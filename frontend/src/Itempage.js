@@ -1,9 +1,11 @@
 import React, { useEffect, useState, useRef } from "react";
 import axios from "axios";
+import { usePageNavigation, Breadcrumb } from "./components/NavigationHelper";
 
 export default function ItemPage() {
+  const { id, isNewMode, isEditMode, showForm, navigateToList, navigateToNew, navigateToEdit } = usePageNavigation('/items');
+  
   const [items, setItems] = useState([]);
-  const [showForm, setShowForm] = useState(false);
   const [editingItem, setEditingItem] = useState(null);
   const [formData, setFormData] = useState({
     ItemCode: "",
@@ -201,6 +203,74 @@ export default function ItemPage() {
     fetchItems();
     fetchDropdownData();
   }, []);
+
+  // Initialize form data for new mode immediately
+  useEffect(() => {
+    if (isNewMode) {
+      setEditingItem(null);
+      setFormData({
+        ItemCode: "",
+        GroupID: "",
+        MakeID: "",
+        BrandID: "",
+        ItemName: "",
+        Packing: "",
+        SuppRef: "",
+        Barcode: "",
+        Cost: "",
+        AvgCost: "",
+        OpeningStock: "",
+        CurStock: "",
+        SPrice: "",
+        MRP: "",
+        Unit: "",
+        Shelf: "",
+        PartNo: "",
+        Model: "",
+        CGST: "",
+        SGST: "",
+        IGST: "",
+        HSNCode: "",
+      });
+    }
+  }, [isNewMode]);
+
+  // Handle edit mode - load item data when ID is in URL
+  useEffect(() => {
+    if (isEditMode && id && items.length > 0) {
+      const item = items.find(i => i.itemcode.toString() === id);
+      if (item) {
+        setEditingItem(item);
+        setFormData({
+          ItemCode: item.itemcode || "",
+          GroupID: item.groupid || "",
+          MakeID: item.makeid || "",
+          BrandID: item.brandid || "",
+          ItemName: item.itemname || "",
+          Packing: item.packing || "",
+          SuppRef: item.suppref || "",
+          Barcode: item.barcode || "",
+          Cost: item.cost || "",
+          AvgCost: item.avgcost || "",
+          OpeningStock: item.openingstock || "",
+          CurStock: item.curstock || "",
+          SPrice: item.sprice || "",
+          MRP: item.mrp || "",
+          Unit: item.unit || "",
+          Shelf: item.shelf || "",
+          PartNo: item.partno || "",
+          Model: item.model || "",
+          CGST: item.cgst || "",
+          SGST: item.sgst || "",
+          IGST: item.igst || "",
+          HSNCode: item.hsncode || "",
+        });
+      } else {
+        // Item not found, redirect to list
+        navigateToList();
+      }
+    }
+  }, [isEditMode, id, items, navigateToList]);
 
   // Handle Add/Edit form submit with validation
   const normalizeForApi = (d) => {
@@ -400,55 +470,7 @@ export default function ItemPage() {
 
   // Handle click to edit
   const handleDoubleClick = (item) => {
-    // Sanitize potential MONEY/text values (remove currency symbols/commas)
-    const cleanMoney = (v) => {
-      if (v === null || v === undefined) return "";
-      const s = String(v);
-      const cleaned = s.replace(/[^0-9.-]/g, "");
-      return cleaned;
-    };
-
-    setEditingItem(item);
-    const editFormData = {
-      ItemCode: item.itemcode ?? "",
-      GroupID: item.groupid ?? "",
-      MakeID: item.makeid ?? "",
-      BrandID: item.brandid ?? "",
-      ItemName: item.itemname ?? "",
-      Packing: item.packing ?? "",
-      SuppRef: item.suppref ?? "",
-      Barcode: item.barcode ?? "",
-      Cost: cleanMoney(item.cost),
-      AvgCost: cleanMoney(item.avgcost),
-      OpeningStock: item.opening_stock ?? "",
-      CurStock: item.curstock ?? "",
-      SPrice: cleanMoney(item.sprice),
-      MRP: cleanMoney(item.mrp),
-      Unit: item.unit ?? "",
-      Shelf: item.shelf ?? "",
-      PartNo: item.partno ?? "",
-      Model: item.model ?? "",
-      CGST: item.cgst ?? "",
-      SGST: item.sgst ?? "",
-      IGST: item.igst ?? "",
-      HSNCode: item.hsncode ?? "",
-      PartyID: item.partyid ?? "",
-      IsExpence: item.isexpence || false,
-      Billable: item.billable ?? false,
-      Deleted: item.deleted || false
-    };
-    setFormData(editFormData);
-    setInitialFormData(editFormData);
-
-    // Reset tab state for new item
-    setActiveTab('details');
-    setTransactionData({
-      purchases: [],
-      sales: [],
-      ledger: []
-    });
-
-    setShowForm(true);
+    navigateToEdit(item.itemcode);
   };
 
   // Check if form data has changed
@@ -607,7 +629,7 @@ export default function ItemPage() {
     const currentIndex = getCurrentRecordIndex();
     if (currentIndex > 0) {
       const previousItem = filteredItems[currentIndex - 1];
-      handleDoubleClick(previousItem);
+      navigateToEdit(previousItem.itemcode);
     }
   };
 
@@ -615,7 +637,7 @@ export default function ItemPage() {
     const currentIndex = getCurrentRecordIndex();
     if (currentIndex < filteredItems.length - 1) {
       const nextItem = filteredItems[currentIndex + 1];
-      handleDoubleClick(nextItem);
+      navigateToEdit(nextItem.itemcode);
     }
   };
 
@@ -644,49 +666,19 @@ export default function ItemPage() {
       )}
 
       <div className="p-0">
+        {/* Breadcrumb */}
+        <Breadcrumb 
+          basePath="/items" 
+          currentPage="Items" 
+          itemName={showForm ? (isNewMode ? "New Item" : `Edit Item: ${formData.ItemName}`) : null}
+        />
+        
         {/* Header with New and Form Actions */}
         <div className="flex items-center justify-between mb-1">
           <div className="flex items-center gap-4">
             <button
               className="px-4 py-2 text-sm rounded text-white bg-purple-600 hover:bg-purple-700 shadow-sm"
-              onClick={() => {
-                setShowForm(true);
-                setEditingItem(null);
-                setFormData({
-                  ItemCode: "",
-                  GroupID: "",
-                  MakeID: "",
-                  BrandID: "",
-                  ItemName: "",
-                  Packing: "",
-                  SuppRef: "",
-                  Barcode: "",
-                  Cost: "",
-                  AvgCost: "",
-                  OpeningStock: "",
-                  CurStock: "",
-                  SPrice: "",
-                  MRP: "",
-                  Unit: "",
-                  Shelf: "",
-                  PartNo: "",
-                  Model: "",
-                  CGST: "",
-                  SGST: "",
-                  IGST: "",
-                  HSNCode: "",
-                  PartyID: "",
-                  IsExpence: false,
-                  Billable: true,
-                  Deleted: false
-                });
-                setInitialFormData({});
-                setTimeout(() => {
-                  if (fieldRefs.current.GroupID) {
-                    fieldRefs.current.GroupID.focus();
-                  }
-                }, 100);
-              }}
+              onClick={navigateToNew}
             >
               New
             </button>
@@ -798,9 +790,10 @@ export default function ItemPage() {
                 <button
                   type="button"
                   className="px-3 py-2 text-sm border rounded"
-                  onClick={() => {
-                    setShowForm(false);
-                    setEditingItem(null);
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    navigateToList();
                   }}
                 >
                   Cancel

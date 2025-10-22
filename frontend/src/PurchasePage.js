@@ -3,6 +3,7 @@ import axios from "axios";
 import { motion } from "framer-motion";
 import jsPDF from "jspdf";
 import { validateTransactionDate, getDefaultTransactionDate } from "./utils/accountingPeriodUtils";
+import { usePageNavigation, Breadcrumb } from "./components/NavigationHelper";
 
 // Helper to format number safely
 const n = (v) => (isNaN(Number(v)) ? 0 : Number(v));
@@ -36,6 +37,8 @@ const dateToInput = (val) => {
 };
 
 export default function PurchasePage() {
+  const { id, isNewMode, isEditMode, showForm, navigateToList, navigateToNew, navigateToEdit } = usePageNavigation('/purchase');
+  
   // List state
   const [purchases, setPurchases] = useState([]);
   const [searchTerm, setSearchTerm] = useState("");
@@ -55,7 +58,6 @@ export default function PurchasePage() {
   const [suppliers, setSuppliers] = useState([]);
 
   // UI mode
-  const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
   const [grnStatus, setGrnStatus] = useState("draft");
   const [editingPurchase, setEditingPurchase] = useState(null);
@@ -400,6 +402,95 @@ export default function PurchasePage() {
     fetchAllItems();
     loadCompanyProfile();
   }, []);
+
+  // Initialize form data for new mode immediately
+  useEffect(() => {
+    if (isNewMode) {
+      const initializeNewPurchase = async () => {
+        // Set default transaction date within accounting period
+        let defaultDate = "";
+        try {
+          defaultDate = await getDefaultTransactionDate();
+        } catch (error) {
+          console.error("Error getting default date:", error);
+          defaultDate = new Date().toISOString().split('T')[0];
+        }
+        
+        setEditingPurchase(null);
+        setHeader({
+          FYearID: "",
+          TrNo: "NEW",
+          TrDate: defaultDate,
+          SuppInvNo: "",
+          SuppInvDt: "",
+          PartyID: "",
+          Remark: "",
+          InvAmt: 0,
+          TptCharge: 0,
+          LabCharge: 0,
+          MiscCharge: 0,
+          PackCharge: 0,
+          Rounded: 0,
+          CGST: 0,
+          SGST: 0,
+          IGST: 0,
+          CostSheetPrepared: false,
+          GRNPosted: false,
+          Costconfirmed: false,
+        });
+        setItems([
+          {
+            Srno: 1,
+            ItemCode: "",
+            Qty: 0,
+            Rate: 0,
+            Amt: 0,
+            CGSTPer: 0,
+            CGST: 0,
+            SGSTPer: 0,
+            SGST: 0,
+            IGSTPer: 0,
+            IGST: 0,
+          }
+        ]);
+        setGrnStatus("draft");
+        setSelectedItem(null);
+        setShowItemModal(false);
+        setItemSearchTerm('');
+        setHighlightIndex(0);
+        // Ensure the Items tab is active for new purchases so Add Row is visible immediately
+        setItemTab('items');
+        setModalItemData({
+          Qty: 1,
+          Rate: 0,
+          InvAmount: 0,
+          CGSTAmount: 0,
+          SGSTAmount: 0,
+          IGSTAmount: 0,
+          GTotal: 0,
+          CGSTPer: 0,
+          SGSTPer: 0,
+          IGSTPer: 0
+        });
+        setNoOverhead(false);
+      };
+      
+      initializeNewPurchase();
+    }
+  }, [isNewMode]);
+
+  // Handle edit mode - load purchase data when ID is in URL
+  useEffect(() => {
+    if (isEditMode && id && purchases.length > 0) {
+      const purchase = purchases.find(p => p.tranid.toString() === id);
+      if (purchase) {
+        editPurchase(purchase);
+      } else {
+        // Purchase not found, redirect to list
+        navigateToList();
+      }
+    }
+  }, [isEditMode, id, purchases, navigateToList]);
 
   // TrNo will be generated only when saving (removed auto-generation to prevent number clashes in multi-user environment)
 
@@ -913,7 +1004,6 @@ export default function PurchasePage() {
       setEditingPurchase(purchase);
       setGrnStatus(purchaseHeader.grnposted ? "posted" : "draft");
       setCurrentTranId(purchase.tranid);
-      setShowForm(true);
     } catch (error) {
       console.error("Error loading purchase for edit:", error);
       alert("Failed to load purchase for editing");
@@ -1393,6 +1483,13 @@ export default function PurchasePage() {
           if (notice.open) setNotice({ open: false, title: "", message: "" });
         }}
       >
+        {/* Breadcrumb */}
+        <Breadcrumb 
+          basePath="/purchase" 
+          currentPage="Purchase" 
+          itemName={showForm ? (isNewMode ? "New Purchase" : `Edit Purchase: ${header.TrNo || 'Draft'}`) : null}
+        />
+        
         {/* Header actions */}
         <div className="flex flex-col items-start mb-4">
           <div className="flex items-center justify-between w-full mb-3">
@@ -1438,14 +1535,12 @@ export default function PurchasePage() {
           <div className="flex items-center justify-between w-full mb-2">
             <div className="flex items-center gap-2">
               <button
-                onClick={async () => {
+                onClick={() => {
                   // Allow new purchase if form is not open OR if current purchase is saved OR confirmed
                   const isSaved = editingPurchase?.tranid;
                   const isConfirmed = header.Costconfirmed;
                   if (showForm && !isSaved && !isConfirmed) return;
-                  await resetFormState(); // ensure fresh form
-                  setShowForm(true);
-                  setTimeout(() => trNoRef.current?.focus(), 0);
+                  navigateToNew();
                 }}
                 disabled={showForm && !editingPurchase?.tranid && !header.Costconfirmed}
                 className={`px-4 py-2 rounded-lg shadow text-white ${
@@ -1552,7 +1647,12 @@ export default function PurchasePage() {
                   <button
                     type="button"
                     className="px-3 py-2 text-sm border rounded"
-                    onClick={async () => { await resetFormState(); setShowForm(false); }}
+                    onClick={async (e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      await resetFormState();
+                      navigateToList();
+                    }}
                   >
                     Close
                   </button>
@@ -1867,7 +1967,7 @@ export default function PurchasePage() {
                   <tr
                     key={r.tranid}
                     className="hover:bg-indigo-50 cursor-pointer"
-                    onClick={() => editPurchase(r)}
+                    onClick={() => navigateToEdit(r.tranid)}
                     title="Click to edit"
                   >
                     <td className="p-2 border-b w-8 text-center" onClick={(e) => e.stopPropagation()}>

@@ -116,6 +116,20 @@ function App() {
             </React.Suspense>
           </AuthenticatedLayout>
         } />
+        <Route path="/purchase/new" element={
+          <AuthenticatedLayout>
+            <React.Suspense fallback={<div>Loading...</div>}>
+              <PurchasePage />
+            </React.Suspense>
+          </AuthenticatedLayout>
+        } />
+        <Route path="/purchase/edit/:id" element={
+          <AuthenticatedLayout>
+            <React.Suspense fallback={<div>Loading...</div>}>
+              <PurchasePage />
+            </React.Suspense>
+          </AuthenticatedLayout>
+        } />
         <Route path="/purchase-return" element={
           <AuthenticatedLayout>
             <React.Suspense fallback={<div>Loading...</div>}>
