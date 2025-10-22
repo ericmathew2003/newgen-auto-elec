@@ -206,8 +206,8 @@ export default function MakePage() {
       {/* Toast Notification */}
       {toast.show && (
         <div className={`fixed top-4 right-4 z-50 px-6 py-3 rounded-lg shadow-lg text-white font-medium transition-all duration-300 ${toast.type === 'success' ? 'bg-green-500' :
-            toast.type === 'error' ? 'bg-red-500' :
-              'bg-blue-500'
+          toast.type === 'error' ? 'bg-red-500' :
+            'bg-blue-500'
           }`}>
           <div className="flex items-center gap-2">
             {toast.type === 'success' && (
@@ -281,8 +281,8 @@ export default function MakePage() {
                     disabled={!canSave}
                     onClick={() => handleSubmit({ preventDefault: () => { } })}
                     className={`px-4 py-2 text-sm rounded text-white ${canSave
-                        ? "bg-purple-600 hover:bg-purple-700"
-                        : "bg-purple-400 cursor-not-allowed opacity-60"
+                      ? "bg-purple-600 hover:bg-purple-700"
+                      : "bg-purple-400 cursor-not-allowed opacity-60"
                       }`}
                   >
                     Save
@@ -298,8 +298,8 @@ export default function MakePage() {
                   onClick={goToPreviousPage}
                   disabled={currentPage === 1}
                   className={`p-1 rounded ${currentPage === 1
-                      ? "text-gray-300 cursor-not-allowed"
-                      : "text-gray-600 hover:bg-gray-100"
+                    ? "text-gray-300 cursor-not-allowed"
+                    : "text-gray-600 hover:bg-gray-100"
                     }`}
                 >
                   ◀
@@ -311,8 +311,8 @@ export default function MakePage() {
                   onClick={goToNextPage}
                   disabled={currentPage === totalPages}
                   className={`p-1 rounded ${currentPage === totalPages
-                      ? "text-gray-300 cursor-not-allowed"
-                      : "text-gray-600 hover:bg-gray-100"
+                    ? "text-gray-300 cursor-not-allowed"
+                    : "text-gray-600 hover:bg-gray-100"
                     }`}
                 >
                   ▶
@@ -328,8 +328,8 @@ export default function MakePage() {
                   onClick={goToPreviousRecord}
                   disabled={getCurrentRecordIndex() === 0}
                   className={`p-1 rounded ${getCurrentRecordIndex() === 0
-                      ? "text-gray-300 cursor-not-allowed"
-                      : "text-gray-600 hover:bg-gray-100"
+                    ? "text-gray-300 cursor-not-allowed"
+                    : "text-gray-600 hover:bg-gray-100"
                     }`}
                 >
                   ◀
@@ -342,8 +342,8 @@ export default function MakePage() {
                   onClick={goToNextRecord}
                   disabled={getCurrentRecordIndex() === filteredMakes.length - 1}
                   className={`p-1 rounded ${getCurrentRecordIndex() === filteredMakes.length - 1
-                      ? "text-gray-300 cursor-not-allowed"
-                      : "text-gray-600 hover:bg-gray-100"
+                    ? "text-gray-300 cursor-not-allowed"
+                    : "text-gray-600 hover:bg-gray-100"
                     }`}
                 >
                   ▶
