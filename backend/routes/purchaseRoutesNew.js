@@ -133,7 +133,7 @@ router.get("/summary", async (req, res) => {
  * Get All Purchases (List View)
  */
 router.get("/", async (req, res) => {
-  const { fromDate, toDate, supplierId, fyearid } = req.query;
+  const { fromDate, toDate, supplierId, fyearId } = req.query;
   let where = [];
   let params = [];
 
@@ -149,9 +149,8 @@ router.get("/", async (req, res) => {
     params.push(supplierId);
     where.push(`p.PartyID = $${params.length}`);
   }
-  // Critical: Filter by financial year for data isolation
-  if (fyearid) {
-    params.push(fyearid);
+  if (fyearId) {
+    params.push(fyearId);
     where.push(`p.FYearID = $${params.length}`);
   }
 
@@ -161,7 +160,7 @@ router.get("/", async (req, res) => {
     const result = await pool.query(
       `SELECT p.TranID, p.TrNo, p.TrDate, p.SuppInvNo, p.SuppInvDt,
               party.PartyName, p.InvAmt, p.CGST, p.SGST, p.IGST,
-              p.CostSheetPrepared, p.GRNPosted, p.Costconfirmed, p.is_cancelled
+              p.CostSheetPrepared, p.GRNPosted, p.Costconfirmed, p.is_cancelled, p.FYearID
        FROM tblTrnPurchase p
        JOIN tblMasParty party ON p.PartyID = party.PartyID
        ${filter}
@@ -294,7 +293,10 @@ router.post('/:tranId/costing/confirm', async (req, res) => {
 
     // 3) Fetch purchase details to compute item master updates
     const det = await client.query(
-      `SELECT ItemCode, Qty, Rate, NetRate FROM tblTrnPurchaseDet WHERE TranMasID = $1`,
+      `SELECT pd.ItemCode, pd.Qty, pd.Rate, pd.NetRate, i.Unit 
+       FROM tblTrnPurchaseDet pd
+       LEFT JOIN tblMasItem i ON pd.ItemCode = i.ItemCode
+       WHERE pd.TranMasID = $1`,
       [tranId]
     );
 
@@ -302,6 +304,7 @@ router.post('/:tranId/costing/confirm', async (req, res) => {
       const itemcode = row.itemcode;
       if (!itemcode) continue;
       const qty = Number(row.qty) || 0;
+      const unit = row.unit || '';
       // Effective rate: use NetRate if cost sheet prepared, else use Rate
       const effRate = prepared ? (Number(row.netrate) || Number(row.rate) || 0) : (Number(row.rate) || 0);
 
@@ -329,42 +332,25 @@ router.post('/:tranId/costing/confirm', async (req, res) => {
         `UPDATE tblMasItem SET Cost = $1, AvgCost = $2, CurStock = $3 WHERE ItemCode = $4`,
         [newCost, newAvg, newCurStock, itemcode]
       );
-    }
 
-    // 4) Create stock ledger entries for inventory tracking
-    const purchaseHeader = await client.query(
-      `SELECT FYearID, TrDate FROM tblTrnPurchase WHERE TranID = $1`,
-      [tranId]
-    );
-    
-    if (purchaseHeader.rows.length > 0) {
-      const { fyearid, trdate } = purchaseHeader.rows[0];
-      
-      // Get purchase details with item info for stock ledger
-      const detailsForLedger = await client.query(
-        `SELECT d.ItemCode, d.Qty, i.Unit 
-         FROM tblTrnPurchaseDet d
-         LEFT JOIN tblMasItem i ON d.ItemCode = i.ItemCode
-         WHERE d.TranMasID = $1`,
+      // Insert stock ledger entry for this purchase item
+      const purchaseHeader = await client.query(
+        `SELECT FYearID, TrDate FROM tblTrnPurchase WHERE TranID = $1`,
         [tranId]
       );
-
-      for (const row of detailsForLedger.rows || []) {
-        const { itemcode, qty, unit } = row;
-        if (!itemcode || !qty || qty <= 0) continue;
-
-        // Insert stock ledger entry for purchase (IN transaction)
-        // Note: stock_ledger_id is auto-generated (identity column)
+      
+      if (purchaseHeader.rows.length > 0) {
+        const { fyearid, trdate } = purchaseHeader.rows[0];
+        
         await client.query(
-          `INSERT INTO trn_stock_ledger 
-           (fyear_id, inv_master_id, itemcode, tran_type, tran_date, unit, qty)
+          `INSERT INTO trn_stock_ledger (fyear_id, inv_master_id, itemcode, tran_type, tran_date, unit, qty)
            VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-          [fyearid, tranId, itemcode, 'PUR', trdate, unit || '', qty]
+          [fyearid, tranId, itemcode, 'PURCH', trdate, unit, qty]
         );
       }
     }
 
-    // 5) Mark the purchase as cost confirmed
+    // 4) Mark the purchase as cost confirmed
     await client.query(
       `UPDATE tblTrnPurchase SET Costconfirmed = true WHERE TranID = $1`,
       [tranId]

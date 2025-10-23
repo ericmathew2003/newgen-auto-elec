@@ -163,6 +163,13 @@ export default function SalesPage() {
       const params = {};
       if (fromDate) params.fromDate = fromDate;
       if (toDate) params.toDate = toDate;
+      
+      // Add financial year filter - critical for data isolation
+      const selectedFYearID = localStorage.getItem("selectedFYearID");
+      if (selectedFYearID) {
+        params.fyearId = selectedFYearID;
+      }
+      
       const r = await axios.get("http://localhost:5000/api/sales", { params });
       const raw = r.data || [];
       // Map API snake_case to UI-friendly fields

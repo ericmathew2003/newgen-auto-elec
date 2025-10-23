@@ -264,98 +264,63 @@ router.get("/:itemCode/sales", async (req, res) => {
 router.get("/:itemCode/ledger", async (req, res) => {
   try {
     const { itemCode } = req.params;
-    console.log(`Fetching ledger for item: ${itemCode}`);
     
-    // Start with a very simple query to test basic functionality
-    const result = [];
+    // Get opening stock for the item
+    const openingStockResult = await pool.query(`
+      SELECT COALESCE(opening_stock, 0) as opening_stock 
+      FROM tblMasItem 
+      WHERE itemcode = $1
+    `, [itemCode]);
     
-    try {
-      // First, just check if the item exists
-      const itemCheck = await pool.query(`
-        SELECT itemcode, itemname, COALESCE(opening_stock, 0) as opening_stock 
-        FROM tblmasitem 
+    const openingStock = openingStockResult.rows[0]?.opening_stock || 0;
+    
+    // Get all transactions from stock ledger table and calculate running balance
+    // Based on actual trn_stock_ledger structure: qty (single column), tran_type, tran_date, inv_master_id
+    const result = await pool.query(`
+      WITH transactions AS (
+        -- Opening Stock Entry from tblmasitem (if exists)
+        SELECT 
+          '1900-01-01'::date as tran_date,
+          'OPEN' as tran_type,
+          'Opening Balance' as reference,
+          $2::numeric as qty_in,
+          0::numeric as qty_out,
+          '1900-01-01'::date as sort_date,
+          0 as sort_order
+        WHERE $2 > 0
+        
+        UNION ALL
+        
+        -- Actual stock ledger entries from trn_stock_ledger
+        SELECT 
+          tran_date,
+          COALESCE(tran_type, 'TXN') as tran_type,
+          CASE 
+            WHEN inv_master_id IS NOT NULL THEN CONCAT(tran_type, '-', inv_master_id)
+            ELSE CONCAT('TXN-', stock_ledger_id)
+          END as reference,
+          CASE WHEN qty > 0 THEN qty ELSE 0 END as qty_in,
+          CASE WHEN qty < 0 THEN ABS(qty) ELSE 0 END as qty_out,
+          tran_date as sort_date,
+          1 as sort_order
+        FROM trn_stock_ledger
         WHERE itemcode = $1
-      `, [itemCode]);
-      
-      console.log(`Item check result:`, itemCheck.rows);
-      
-      if (itemCheck.rows.length === 0) {
-        console.log(`Item ${itemCode} not found`);
-        return res.json([]);
-      }
-      
-      const openingStock = Number(itemCheck.rows[0].opening_stock || 0);
-      console.log(`Opening stock: ${openingStock}`);
-      
-      // Add opening stock entry if > 0
-      if (openingStock > 0) {
-        result.push({
-          tran_date: '1900-01-01',
-          tran_type: 'OPEN',
-          reference: 'Opening Balance',
-          qty_in: openingStock,
-          qty_out: 0,
-          balance: openingStock
-        });
-      }
-      
-      // Try to get stock ledger entries - but handle if table doesn't exist
-      try {
-        const ledgerResult = await pool.query(`
-          SELECT 
-            tran_date,
-            tran_type,
-            inv_master_id,
-            stock_ledger_id,
-            qty
-          FROM trn_stock_ledger
-          WHERE itemcode = $1
-          ORDER BY tran_date DESC
-          LIMIT 10
-        `, [itemCode]);
-        
-        console.log(`Stock ledger entries found: ${ledgerResult.rows.length}`);
-        
-        let runningBalance = openingStock;
-        
-        // Process ledger entries
-        for (const entry of ledgerResult.rows.reverse()) {
-          const qty = Number(entry.qty || 0);
-          const qtyIn = qty > 0 ? qty : 0;
-          const qtyOut = qty < 0 ? Math.abs(qty) : 0;
-          
-          runningBalance += qtyIn - qtyOut;
-          
-          result.push({
-            tran_date: entry.tran_date,
-            tran_type: entry.tran_type || 'TXN',
-            reference: entry.inv_master_id ? `${entry.tran_type}-${entry.inv_master_id}` : `TXN-${entry.stock_ledger_id}`,
-            qty_in: qtyIn,
-            qty_out: qtyOut,
-            balance: runningBalance
-          });
-        }
-        
-      } catch (ledgerError) {
-        console.log(`Stock ledger table error (might not exist):`, ledgerError.message);
-        // Continue without ledger entries - just return opening stock
-      }
-      
-    } catch (itemError) {
-      console.error(`Error checking item:`, itemError);
-      throw itemError;
-    }
+      )
+      SELECT 
+        tran_date,
+        tran_type,
+        reference,
+        qty_in,
+        qty_out,
+        SUM(qty_in - qty_out) OVER (ORDER BY sort_date ASC, sort_order ASC) as balance
+      FROM transactions
+      ORDER BY sort_date DESC, sort_order DESC
+    `, [itemCode, openingStock]);
     
-    console.log(`Returning ${result.length} ledger entries`);
-    res.json(result.reverse()); // Newest first
-    
+    res.json(result.rows);
   } catch (err) {
-    console.error("Error in ledger route:", err);
-    res.status(500).json({ 
-      error: "Failed to fetch item ledger", 
-      details: err.message,
-      stack: process.env.NODE_ENV === 'development' ? err.stack : undefined
-    });
+    console.error("Error fetching item ledger:", err);
+    res.status(500).json({ error: "Failed to fetch item ledger", details: err.message });
   }
 });
 

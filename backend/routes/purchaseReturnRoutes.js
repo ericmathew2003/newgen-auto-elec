@@ -282,7 +282,46 @@ router.put("/:purchRetId", async (req, res) => {
     const nowPosted = !!is_posted;
 
     if (!wasPosted && nowPosted) {
-      await client.query(`CALL post_purchase_return($1)`, [purchRetId]);
+      // Create stock ledger entries for purchase return (OUT transactions)
+      const returnHeader = await client.query(
+        `SELECT fyear_id, tran_date FROM trn_purchase_return_master WHERE pret_id = $1`,
+        [purchRetId]
+      );
+      
+      if (returnHeader.rows.length > 0) {
+        const { fyear_id, tran_date } = returnHeader.rows[0];
+        
+        // Get return details with item info for stock ledger
+        const detailsForLedger = await client.query(
+          `SELECT d.itemcode, d.qty, i.unit 
+           FROM trn_purchase_return_detail d
+           LEFT JOIN tblMasItem i ON d.itemcode = i.itemcode
+           WHERE d.pret_id = $1`,
+          [purchRetId]
+        );
+
+        for (const row of detailsForLedger.rows || []) {
+          const { itemcode, qty, unit } = row;
+          if (!itemcode || !qty || qty <= 0) continue;
+
+          // Insert stock ledger entry for purchase return (OUT transaction - negative qty)
+          // Note: stock_ledger_id is auto-generated (identity column)
+          await client.query(
+            `INSERT INTO trn_stock_ledger 
+             (fyear_id, inv_master_id, itemcode, tran_type, tran_date, unit, qty)
+             VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+            [fyear_id, purchRetId, itemcode, 'PRET', tran_date, unit || '', -qty]
+          );
+
+          // Update item master stock (reduce stock for return)
+          await client.query(
+            `UPDATE tblMasItem 
+             SET CurStock = GREATEST(0, CurStock - $1)
+             WHERE ItemCode = $2`,
+            [qty, itemcode]
+          );
+        }
+      }
     }
 
     await client.query("COMMIT");

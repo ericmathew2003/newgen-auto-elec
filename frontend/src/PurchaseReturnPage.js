@@ -54,6 +54,13 @@ export default function PurchaseReturnPage() {
       const params = {};
       if (fromDate) params.fromDate = fromDate;
       if (toDate) params.toDate = toDate;
+      
+      // Add financial year filter - critical for data isolation
+      const selectedFYearID = localStorage.getItem("selectedFYearID");
+      if (selectedFYearID) {
+        params.fyearId = selectedFYearID;
+      }
+      
       const r = await axios.get("http://localhost:5000/api/purchase-return", { params });
       const raw = r.data || [];
       // Map API to UI fields
