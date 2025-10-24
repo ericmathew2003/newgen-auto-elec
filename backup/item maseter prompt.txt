@@ -1,0 +1,16 @@
+Adding purchase history sidebar with backend route
+
+------------
+i want a box on right side which will show purchase details for the item in continous rows. 
+the details are tbltrnpurchase.trno, tbltrnpurchase.trdate , tbltrnpurchase.suppinvno , tblmasparty.partyname , tbltrnpurchasedet.srno , 
+tbltrnpurchasedet.qty , tbltrnpurchasedet.rate , tbltrnpurchasedet.ohamt , tbltrnpurchasedet.netrate.
+
+------------
+I'm setting up a new purchase history panel beside the item form by adding state and fetch logic 
+that triggers when editing an item. This involves creating a backend GET route to retrieve purchase details 
+for an item, updating the frontend to fetch and display that data in a styled table, and carefully managing 
+state resets when opening, editing, or closing the form. I'll make sure the layout uses flex with a dedicated 
+width for the history box and format numbers and dates nicely. The fetch function will be hooked into a 
+useEffect watching the editing item for seamless updates.
+-------------
+i want to show purchase and sales history for the item selected for edit. there is vacant space to the right of the form. if i place 2 cards vertically, the top showing purchase and bottom sales. purchae and sales details data should be in tabular format with continuous rows, will it be ok or should i keep 2 tabs one for purchase and other for sales. which approach will be better by performance, because when data increases we need to filter purchase and sales when opening an item for edit.
