@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import PurchaseReturnForm from "./PurchaseReturnForm";
+import API_BASE_URL from "config/api";
 
 const n = (v) => (isNaN(Number(v)) ? 0 : Number(v));
 const formatNumber = (val) => {
@@ -61,7 +62,7 @@ export default function PurchaseReturnPage() {
         params.fyearId = selectedFYearID;
       }
       
-      const r = await axios.get("http://localhost:5000/api/purchase-return", { params });
+      const r = await axios.get(`${API_BASE_URL}/api/purchase-return`, { params });
       const raw = r.data || [];
       // Map API to UI fields
       const mapped = raw.map(x => ({

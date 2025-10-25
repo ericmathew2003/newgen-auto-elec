@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import { Line } from "react-chartjs-2";
 import { FiTrendingUp, FiShoppingBag, FiUsers, FiUserCheck, FiPackage,FiAlertTriangle,FiDollarSign,FiTruck,FiBarChart,FiActivity,FiShoppingCart,FiBox,FiSettings,FiRefreshCw} from "react-icons/fi";
+import API_BASE_URL from "config/api";
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -55,7 +56,7 @@ recentTransactions: []
 // Fetch low stock items
 const fetchLowStockItems = async () => {
 try {
-const res = await axios.get("http://localhost:5000/api/items/all");
+const res = await axios.get(`${API_BASE_URL}/api/items/all`);
 const allItems = res.data || [];
 // Filter items with low stock (assuming stock <= 10 is low stock)
 const lowStock = allItems.filter(item => {
@@ -73,7 +74,7 @@ setError("Failed to load low stock items");
 // Fetch out of stock items
 const fetchOutOfStockItems = async () => {
 try {
-const res = await axios.get("http://localhost:5000/api/items/all");
+const res = await axios.get(`${API_BASE_URL}/api/items/all`);
 const allItems = res.data || [];
 // Filter items with zero stock
 const outOfStock = allItems.filter(item => {
@@ -94,7 +95,7 @@ const fetchData = async () => {
 try {
 setError("");
 setLoading(true);
-const res = await axios.get("http://localhost:5000/api/dashboard/summary");
+const res = await axios.get(`${API_BASE_URL}/api/dashboard/summary`);
 if (isMounted) {
 setData(res.data);
 }

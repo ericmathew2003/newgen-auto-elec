@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import axios from "axios";
+import API_BASE_URL from "config/api";
 
 const ReportsPage = () => {
   const [showGSTModal, setShowGSTModal] = useState(false);
@@ -35,7 +36,7 @@ const ReportsPage = () => {
       // Fetch company data and sales data
       console.log("Making API calls...");
       const [compRes, salesRes] = await Promise.all([
-        axios.get("http://localhost:5000/api/company"),
+        axios.get(`${API_BASE_URL}/api/company`),
         axios.get(`http://localhost:5000/api/sales/report?fromDate=${fromDate}&toDate=${toDate}`)
       ]);
 

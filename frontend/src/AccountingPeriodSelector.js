@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
+import API_BASE_URL from "config/api";
 
 export default function AccountingPeriodSelector() {
   const [periods, setPeriods] = useState([]);
@@ -16,7 +17,7 @@ export default function AccountingPeriodSelector() {
 
   const fetchAccountingPeriods = async () => {
     try {
-      const res = await axios.get("http://localhost:5000/api/accounting-periods");
+      const res = await axios.get(`${API_BASE_URL}/api/accounting-periods`);
       setPeriods(res.data || []);
       setLoading(false);
     } catch (err) {

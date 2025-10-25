@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useRef } from "react";
 import axios from "axios";
 import { usePageNavigation, Breadcrumb } from "./components/NavigationHelper";
+import API_BASE_URL from "config/api";
 
 export default function GroupPage() {
   const { id, isNewMode, isEditMode, showForm, navigateToList, navigateToNew, navigateToEdit } = usePageNavigation('/groups');
@@ -20,7 +21,7 @@ export default function GroupPage() {
   // Fetch groups
   const fetchGroups = async () => {
     try {
-      const res = await axios.get("http://localhost:5000/api/groups/all");
+      const res = await axios.get(`${API_BASE_URL}/api/groups/all`);
       setGroups(res.data);
     } catch (err) {
       console.error(err);
@@ -103,7 +104,7 @@ export default function GroupPage() {
         );
         showToast("Group updated successfully!", 'success');
       } else {
-        await axios.post("http://localhost:5000/api/groups/add", { GroupName: formData.GroupName });
+        await axios.post(`${API_BASE_URL}/api/groups/add`, { GroupName: formData.GroupName });
         showToast("Group added successfully!", 'success');
       }
       fetchGroups();

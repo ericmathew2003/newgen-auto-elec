@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
+import API_BASE_URL from "./config/api";
 
 export default function LoginForm() {
   const [username, setUsername] = useState("");
@@ -22,7 +23,7 @@ export default function LoginForm() {
 
     setLoading(true);
     try {
-      const res = await axios.post("http://localhost:5000/api/auth/login", {
+      const res = await axios.post(`${API_BASE_URL}/api/auth/login`, {
         username: username.trim(),
         password: password.trim(),
       });

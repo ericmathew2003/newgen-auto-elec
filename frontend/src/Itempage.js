@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useRef } from "react";
 import axios from "axios";
 import { usePageNavigation, Breadcrumb } from "./components/NavigationHelper";
+import API_BASE_URL from "config/api";
 
 export default function ItemPage() {
   const { id, isNewMode, isEditMode, showForm, navigateToList, navigateToNew, navigateToEdit } = usePageNavigation('/items');
@@ -147,7 +148,7 @@ export default function ItemPage() {
       if (withSpinner) {
         setIsRefreshing(true);
       }
-      const res = await axios.get("http://localhost:5000/api/items/all");
+      const res = await axios.get(`${API_BASE_URL}/api/items/all`);
       setItems(res.data);
     } catch (err) {
       console.error(err);
@@ -161,7 +162,7 @@ export default function ItemPage() {
   // Fetch dropdown data
   const fetchDropdownData = async () => {
     try {
-      const res = await axios.get("http://localhost:5000/api/items/dropdown-data");
+      const res = await axios.get(`${API_BASE_URL}/api/items/dropdown-data`);
       setDropdownData((prev) => ({ ...prev, ...res.data }));
     } catch (err) {
       console.error(err);
@@ -373,7 +374,7 @@ export default function ItemPage() {
         );
         showToast("Item updated successfully!", 'success');
       } else {
-        const response = await axios.post("http://localhost:5000/api/items/add", payload);
+        const response = await axios.post(`${API_BASE_URL}/api/items/add`, payload);
         showToast("Item added successfully!", 'success');
 
         // For new items, update the form with the generated ItemCode if available

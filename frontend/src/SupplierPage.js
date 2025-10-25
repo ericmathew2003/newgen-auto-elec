@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useRef } from "react";
 import axios from "axios";
 import { usePageNavigation, Breadcrumb } from "./components/NavigationHelper";
+import API_BASE_URL from "config/api";
 
 export default function SupplierPage() {
   const { id, isNewMode, isEditMode, showForm, navigateToList, navigateToNew, navigateToEdit } = usePageNavigation('/suppliers');
@@ -64,7 +65,7 @@ export default function SupplierPage() {
   // API: fetch all parties (suppliers)
   const fetchParties = async () => {
     try {
-      const res = await axios.get("http://localhost:5000/api/party/all");
+      const res = await axios.get(`${API_BASE_URL}/api/party/all`);
       setParties(res.data || []);
     } catch (err) {
       console.error(err);
@@ -74,7 +75,7 @@ export default function SupplierPage() {
   // API: fetch all accounts from acc_mas_account table
   const fetchAccounts = async () => {
     try {
-      const res = await axios.get("http://localhost:5000/api/acc-mas-account/all");
+      const res = await axios.get(`${API_BASE_URL}/api/acc-mas-account/all`);
       setAccounts(res.data || []);
     } catch (err) {
       console.error("Error fetching accounts:", err);
@@ -191,7 +192,7 @@ export default function SupplierPage() {
       } else {
         // POST add - exclude PartyID since it's auto-generated, force supplier type to 2
         const { PartyID, ...rest } = formData;
-        await axios.post("http://localhost:5000/api/party/add", { ...rest, PartyType: 2 });
+        await axios.post(`${API_BASE_URL}/api/party/add`, { ...rest, PartyType: 2 });
         showToast("Supplier added successfully!", 'success');
       }
 

@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import axios from "axios";
 import { validateTransactionDate, getDefaultTransactionDate } from "./utils/accountingPeriodUtils";
+import API_BASE_URL from "config/api";
 
 const n = (value) => (isNaN(Number(value)) ? 0 : Number(value));
 const formatNumber = (val) => {
@@ -227,7 +228,7 @@ export default function PurchaseReturnForm({ onClose, onSaved, onDataChanged, in
   useEffect(() => {
     const loadSuppliers = async () => {
       try {
-        const res = await axios.get("http://localhost:5000/api/party/all");
+        const res = await axios.get(`${API_BASE_URL}/api/party/all`);
         const supplierList = (res.data || []).filter(
           (p) => parseInt(p.partytype ?? 0, 10) === 2
         );
@@ -728,7 +729,7 @@ export default function PurchaseReturnForm({ onClose, onSaved, onDataChanged, in
     try {
       const params = header.FYearID ? { fyear_id: header.FYearID } : {};
       console.log("Frontend: Generating next return number with params:", params);
-      const res = await axios.get("http://localhost:5000/api/purchase-return/next-number", { params });
+      const res = await axios.get(`${API_BASE_URL}/api/purchase-return/next-number`, { params });
       console.log("Frontend: API response:", res.data);
       const next = res.data?.next_no || "1";
       console.log("Frontend: Generated return number:", next);
@@ -813,7 +814,7 @@ export default function PurchaseReturnForm({ onClose, onSaved, onDataChanged, in
         }
         
         console.log("Frontend: Saving with payload:", payload.header);
-        const saveResponse = await axios.post("http://localhost:5000/api/purchase-return", payload);
+        const saveResponse = await axios.post(`${API_BASE_URL}/api/purchase-return`, payload);
         console.log("Frontend: Save response:", saveResponse.data);
         
         // Use the return number from the server response (most reliable)
@@ -904,8 +905,8 @@ export default function PurchaseReturnForm({ onClose, onSaved, onDataChanged, in
     try {
       // Get company data and all items (for HSN codes)
       const [compRes, itemsRes] = await Promise.all([
-        axios.get("http://localhost:5000/api/company"),
-        axios.get("http://localhost:5000/api/items/all")
+        axios.get(`${API_BASE_URL}/api/company`),
+        axios.get(`${API_BASE_URL}/api/items/all`)
       ]);
       const company = compRes.data || {};
       const allItems = itemsRes.data || [];

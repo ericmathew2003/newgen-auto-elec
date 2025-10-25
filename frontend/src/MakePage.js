@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useRef } from "react";
 import axios from "axios";
 import { usePageNavigation, Breadcrumb } from "./components/NavigationHelper";
+import API_BASE_URL from "config/api";
 
 export default function MakePage() {
   const { id, isNewMode, isEditMode, showForm, navigateToList, navigateToNew, navigateToEdit } = usePageNavigation('/makes');
@@ -20,7 +21,7 @@ export default function MakePage() {
   // Fetch makes
   const fetchMakes = async () => {
     try {
-      const res = await axios.get("http://localhost:5000/api/makes/all");
+      const res = await axios.get(`${API_BASE_URL}/api/makes/all`);
       setMakes(res.data);
     } catch (err) {
       console.error("Error fetching makes:", err);
@@ -107,7 +108,7 @@ export default function MakePage() {
         );
         showToast("Make updated successfully!", 'success');
       } else {
-        await axios.post("http://localhost:5000/api/makes/add", { MakeName: formData.MakeName });
+        await axios.post(`${API_BASE_URL}/api/makes/add`, { MakeName: formData.MakeName });
         showToast("Make added successfully!", 'success');
       }
       fetchMakes();

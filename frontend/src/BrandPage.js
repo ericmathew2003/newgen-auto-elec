@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useRef } from "react";
 import axios from "axios";
 import { usePageNavigation, Breadcrumb } from "./components/NavigationHelper";
+import API_BASE_URL from "config/api";
 
 export default function BrandPage() {
   const { id, isNewMode, isEditMode, showForm, navigateToList, navigateToNew, navigateToEdit } = usePageNavigation('/brands');
@@ -21,7 +22,7 @@ export default function BrandPage() {
   const fetchBrands = async () => {
     try {
       console.log("Fetching brands...");
-      const res = await axios.get("http://localhost:5000/api/brands/all");
+      const res = await axios.get(`${API_BASE_URL}/api/brands/all`);
       console.log("Brands data received:", res.data);
       setBrands(res.data);
     } catch (err) {
@@ -105,7 +106,7 @@ export default function BrandPage() {
         );
         showToast("Brand updated successfully!", 'success');
       } else {
-        await axios.post("http://localhost:5000/api/brands/add", { BrandName: formData.BrandName });
+        await axios.post(`${API_BASE_URL}/api/brands/add`, { BrandName: formData.BrandName });
         showToast("Brand added successfully!", 'success');
       }
       fetchBrands();

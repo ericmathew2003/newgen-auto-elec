@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import axios from "axios";
 import { motion } from "framer-motion";
 import { validateTransactionDate, getDefaultTransactionDate } from "./utils/accountingPeriodUtils";
+import API_BASE_URL from "config/api";
 
 // Helpers
 const n = (v) => (isNaN(Number(v)) ? 0 : Number(v));
@@ -170,7 +171,7 @@ export default function SalesPage() {
         params.fyearId = selectedFYearID;
       }
       
-      const r = await axios.get("http://localhost:5000/api/sales", { params });
+      const r = await axios.get(`${API_BASE_URL}/api/sales`, { params });
       const raw = r.data || [];
       // Map API snake_case to UI-friendly fields
       const mapped = raw.map(x => ({
@@ -192,14 +193,14 @@ export default function SalesPage() {
   };
   const fetchCustomers = async () => {
     try {
-      const r = await axios.get("http://localhost:5000/api/party/all");
+      const r = await axios.get(`${API_BASE_URL}/api/party/all`);
       const onlyCustomers = (r.data || []).filter(p => parseInt(p.partytype ?? 0, 10) === 1);
       setCustomers(onlyCustomers.sort((a,b)=>String(a.partyname||'').localeCompare(String(b.partyname||''), undefined, {sensitivity: 'base'})));
     } catch(e){ console.error(e); }
   };
   const fetchItems = async () => {
     try {
-      const r = await axios.get("http://localhost:5000/api/items/all");
+      const r = await axios.get(`${API_BASE_URL}/api/items/all`);
       setAllItems(r.data || []);
     } catch(e){ console.error(e);} 
   };
@@ -224,14 +225,14 @@ export default function SalesPage() {
     try {
       const selectedFYearID = localStorage.getItem("selectedFYearID");
       const params = selectedFYearID ? { params: { fyearId: selectedFYearID } } : {};
-      const r = await axios.get("http://localhost:5000/api/sales/next-invno", params);
+      const r = await axios.get(`${API_BASE_URL}/api/sales/next-invno`, params);
       const next = r.data?.next_inv_no || "1";
       setHeader(h => ({ ...h, FYearID: selectedFYearID || h.FYearID, InvNo: String(next) }));
     } catch (e) {
       console.error(e);
       // Fallback to list-based computation if endpoint fails
       try {
-        const r2 = await axios.get("http://localhost:5000/api/sales");
+        const r2 = await axios.get(`${API_BASE_URL}/api/sales`);
         const list = r2.data || [];
         const nums = list.map(s => parseInt(String(s.inv_no ?? s.invno ?? s.invNo ?? "").replace(/[^0-9]/g, ""), 10)).filter(n=>!isNaN(n));
         const last = nums.length ? Math.max(...nums) : 0;
@@ -658,7 +659,7 @@ export default function SalesPage() {
         await axios.put(`http://localhost:5000/api/sales/${editing.tranid}`, payloadHeader);
         tranId = editing.tranid;
       } else {
-        const r = await axios.post('http://localhost:5000/api/sales', payloadHeader);
+        const r = await axios.post(`${API_BASE_URL}/api/sales`, payloadHeader);
         tranId = r.data?.inv_master_id;
         const assignedInvNo = r.data?.inv_no;
         if (assignedInvNo) {

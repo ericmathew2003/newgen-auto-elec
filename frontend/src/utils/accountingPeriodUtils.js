@@ -1,4 +1,5 @@
 import axios from 'axios';
+import API_BASE_URL from "../config/api";
 
 /**
  * Get the selected accounting period details from localStorage and API
@@ -10,7 +11,7 @@ export const getSelectedAccountingPeriod = async () => {
   }
 
   try {
-    const response = await axios.get("http://localhost:5000/api/accounting-periods");
+    const response = await axios.get(`${API_BASE_URL}/api/accounting-periods`);
     const periods = response.data;
     const selectedPeriod = periods.find(p => p.finyearid.toString() === selectedFYearID);
     

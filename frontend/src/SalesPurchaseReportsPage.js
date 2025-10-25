@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import axios from "axios";
+import API_BASE_URL from "config/api";
 
 const SalesPurchaseReportsPage = () => {
   const [showSalesSummaryModal, setShowSalesSummaryModal] = useState(false);
@@ -38,7 +39,7 @@ const SalesPurchaseReportsPage = () => {
     try {
       // Fetch company data and sales summary data
       const [compRes, salesRes] = await Promise.all([
-        axios.get("http://localhost:5000/api/company"),
+        axios.get(`${API_BASE_URL}/api/company`),
         axios.get(`http://localhost:5000/api/sales/summary?fromDate=${fromDate}&toDate=${toDate}`)
       ]);
 
@@ -202,7 +203,7 @@ const SalesPurchaseReportsPage = () => {
     try {
       // Fetch company data and purchase summary data
       const [compRes, purchaseRes] = await Promise.all([
-        axios.get("http://localhost:5000/api/company"),
+        axios.get(`${API_BASE_URL}/api/company`),
         axios.get(`http://localhost:5000/api/purchase/summary?fromDate=${fromDate}&toDate=${toDate}`)
       ]);
 

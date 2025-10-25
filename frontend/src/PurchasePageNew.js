@@ -3,6 +3,7 @@ import axios from "axios";
 import { motion } from "framer-motion";
 import jsPDF from "jspdf";
 import { validateTransactionDate, getDefaultTransactionDate } from "./utils/accountingPeriodUtils";
+import API_BASE_URL from "config/api";
 
 // Helper to format number safely
 const n = (v) => (isNaN(Number(v)) ? 0 : Number(v));
@@ -307,7 +308,7 @@ export default function PurchasePage() {
 
   const loadCompanyProfile = async () => {
     try {
-      const res = await axios.get("http://localhost:5000/api/company");
+      const res = await axios.get(`${API_BASE_URL}/api/company`);
       setCompanyProfile(res.data || {});
     } catch (err) {
       console.error(err);
@@ -347,7 +348,7 @@ export default function PurchasePage() {
   // Fetch suppliers
   const fetchSuppliers = async () => {
     try {
-      const res = await axios.get("http://localhost:5000/api/party/all");
+      const res = await axios.get(`${API_BASE_URL}/api/party/all`);
       const onlySuppliers = (res.data || []).filter((p) => parseInt(p.partytype ?? 0, 10) === 2);
       const sortedByName = [...onlySuppliers].sort((a, b) => String(a.partyname || '').localeCompare(String(b.partyname || ''), undefined, { sensitivity: 'base' }));
       setSuppliers(sortedByName);
@@ -359,7 +360,7 @@ export default function PurchasePage() {
   // Generate next TrNo (called only at save time)
   const generateNextTrNo = async () => {
     try {
-      const res = await axios.get("http://localhost:5000/api/purchase");
+      const res = await axios.get(`${API_BASE_URL}/api/purchase`);
       const purchases = res.data || [];
       const lastTrNo = Math.max(0, ...purchases.map(p => parseInt(p.trno) || 0));
       const nextTrNo = lastTrNo + 1;
@@ -374,7 +375,7 @@ export default function PurchasePage() {
   // Fetch all items for the modal
   const fetchAllItems = async () => {
     try {
-      const res = await axios.get("http://localhost:5000/api/items/all");
+      const res = await axios.get(`${API_BASE_URL}/api/items/all`);
       setAllItems(res.data || []);
     } catch (e) {
       console.error(e);
@@ -394,7 +395,7 @@ export default function PurchasePage() {
         params.fyearId = selectedFYearID;
       }
       
-      const res = await axios.get("http://localhost:5000/api/purchase", { params });
+      const res = await axios.get(`${API_BASE_URL}/api/purchase`, { params });
       setPurchases(res.data || []);
     } catch (e) {
       console.error(e);
@@ -1023,7 +1024,7 @@ export default function PurchasePage() {
         const nextTrNo = await generateNextTrNo();
         const payloadWithTrNo = { ...payloadHeader, TrNo: nextTrNo };
         
-        const headerRes = await axios.post("http://localhost:5000/api/purchase", payloadWithTrNo);
+        const headerRes = await axios.post(`${API_BASE_URL}/api/purchase`, payloadWithTrNo);
         tranId = headerRes.data?.TranID;
         if (!tranId) throw new Error("TranID not returned");
         

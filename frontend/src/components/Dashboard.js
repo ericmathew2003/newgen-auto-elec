@@ -16,6 +16,7 @@ import {
 import axios from 'axios';
 import { sampleDashboardData } from '../utils/sampleData';
 import LoadingSpinner from './LoadingSpinner';
+import API_BASE_URL from "../config/api";
 import './Dashboard.css';
 
 const Dashboard = () => {
@@ -40,7 +41,7 @@ const Dashboard = () => {
   const fetchDashboardData = async () => {
     try {
       setLoading(true);
-      const response = await axios.get('http://localhost:5000/api/dashboard/stats');
+      const response = await axios.get(`${API_BASE_URL}/api/dashboard/stats`);
       setDashboardData(response.data);
     } catch (error) {
       console.error('Error fetching dashboard data:', error);
