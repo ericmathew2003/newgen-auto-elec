@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import axios from "axios";
 import { motion } from "framer-motion";
 import { validateTransactionDate, getDefaultTransactionDate } from "./utils/accountingPeriodUtils";
-import API_BASE_URL from "config/api";
+import API_BASE_URL from "./config/api";
 
 // Helpers
 const n = (v) => (isNaN(Number(v)) ? 0 : Number(v));

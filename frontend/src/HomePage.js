@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import { Line } from "react-chartjs-2";
 import { FiTrendingUp, FiShoppingBag, FiUsers, FiUserCheck, FiPackage,FiAlertTriangle,FiDollarSign,FiTruck,FiBarChart,FiActivity,FiShoppingCart,FiBox,FiSettings,FiRefreshCw} from "react-icons/fi";
-import API_BASE_URL from "config/api";
+import API_BASE_URL from "./config/api";
 import {
   Chart as ChartJS,
   CategoryScale,

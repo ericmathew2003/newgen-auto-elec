@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef } from "react";
 import axios from "axios";
-import API_BASE_URL from "config/api";
+import API_BASE_URL from "./config/api";
 
 export default function ItemPage() {
   const [items, setItems] = useState([]);

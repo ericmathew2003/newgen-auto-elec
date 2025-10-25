@@ -4,7 +4,7 @@ import { motion } from "framer-motion";
 import jsPDF from "jspdf";
 import { validateTransactionDate, getDefaultTransactionDate } from "./utils/accountingPeriodUtils";
 import { usePageNavigation, Breadcrumb } from "./components/NavigationHelper";
-import API_BASE_URL from "config/api";
+import API_BASE_URL from "./config/api";
 
 // Helper to format number safely
 const n = (v) => (isNaN(Number(v)) ? 0 : Number(v));

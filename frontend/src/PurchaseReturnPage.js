@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import PurchaseReturnForm from "./PurchaseReturnForm";
-import API_BASE_URL from "config/api";
+import API_BASE_URL from "./config/api";
 
 const n = (v) => (isNaN(Number(v)) ? 0 : Number(v));
 const formatNumber = (val) => {

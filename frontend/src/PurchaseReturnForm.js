@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import axios from "axios";
 import { validateTransactionDate, getDefaultTransactionDate } from "./utils/accountingPeriodUtils";
-import API_BASE_URL from "config/api";
+import API_BASE_URL from "./config/api";
 
 const n = (value) => (isNaN(Number(value)) ? 0 : Number(value));
 const formatNumber = (val) => {
