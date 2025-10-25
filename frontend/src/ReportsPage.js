@@ -37,7 +37,7 @@ const ReportsPage = () => {
       console.log("Making API calls...");
       const [compRes, salesRes] = await Promise.all([
         axios.get(`${API_BASE_URL}/api/company`),
-        axios.get(`http://localhost:5000/api/sales/report?fromDate=${fromDate}&toDate=${toDate}`)
+        axios.get(`${API_BASE_URL}/api/sales/report?fromDate=${fromDate}&toDate=${toDate}`)
       ]);
 
       console.log("Company response:", compRes.data);
