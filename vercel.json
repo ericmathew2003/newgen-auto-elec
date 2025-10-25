@@ -1,10 +1,9 @@
 {
-  "version": 2,
   "buildCommand": "cd frontend && npm install && npm run build",
   "outputDirectory": "frontend/build",
   "functions": {
     "api/**/*.js": {
-      "runtime": "@vercel/node@18.x"
+      "runtime": "@vercel/node@20.x"
     }
   },
   "rewrites": [
