@@ -630,57 +630,102 @@ router.get('/supplier/:partyId/items', async (req, res) => {
 });
 
 /**
- * Database migration route - creates missing tables with correct structure
+ * Database migration route - fixes existing table structure
  */
-router.post('/migrate/create-tables', async (req, res) => {
+router.post('/migrate/fix-tables', async (req, res) => {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
     
-    console.log('Starting database migration...');
+    console.log('Starting database migration to fix table structure...');
     
-    // Create tbltrnpurchasedet table with correct structure
-    await client.query(`
-      CREATE TABLE IF NOT EXISTS public.tbltrnpurchasedet (
-        fyearid smallint NOT NULL,
-        trid bigint GENERATED ALWAYS AS IDENTITY,
-        tranmasid bigint NOT NULL,
-        srno bigint,
-        itemcode bigint NOT NULL,
-        qty numeric(12,2),
-        rate numeric(12,2),
-        invamount numeric(12,2),
-        ohamt numeric(12,2),
-        netrate numeric(12,2),
-        rounded numeric(4,2),
-        cgst numeric(12,2),
-        sgst numeric(12,2),
-        igst numeric(12,2),
-        gtotal numeric(12,2),
-        cgstp numeric(5,2),
-        sgstp numeric(5,2),
-        igstp numeric(5,2),
-        created_date timestamp without time zone DEFAULT now() NOT NULL,
-        edited_date timestamp without time zone DEFAULT now() NOT NULL,
-        PRIMARY KEY (trid)
-      )
+    // Check if trid column is auto-incrementing
+    const columnInfo = await client.query(`
+      SELECT column_default, is_identity 
+      FROM information_schema.columns 
+      WHERE table_name = 'tbltrnpurchasedet' AND column_name = 'trid'
     `);
     
-    // Create tbltrnpurchasecosting table
-    await client.query(`
-      CREATE TABLE IF NOT EXISTS public.tbltrnpurchasecosting (
-        costtrid bigint GENERATED ALWAYS AS IDENTITY,
-        pruchmasid bigint NOT NULL,
-        ohtype character varying(100) NOT NULL,
-        amount numeric(12,2) NOT NULL,
-        referenceno character varying(50),
-        ohdate date,
-        remark character varying(200),
-        created_date timestamp without time zone DEFAULT now() NOT NULL,
-        edited_date timestamp without time zone DEFAULT now() NOT NULL,
-        PRIMARY KEY (costtrid)
-      )
+    console.log('Current trid column info:', columnInfo.rows[0]);
+    
+    if (columnInfo.rows.length > 0 && columnInfo.rows[0].is_identity !== 'YES') {
+      console.log('Fixing trid column to be auto-incrementing...');
+      
+      // Drop and recreate the table with correct structure
+      // First backup any existing data
+      const backupData = await client.query('SELECT * FROM tbltrnpurchasedet');
+      console.log(`Backing up ${backupData.rows.length} existing records`);
+      
+      // Drop the table
+      await client.query('DROP TABLE IF EXISTS public.tbltrnpurchasedet CASCADE');
+      
+      // Recreate with correct structure
+      await client.query(`
+        CREATE TABLE public.tbltrnpurchasedet (
+          fyearid smallint NOT NULL,
+          trid bigint GENERATED ALWAYS AS IDENTITY,
+          tranmasid bigint NOT NULL,
+          srno bigint,
+          itemcode bigint NOT NULL,
+          qty numeric(12,2),
+          rate numeric(12,2),
+          invamount numeric(12,2),
+          ohamt numeric(12,2),
+          netrate numeric(12,2),
+          rounded numeric(4,2),
+          cgst numeric(12,2),
+          sgst numeric(12,2),
+          igst numeric(12,2),
+          gtotal numeric(12,2),
+          cgstp numeric(5,2),
+          sgstp numeric(5,2),
+          igstp numeric(5,2),
+          created_date timestamp without time zone DEFAULT now() NOT NULL,
+          edited_date timestamp without time zone DEFAULT now() NOT NULL,
+          PRIMARY KEY (trid)
+        )
+      `);
+      
+      // Restore data (excluding trid since it will be auto-generated)
+      for (const row of backupData.rows) {
+        await client.query(`
+          INSERT INTO tbltrnpurchasedet 
+          (fyearid, tranmasid, srno, itemcode, qty, rate, invamount, ohamt, netrate, rounded, cgst, sgst, igst, gtotal, cgstp, sgstp, igstp)
+          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
+        `, [
+          row.fyearid, row.tranmasid, row.srno, row.itemcode, row.qty, row.rate, 
+          row.invamount, row.ohamt, row.netrate, row.rounded, row.cgst, row.sgst, 
+          row.igst, row.gtotal, row.cgstp, row.sgstp, row.igstp
+        ]);
+      }
+      
+      console.log(`Restored ${backupData.rows.length} records with auto-incrementing trid`);
+    }
+    
+    // Fix tbltrnpurchasecosting table if needed
+    const costingColumnInfo = await client.query(`
+      SELECT column_default, is_identity 
+      FROM information_schema.columns 
+      WHERE table_name = 'tbltrnpurchasecosting' AND column_name = 'costtrid'
     `);
+    
+    if (costingColumnInfo.rows.length === 0) {
+      // Create the costing table if it doesn't exist
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS public.tbltrnpurchasecosting (
+          costtrid bigint GENERATED ALWAYS AS IDENTITY,
+          pruchmasid bigint NOT NULL,
+          ohtype character varying(100) NOT NULL,
+          amount numeric(12,2) NOT NULL,
+          referenceno character varying(50),
+          ohdate date,
+          remark character varying(200),
+          created_date timestamp without time zone DEFAULT now() NOT NULL,
+          edited_date timestamp without time zone DEFAULT now() NOT NULL,
+          PRIMARY KEY (costtrid)
+        )
+      `);
+    }
     
     // Create indexes
     await client.query(`CREATE INDEX IF NOT EXISTS idx_tbltrnpurchasedet_tranmasid ON public.tbltrnpurchasedet(tranmasid)`);
@@ -693,8 +738,8 @@ router.post('/migrate/create-tables', async (req, res) => {
     
     res.json({
       success: true,
-      message: 'Database tables created successfully',
-      tables_created: ['tbltrnpurchasedet', 'tbltrnpurchasecosting'],
+      message: 'Database table structure fixed successfully',
+      details: 'trid column is now auto-incrementing',
       timestamp: new Date().toISOString()
     });
     
