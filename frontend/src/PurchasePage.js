@@ -1554,6 +1554,7 @@ export default function PurchasePage() {
               <button
                 onClick={(e) => {
                   console.log('🔥 NEW BUTTON CLICKED - Event fired!', e.target);
+                  alert('New button clicked! Check console for details.');
                   e.preventDefault();
                   e.stopPropagation();
                   
@@ -1564,6 +1565,7 @@ export default function PurchasePage() {
                   
                   if (showForm && !isSaved && !isConfirmed) {
                     console.log('New button blocked: form is open but purchase not saved or confirmed');
+                    alert('Navigation blocked: Purchase not saved or confirmed');
                     return;
                   }
                   
@@ -1573,6 +1575,7 @@ export default function PurchasePage() {
                     console.log('✅ navigateToNew() called successfully');
                   } catch (error) {
                     console.error('❌ Error calling navigateToNew():', error);
+                    alert('Error during navigation: ' + error.message);
                   }
                 }}
                 onMouseEnter={() => console.log('🖱️ Mouse entered New button')}
