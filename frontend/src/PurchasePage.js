@@ -1543,34 +1543,48 @@ export default function PurchasePage() {
           <div className="flex items-center justify-between w-full mb-2">
             <div className="flex items-center gap-2">
               {/* Debug: Log button state when in form view */}
-              {showForm && console.log('New button state:', { 
+              {showForm && console.log('🔍 New button render state:', { 
                 showForm, 
                 editingPurchase: editingPurchase?.tranid, 
                 costconfirmed: header.Costconfirmed,
-                disabled: showForm && !editingPurchase?.tranid && !header.Costconfirmed
+                disabled: showForm && !editingPurchase?.tranid && !header.Costconfirmed,
+                isNewMode,
+                isEditMode
               })}
               <button
-                onClick={() => {
+                onClick={(e) => {
+                  console.log('🔥 NEW BUTTON CLICKED - Event fired!', e.target);
+                  e.preventDefault();
+                  e.stopPropagation();
+                  
                   // Allow new purchase if form is not open OR if current purchase is saved OR confirmed
                   const isSaved = editingPurchase?.tranid;
                   const isConfirmed = header.Costconfirmed;
-                  console.log('New button clicked:', { showForm, isSaved, isConfirmed, editingPurchase: editingPurchase?.tranid });
+                  console.log('New button state check:', { showForm, isSaved, isConfirmed, editingPurchase: editingPurchase?.tranid });
                   
                   if (showForm && !isSaved && !isConfirmed) {
                     console.log('New button blocked: form is open but purchase not saved or confirmed');
                     return;
                   }
                   
-                  console.log('Navigating to new purchase...');
-                  navigateToNew();
+                  console.log('✅ Navigating to new purchase...');
+                  try {
+                    navigateToNew();
+                    console.log('✅ navigateToNew() called successfully');
+                  } catch (error) {
+                    console.error('❌ Error calling navigateToNew():', error);
+                  }
                 }}
+                onMouseEnter={() => console.log('🖱️ Mouse entered New button')}
+                onMouseLeave={() => console.log('🖱️ Mouse left New button')}
                 disabled={showForm && !editingPurchase?.tranid && !header.Costconfirmed}
-                className={`px-4 py-2 rounded-lg shadow text-white transition-all ${
+                className={`px-4 py-2 rounded-lg shadow text-white transition-all relative z-50 ${
                   (showForm && !editingPurchase?.tranid && !header.Costconfirmed) 
                     ? "bg-gray-400 cursor-not-allowed opacity-50 pointer-events-none" 
                     : "bg-purple-600 hover:bg-purple-700 active:bg-purple-800"
                 }`}
                 title={`New Purchase (showForm: ${showForm}, saved: ${!!editingPurchase?.tranid}, confirmed: ${header.Costconfirmed}) - ${(showForm && !editingPurchase?.tranid && !header.Costconfirmed) ? 'DISABLED' : 'ENABLED'}`}
+                style={{ zIndex: 9999 }}
               >
                 New
               </button>
