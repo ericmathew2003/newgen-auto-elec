@@ -464,7 +464,7 @@ router.delete("/:tranId", async (req, res) => {
   const { tranId } = req.params;
   try {
     await pool.query(`DELETE FROM tbltrnpurchasedet WHERE tranmasid = $1`, [tranId]);
-    await pool.query(`DELETE FROM tblTrnPurchase WHERE TranID = $1`, [tranId]);
+    await pool.query(`DELETE FROM tbltrnpurchase WHERE tranid = $1`, [tranId]);
     res.json({ success: true });
   } catch (err) {
     console.error(err);
@@ -586,6 +586,95 @@ router.get('/supplier/:partyId/items', async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Failed to fetch supplier items' });
+  }
+});
+
+/**
+ * Test route to check database table structure
+ */
+router.get('/test/db-structure', async (req, res) => {
+  try {
+    // Test if tables exist and have correct structure
+    const tests = [];
+    
+    // Test 1: Check if tbltrnpurchasedet table exists
+    try {
+      const result1 = await pool.query(`
+        SELECT column_name, data_type, is_nullable 
+        FROM information_schema.columns 
+        WHERE table_name = 'tbltrnpurchasedet' 
+        ORDER BY ordinal_position
+      `);
+      tests.push({
+        test: 'tbltrnpurchasedet table structure',
+        success: true,
+        columns: result1.rows
+      });
+    } catch (err) {
+      tests.push({
+        test: 'tbltrnpurchasedet table structure',
+        success: false,
+        error: err.message
+      });
+    }
+    
+    // Test 2: Check if tbltrnpurchasecosting table exists
+    try {
+      const result2 = await pool.query(`
+        SELECT column_name, data_type, is_nullable 
+        FROM information_schema.columns 
+        WHERE table_name = 'tbltrnpurchasecosting' 
+        ORDER BY ordinal_position
+      `);
+      tests.push({
+        test: 'tbltrnpurchasecosting table structure',
+        success: true,
+        columns: result2.rows
+      });
+    } catch (err) {
+      tests.push({
+        test: 'tbltrnpurchasecosting table structure',
+        success: false,
+        error: err.message
+      });
+    }
+    
+    // Test 3: Try a simple insert/delete to tbltrnpurchasedet
+    try {
+      await pool.query(`
+        INSERT INTO tbltrnpurchasedet 
+        (fyearid, tranmasid, srno, itemcode, qty, rate, invamount, ohamt, netrate, rounded, cgst, sgst, igst, gtotal, cgstp, sgstp, igstp)
+        VALUES (1, 999999, 1, 1001, 1.00, 100.00, 100.00, 0.00, 100.00, 0.00, 9.00, 9.00, 0.00, 118.00, 9.00, 9.00, 0.00)
+      `);
+      
+      await pool.query(`DELETE FROM tbltrnpurchasedet WHERE tranmasid = 999999 AND srno = 1`);
+      
+      tests.push({
+        test: 'tbltrnpurchasedet insert/delete',
+        success: true,
+        message: 'Insert and delete operations successful'
+      });
+    } catch (err) {
+      tests.push({
+        test: 'tbltrnpurchasedet insert/delete',
+        success: false,
+        error: err.message,
+        code: err.code
+      });
+    }
+    
+    res.json({
+      message: 'Database structure test completed',
+      tests: tests,
+      timestamp: new Date().toISOString()
+    });
+    
+  } catch (err) {
+    console.error('Database test error:', err);
+    res.status(500).json({
+      error: 'Database test failed',
+      details: err.message
+    });
   }
 });
 
