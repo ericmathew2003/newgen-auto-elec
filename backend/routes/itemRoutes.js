@@ -8,7 +8,7 @@ const pool = require("../db"); // <-- your PostgreSQL pool/connection file
 router.get("/all", async (req, res) => {
   try {
     const result = await pool.query(`
-      SELECT 
+      SELECT DISTINCT ON (i.itemcode)
         i.*,
         g.groupname,
         m.makename,
@@ -19,9 +19,21 @@ router.get("/all", async (req, res) => {
       LEFT JOIN tblMasBrand b ON i.brandid = b.brandid
       ORDER BY i.itemcode ASC
     `);
+    
+    console.log(`Items API: Returning ${result.rows.length} items`);
+    
+    // Check for duplicates in the result
+    const itemCodes = result.rows.map(item => item.itemcode);
+    const uniqueItemCodes = [...new Set(itemCodes)];
+    
+    if (itemCodes.length !== uniqueItemCodes.length) {
+      console.warn(`⚠️ Duplicate item codes detected in query result!`);
+      console.warn(`Total rows: ${itemCodes.length}, Unique codes: ${uniqueItemCodes.length}`);
+    }
+    
     res.json(result.rows);
   } catch (err) {
-    console.error(err.message);
+    console.error("Error in /api/items/all:", err.message);
     res.status(500).send("Server Error");
   }
 });

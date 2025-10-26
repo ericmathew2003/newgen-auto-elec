@@ -149,7 +149,30 @@ export default function ItemPage() {
         setIsRefreshing(true);
       }
       const res = await axios.get(`${API_BASE_URL}/api/items/all`);
-      setItems(res.data);
+      
+      // Debug: Check for duplicates in the response
+      const itemCodes = res.data.map(item => item.itemcode);
+      const uniqueItemCodes = [...new Set(itemCodes)];
+      
+      if (itemCodes.length !== uniqueItemCodes.length) {
+        console.warn(`⚠️ Frontend: Duplicate items detected in API response!`);
+        console.warn(`Total items: ${itemCodes.length}, Unique codes: ${uniqueItemCodes.length}`);
+        
+        // Find and log duplicates
+        const duplicates = itemCodes.filter((code, index) => itemCodes.indexOf(code) !== index);
+        console.warn(`Duplicate item codes:`, [...new Set(duplicates)]);
+      }
+      
+      // Remove duplicates on the frontend as a safety measure
+      const uniqueItems = res.data.filter((item, index, self) => 
+        index === self.findIndex(i => i.itemcode === item.itemcode)
+      );
+      
+      if (uniqueItems.length !== res.data.length) {
+        console.log(`Removed ${res.data.length - uniqueItems.length} duplicate items on frontend`);
+      }
+      
+      setItems(uniqueItems);
     } catch (err) {
       console.error(err);
     } finally {
