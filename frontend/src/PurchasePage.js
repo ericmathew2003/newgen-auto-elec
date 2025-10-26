@@ -1547,13 +1547,21 @@ export default function PurchasePage() {
                   // Allow new purchase if form is not open OR if current purchase is saved OR confirmed
                   const isSaved = editingPurchase?.tranid;
                   const isConfirmed = header.Costconfirmed;
-                  if (showForm && !isSaved && !isConfirmed) return;
+                  console.log('New button clicked:', { showForm, isSaved, isConfirmed, editingPurchase: editingPurchase?.tranid });
+                  
+                  if (showForm && !isSaved && !isConfirmed) {
+                    console.log('New button blocked: form is open but purchase not saved or confirmed');
+                    return;
+                  }
+                  
+                  console.log('Navigating to new purchase...');
                   navigateToNew();
                 }}
                 disabled={showForm && !editingPurchase?.tranid && !header.Costconfirmed}
                 className={`px-4 py-2 rounded-lg shadow text-white ${
                   (showForm && !editingPurchase?.tranid && !header.Costconfirmed) ? "bg-purple-400 cursor-not-allowed opacity-60" : "bg-purple-600 hover:bg-purple-700"
                 }`}
+                title={`New Purchase (showForm: ${showForm}, saved: ${!!editingPurchase?.tranid}, confirmed: ${header.Costconfirmed})`}
               >
                 New
               </button>
