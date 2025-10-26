@@ -414,9 +414,33 @@ router.post('/:tranId/items', async (req, res) => {
   });
 
   try {
+    // First, check if the table exists and has the correct structure
+    const tableCheck = await pool.query(`
+      SELECT column_name 
+      FROM information_schema.columns 
+      WHERE table_name = 'tbltrnpurchasedet'
+      ORDER BY ordinal_position
+    `);
+    
+    console.log("Purchase Items POST - Table columns found:", tableCheck.rows.map(r => r.column_name));
+    
+    if (tableCheck.rows.length === 0) {
+      throw new Error("Table 'tbltrnpurchasedet' does not exist. Please run the database migration script.");
+    }
+    
+    const requiredColumns = ['fyearid', 'tranmasid', 'srno', 'itemcode', 'qty', 'rate', 'invamount', 'ohamt', 'netrate', 'rounded', 'cgst', 'sgst', 'igst', 'gtotal', 'cgstp', 'sgstp', 'igstp'];
+    const existingColumns = tableCheck.rows.map(r => r.column_name);
+    const missingColumns = requiredColumns.filter(col => !existingColumns.includes(col));
+    
+    if (missingColumns.length > 0) {
+      throw new Error(`Table 'tbltrnpurchasedet' is missing required columns: ${missingColumns.join(', ')}`);
+    }
+
     // Ensure idempotency without relying on a DB unique constraint: delete then insert
+    console.log("Purchase Items POST - Deleting existing record if any");
     await pool.query(`DELETE FROM tbltrnpurchasedet WHERE tranmasid = $1 AND srno = $2`, [tranId, Srno]);
 
+    console.log("Purchase Items POST - Inserting new record");
     await pool.query(
       `INSERT INTO tbltrnpurchasedet
        (fyearid, tranmasid, srno, itemcode, qty, rate, invamount, ohamt, netrate, rounded,
@@ -449,10 +473,26 @@ router.post('/:tranId/items', async (req, res) => {
     console.error("Purchase Items POST - Error:", err);
     console.error("Purchase Items POST - Error message:", err.message);
     console.error("Purchase Items POST - Error code:", err.code);
+    console.error("Purchase Items POST - Error detail:", err.detail);
+    console.error("Purchase Items POST - Error hint:", err.hint);
+    
+    // Provide more specific error messages
+    let userMessage = 'Failed to save purchase item';
+    if (err.message.includes('does not exist')) {
+      userMessage = 'Database table missing. Please contact administrator.';
+    } else if (err.message.includes('missing required columns')) {
+      userMessage = 'Database structure outdated. Please contact administrator.';
+    } else if (err.code === '42P01') {
+      userMessage = 'Database table does not exist. Please run database migration.';
+    } else if (err.code === '42703') {
+      userMessage = 'Database column missing. Please update database structure.';
+    }
+    
     res.status(500).json({ 
-      error: 'Failed to save purchase item',
-      details: err.message,
-      code: err.code
+      error: userMessage,
+      technical_details: err.message,
+      code: err.code,
+      hint: err.hint
     });
   }
 });
@@ -586,6 +626,89 @@ router.get('/supplier/:partyId/items', async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Failed to fetch supplier items' });
+  }
+});
+
+/**
+ * Database migration route - creates missing tables with correct structure
+ */
+router.post('/migrate/create-tables', async (req, res) => {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    
+    console.log('Starting database migration...');
+    
+    // Create tbltrnpurchasedet table with correct structure
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS public.tbltrnpurchasedet (
+        fyearid smallint NOT NULL,
+        trid bigint GENERATED ALWAYS AS IDENTITY,
+        tranmasid bigint NOT NULL,
+        srno bigint,
+        itemcode bigint NOT NULL,
+        qty numeric(12,2),
+        rate numeric(12,2),
+        invamount numeric(12,2),
+        ohamt numeric(12,2),
+        netrate numeric(12,2),
+        rounded numeric(4,2),
+        cgst numeric(12,2),
+        sgst numeric(12,2),
+        igst numeric(12,2),
+        gtotal numeric(12,2),
+        cgstp numeric(5,2),
+        sgstp numeric(5,2),
+        igstp numeric(5,2),
+        created_date timestamp without time zone DEFAULT now() NOT NULL,
+        edited_date timestamp without time zone DEFAULT now() NOT NULL,
+        PRIMARY KEY (trid)
+      )
+    `);
+    
+    // Create tbltrnpurchasecosting table
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS public.tbltrnpurchasecosting (
+        costtrid bigint GENERATED ALWAYS AS IDENTITY,
+        pruchmasid bigint NOT NULL,
+        ohtype character varying(100) NOT NULL,
+        amount numeric(12,2) NOT NULL,
+        referenceno character varying(50),
+        ohdate date,
+        remark character varying(200),
+        created_date timestamp without time zone DEFAULT now() NOT NULL,
+        edited_date timestamp without time zone DEFAULT now() NOT NULL,
+        PRIMARY KEY (costtrid)
+      )
+    `);
+    
+    // Create indexes
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_tbltrnpurchasedet_tranmasid ON public.tbltrnpurchasedet(tranmasid)`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_tbltrnpurchasedet_itemcode ON public.tbltrnpurchasedet(itemcode)`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_tbltrnpurchasecosting_pruchmasid ON public.tbltrnpurchasecosting(pruchmasid)`);
+    
+    await client.query('COMMIT');
+    
+    console.log('Database migration completed successfully');
+    
+    res.json({
+      success: true,
+      message: 'Database tables created successfully',
+      tables_created: ['tbltrnpurchasedet', 'tbltrnpurchasecosting'],
+      timestamp: new Date().toISOString()
+    });
+    
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('Database migration error:', err);
+    res.status(500).json({
+      success: false,
+      error: 'Database migration failed',
+      details: err.message,
+      code: err.code
+    });
+  } finally {
+    client.release();
   }
 });
 
