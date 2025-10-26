@@ -1542,6 +1542,13 @@ export default function PurchasePage() {
           </div>
           <div className="flex items-center justify-between w-full mb-2">
             <div className="flex items-center gap-2">
+              {/* Debug: Log button state when in form view */}
+              {showForm && console.log('New button state:', { 
+                showForm, 
+                editingPurchase: editingPurchase?.tranid, 
+                costconfirmed: header.Costconfirmed,
+                disabled: showForm && !editingPurchase?.tranid && !header.Costconfirmed
+              })}
               <button
                 onClick={() => {
                   // Allow new purchase if form is not open OR if current purchase is saved OR confirmed
@@ -1558,10 +1565,12 @@ export default function PurchasePage() {
                   navigateToNew();
                 }}
                 disabled={showForm && !editingPurchase?.tranid && !header.Costconfirmed}
-                className={`px-4 py-2 rounded-lg shadow text-white ${
-                  (showForm && !editingPurchase?.tranid && !header.Costconfirmed) ? "bg-purple-400 cursor-not-allowed opacity-60" : "bg-purple-600 hover:bg-purple-700"
+                className={`px-4 py-2 rounded-lg shadow text-white transition-all ${
+                  (showForm && !editingPurchase?.tranid && !header.Costconfirmed) 
+                    ? "bg-gray-400 cursor-not-allowed opacity-50 pointer-events-none" 
+                    : "bg-purple-600 hover:bg-purple-700 active:bg-purple-800"
                 }`}
-                title={`New Purchase (showForm: ${showForm}, saved: ${!!editingPurchase?.tranid}, confirmed: ${header.Costconfirmed})`}
+                title={`New Purchase (showForm: ${showForm}, saved: ${!!editingPurchase?.tranid}, confirmed: ${header.Costconfirmed}) - ${(showForm && !editingPurchase?.tranid && !header.Costconfirmed) ? 'DISABLED' : 'ENABLED'}`}
               >
                 New
               </button>
