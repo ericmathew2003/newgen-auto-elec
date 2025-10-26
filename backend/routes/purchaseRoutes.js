@@ -408,10 +408,7 @@ router.post('/:tranId/items', async (req, res) => {
     IGSTPer
   } = req.body || {};
 
-  console.log("Purchase Items POST - Request data:", {
-    tranId, FYearID, Srno, ItemCode, Qty, Rate, InvAmount, OHAmt, NetRate, Rounded,
-    CGSTAmount, SGSTAmout, IGSTAmount, GTotal, CGSTPer, SGSTPer, IGSTPer
-  });
+
 
   try {
     // First, check if the table exists and has the correct structure
@@ -422,7 +419,7 @@ router.post('/:tranId/items', async (req, res) => {
       ORDER BY ordinal_position
     `);
     
-    console.log("Purchase Items POST - Table columns found:", tableCheck.rows.map(r => r.column_name));
+
     
     if (tableCheck.rows.length === 0) {
       throw new Error("Table 'tbltrnpurchasedet' does not exist. Please run the database migration script.");
@@ -437,16 +434,9 @@ router.post('/:tranId/items', async (req, res) => {
     }
 
     // Ensure idempotency without relying on a DB unique constraint: delete then insert
-    console.log("Purchase Items POST - Deleting existing record if any");
-    console.log("Purchase Items POST - Delete params:", { tranId, Srno });
     const deleteResult = await pool.query(`DELETE FROM tbltrnpurchasedet WHERE tranmasid = $1 AND srno = $2`, [tranId, Srno]);
-    console.log("Purchase Items POST - Deleted rows:", deleteResult.rowCount);
 
-    console.log("Purchase Items POST - Inserting new record");
-    console.log("Purchase Items POST - Insert values:", [
-      FYearID, tranId, Srno, ItemCode, Qty, Rate, InvAmount, OHAmt, NetRate, Rounded,
-      CGSTAmount, SGSTAmout, IGSTAmount, GTotal, CGSTPer, SGSTPer, IGSTPer
-    ]);
+
     
     const insertResult = await pool.query(
       `INSERT INTO tbltrnpurchasedet
@@ -475,9 +465,7 @@ router.post('/:tranId/items', async (req, res) => {
       ]
     );
     
-    console.log("Purchase Items POST - Insert successful, new trid:", insertResult.rows[0]?.trid);
 
-    console.log("Purchase Items POST - Successfully inserted item");
     res.json({ success: true });
   } catch (err) {
     console.error("Purchase Items POST - Error:", err);
