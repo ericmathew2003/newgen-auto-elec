@@ -193,10 +193,10 @@ router.get("/next-invno", async (req, res) => {
 // Test endpoint to verify API is working
 router.get("/report-test", async (req, res) => {
   try {
-    res.json({ 
-      message: "Report API is working", 
+    res.json({
+      message: "Report API is working",
       timestamp: new Date().toISOString(),
-      query: req.query 
+      query: req.query
     });
   } catch (err) {
     res.status(500).json({ error: "Test failed", details: err.message });
@@ -207,9 +207,9 @@ router.get("/report-test", async (req, res) => {
 router.get("/summary", async (req, res) => {
   try {
     const { fromDate, toDate } = req.query;
-    
+
     console.log("Sales summary endpoint called with:", { fromDate, toDate });
-    
+
     if (!fromDate || !toDate) {
       console.log("Missing dates - fromDate:", fromDate, "toDate:", toDate);
       return res.status(400).json({ error: "fromDate and toDate are required" });
@@ -236,15 +236,15 @@ router.get("/summary", async (req, res) => {
     `;
 
     console.log("Executing sales summary query with params:", [fromDate, toDate]);
-    
+
     try {
       const result = await pool.query(query, [fromDate, toDate]);
       console.log("Sales summary query executed successfully, result count:", result.rows.length);
       res.json(result.rows);
     } catch (queryError) {
       console.error("Database query error:", queryError);
-      return res.status(400).json({ 
-        error: "Database query failed", 
+      return res.status(400).json({
+        error: "Database query failed",
         details: queryError.message,
         query: query,
         params: [fromDate, toDate]
@@ -253,8 +253,8 @@ router.get("/summary", async (req, res) => {
   } catch (err) {
     console.error("Error fetching sales summary:", err.message);
     console.error("Full error:", err);
-    res.status(500).json({ 
-      error: "Server Error", 
+    res.status(500).json({
+      error: "Server Error",
       details: err.message,
       query_params: { fromDate, toDate }
     });
@@ -265,11 +265,11 @@ router.get("/summary", async (req, res) => {
 router.get("/report", async (req, res) => {
   try {
     const { fromDate, toDate } = req.query;
-    
+
     console.log("Report endpoint called with:", { fromDate, toDate });
     console.log("fromDate type:", typeof fromDate, "value:", fromDate);
     console.log("toDate type:", typeof toDate, "value:", toDate);
-    
+
     if (!fromDate || !toDate) {
       console.log("Missing dates - fromDate:", fromDate, "toDate:", toDate);
       return res.status(400).json({ error: "fromDate and toDate are required" });
@@ -303,15 +303,15 @@ router.get("/report", async (req, res) => {
 
     console.log("Executing query with params:", [fromDate, toDate]);
     console.log("Query:", query);
-    
+
     try {
       const result = await pool.query(query, [fromDate, toDate]);
       console.log("Query executed successfully, result count:", result.rows.length);
       res.json(result.rows);
     } catch (queryError) {
       console.error("Database query error:", queryError);
-      return res.status(400).json({ 
-        error: "Database query failed", 
+      return res.status(400).json({
+        error: "Database query failed",
         details: queryError.message,
         query: query,
         params: [fromDate, toDate]
@@ -320,8 +320,8 @@ router.get("/report", async (req, res) => {
   } catch (err) {
     console.error("Error fetching sales report:", err.message);
     console.error("Full error:", err);
-    res.status(500).json({ 
-      error: "Server Error", 
+    res.status(500).json({
+      error: "Server Error",
       details: err.message,
       query_params: { fromDate, toDate }
     });
@@ -334,9 +334,9 @@ router.get("/", async (req, res) => {
   const where = [];
   const params = [];
   if (fromDate) { params.push(fromDate); where.push(`m.inv_date >= $${params.length}`); }
-  if (toDate)   { params.push(toDate);   where.push(`m.inv_date <= $${params.length}`); }
-  if (partyId)  { params.push(partyId);  where.push(`m.party_id = $${params.length}`); }
-  if (fyearId)  { params.push(fyearId);  where.push(`m.fyear_id = $${params.length}`); }
+  if (toDate) { params.push(toDate); where.push(`m.inv_date <= $${params.length}`); }
+  if (partyId) { params.push(partyId); where.push(`m.party_id = $${params.length}`); }
+  if (fyearId) { params.push(fyearId); where.push(`m.fyear_id = $${params.length}`); }
   const filter = where.length ? `WHERE ${where.join(" AND ")}` : "";
 
   try {
@@ -361,10 +361,10 @@ router.get("/", async (req, res) => {
 // Test endpoint to verify API is working
 router.get("/report-test", async (req, res) => {
   try {
-    res.json({ 
-      message: "Report API is working", 
+    res.json({
+      message: "Report API is working",
       timestamp: new Date().toISOString(),
-      query: req.query 
+      query: req.query
     });
   } catch (err) {
     res.status(500).json({ error: "Test failed", details: err.message });
@@ -517,12 +517,7 @@ router.post("/:invMasterId/post", async (req, res) => {
     const igstAmt = num(m.igst_amount);
     const finalTotal = totAmount + roundOff; // final invoice amount
 
-    // Insert into acc_trn_invoice
-    await client.query(
-      `INSERT INTO public.acc_trn_invoice (fyear_id, party_id, tran_type, inv_master_id, tran_date, tran_amount)
-       VALUES ($1,$2,$3,$4,$5,$6)`,
-      [m.fyear_id, m.party_id, 'Sale', invMasterId, m.inv_date, finalTotal]
-    );
+    // Note: acc_trn_invoice table updates removed as requested
 
     const descSalesParty = `Being receivable from customer for sales invoice #${m.inv_no}`;
     const descSalesAmount = `Being Sales amount for sales invoice #${m.inv_no}`;
@@ -693,5 +688,61 @@ router.post("/:invMasterId/post", async (req, res) => {
 });
 
 
+
+/**
+ * Fix auto-increment sequence for inv_master_id column
+ */
+router.post('/fix/sequence', async (req, res) => {
+  try {
+    console.log('Fixing auto-increment sequence for inv_master_id...');
+
+    // Get the current maximum inv_master_id value
+    const maxResult = await pool.query('SELECT COALESCE(MAX(inv_master_id), 0) as max_id FROM trn_invoice_master');
+    const maxId = maxResult.rows[0].max_id;
+    console.log('Current max inv_master_id:', maxId);
+
+    // Get the sequence name for the inv_master_id column
+    const seqResult = await pool.query(`
+      SELECT pg_get_serial_sequence('trn_invoice_master', 'inv_master_id') as sequence_name
+    `);
+    const sequenceName = seqResult.rows[0].sequence_name;
+    console.log('Sequence name:', sequenceName);
+
+    if (sequenceName) {
+      // Reset the sequence to start from max_id + 1
+      const nextVal = maxId + 1;
+      await pool.query(`SELECT setval('${sequenceName}', $1, false)`, [nextVal]);
+      console.log(`Sequence reset to start from: ${nextVal}`);
+
+      // Test the sequence by getting the next value
+      const testResult = await pool.query(`SELECT nextval('${sequenceName}') as next_val`);
+      const nextValue = testResult.rows[0].next_val;
+      console.log('Next sequence value will be:', nextValue);
+
+      res.json({
+        success: true,
+        message: 'Sales invoice auto-increment sequence fixed successfully',
+        max_existing_id: maxId,
+        sequence_name: sequenceName,
+        next_id_will_be: nextValue,
+        timestamp: new Date().toISOString()
+      });
+    } else {
+      res.status(400).json({
+        success: false,
+        error: 'Could not find sequence for inv_master_id column'
+      });
+    }
+
+  } catch (err) {
+    console.error('Sales sequence fix error:', err);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fix sales sequence',
+      details: err.message,
+      code: err.code
+    });
+  }
+});
 
 module.exports = router;
