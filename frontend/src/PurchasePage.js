@@ -1555,7 +1555,7 @@ export default function PurchasePage() {
                   // Reset form state before navigating
                   setEditingPurchase(null);
                   setHeader(initialHeader);
-                  setRows([]);
+                  setItems([]);
                   setCurrentTranId(null);
                   setGrnStatus('draft');
                   setNoOverhead(false);
