@@ -101,7 +101,7 @@ export default function BrandPage() {
     try {
       if (editingBrand) {
         await axios.put(
-          `http://localhost:5000/api/brands/edit/${editingBrand.brandid}`,
+          `${API_BASE_URL}/api/brands/edit/${editingBrand.brandid}`,
           { BrandName: formData.BrandName }
         );
         showToast("Brand updated successfully!", 'success');
@@ -130,7 +130,7 @@ export default function BrandPage() {
   const handleDelete = async (id) => {
     if (!window.confirm("Are you sure you want to delete this Brand?")) return;
     try {
-      await axios.delete(`http://localhost:5000/api/brands/delete/${id}`);
+      await axios.delete(`${API_BASE_URL}/api/brands/delete/${id}`);
       showToast("Brand deleted successfully!", 'success');
       fetchBrands();
     } catch (err) {

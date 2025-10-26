@@ -173,7 +173,7 @@ export default function ItemPage() {
 
     setLoadingTransactions(true);
     try {
-      const res = await axios.get(`http://localhost:5000/api/items/${itemCode}/${type}`);
+      const res = await axios.get(`${API_BASE_URL}/api/items/${itemCode}/${type}`);
       setTransactionData(prev => ({
         ...prev,
         [type]: res.data || []
@@ -299,7 +299,7 @@ export default function ItemPage() {
       const payload = normalizeForApi(formData);
       if (editingItem) {
         await axios.put(
-          `http://localhost:5000/api/items/edit/${editingItem.itemcode}`,
+          `${API_BASE_URL}/api/items/edit/${editingItem.itemcode}`,
           payload
         );
         showToast("Item updated successfully!", 'success');
@@ -389,7 +389,7 @@ export default function ItemPage() {
   const handleDelete = async (itemCode) => {
     if (window.confirm("Are you sure you want to delete this item?")) {
       try {
-        await axios.delete(`http://localhost:5000/api/items/delete/${itemCode}`);
+        await axios.delete(`${API_BASE_URL}/api/items/delete/${itemCode}`);
         showToast("Item deleted successfully!", 'success');
         fetchItems();
       } catch (err) {

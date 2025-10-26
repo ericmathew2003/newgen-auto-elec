@@ -99,7 +99,7 @@ export default function GroupPage() {
     try {
       if (editingGroup) {
         await axios.put(
-          `http://localhost:5000/api/groups/edit/${editingGroup.groupid}`,
+          `${API_BASE_URL}/api/groups/edit/${editingGroup.groupid}`,
           { GroupName: formData.GroupName }
         );
         showToast("Group updated successfully!", 'success');
@@ -128,7 +128,7 @@ export default function GroupPage() {
   const handleDelete = async (id) => {
     if (!window.confirm("Are you sure you want to delete this Group?")) return;
     try {
-      await axios.delete(`http://localhost:5000/api/groups/delete/${id}`);
+      await axios.delete(`${API_BASE_URL}/api/groups/delete/${id}`);
       showToast("Group deleted successfully!", 'success');
       fetchGroups();
     } catch (err) {

@@ -103,7 +103,7 @@ export default function MakePage() {
     try {
       if (editingMake) {
         await axios.put(
-          `http://localhost:5000/api/makes/edit/${editingMake.makeid}`,
+          `${API_BASE_URL}/api/makes/edit/${editingMake.makeid}`,
           { MakeName: formData.MakeName }
         );
         showToast("Make updated successfully!", 'success');
@@ -132,7 +132,7 @@ export default function MakePage() {
   const handleDelete = async (id) => {
     if (!window.confirm("Are you sure you want to delete this Make?")) return;
     try {
-      await axios.delete(`http://localhost:5000/api/makes/delete/${id}`);
+      await axios.delete(`${API_BASE_URL}/api/makes/delete/${id}`);
       showToast("Make deleted successfully!", 'success');
       fetchMakes();
     } catch (err) {

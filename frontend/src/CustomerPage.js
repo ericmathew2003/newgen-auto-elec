@@ -185,7 +185,7 @@ export default function CustomerPage() {
         // PUT edit (PartyID in URL; body excludes PartyID per backend route)
         const { PartyID, ...rest } = formData;
         // Ensure customer type stays 1 on edit
-        await axios.put(`http://localhost:5000/api/party/edit/${editingParty.partyid}`, { ...rest, PartyType: 1 });
+        await axios.put(`${API_BASE_URL}/api/party/edit/${editingParty.partyid}`, { ...rest, PartyType: 1 });
         showToast("Customer updated successfully!", 'success');
       } else {
         // POST add - exclude PartyID since it's auto-generated, force customer type to 1
@@ -226,7 +226,7 @@ export default function CustomerPage() {
   const handleDelete = async (id) => {
     if (!window.confirm("Are you sure you want to delete this Customer?")) return;
     try {
-      await axios.delete(`http://localhost:5000/api/party/delete/${id}`);
+      await axios.delete(`${API_BASE_URL}/api/party/delete/${id}`);
       showToast("Customer deleted successfully!", 'success');
       fetchParties();
     } catch (err) {
