@@ -1542,19 +1542,9 @@ export default function PurchasePage() {
           </div>
           <div className="flex items-center justify-between w-full mb-2">
             <div className="flex items-center gap-2">
-              {/* Debug: Log button state when in form view */}
-              {showForm && console.log('🔍 New button render state:', { 
-                showForm, 
-                editingPurchase: editingPurchase?.tranid, 
-                costconfirmed: header.Costconfirmed,
-                disabled: showForm && !editingPurchase?.tranid && !header.Costconfirmed,
-                isNewMode,
-                isEditMode
-              })}
               <button
                 onClick={(e) => {
                   console.log('🔥 NEW BUTTON CLICKED - Event fired!', e.target);
-                  alert('New button clicked! Check console for details.');
                   e.preventDefault();
                   e.stopPropagation();
                   
@@ -1571,15 +1561,23 @@ export default function PurchasePage() {
                   
                   console.log('✅ Navigating to new purchase...');
                   try {
+                    // Reset form state before navigating
+                    setEditingPurchase(null);
+                    setHeader(initialHeader);
+                    setRows([]);
+                    setCurrentTranId(null);
+                    setGrnStatus('draft');
+                    setNoOverhead(false);
+                    
+                    // Now navigate to new
                     navigateToNew();
-                    console.log('✅ navigateToNew() called successfully');
+                    console.log('✅ navigateToNew() called successfully with form reset');
                   } catch (error) {
                     console.error('❌ Error calling navigateToNew():', error);
                     alert('Error during navigation: ' + error.message);
                   }
                 }}
-                onMouseEnter={() => console.log('🖱️ Mouse entered New button')}
-                onMouseLeave={() => console.log('🖱️ Mouse left New button')}
+
                 disabled={showForm && !editingPurchase?.tranid && !header.Costconfirmed}
                 className={`px-4 py-2 rounded-lg shadow text-white transition-all relative z-50 ${
                   (showForm && !editingPurchase?.tranid && !header.Costconfirmed) 
