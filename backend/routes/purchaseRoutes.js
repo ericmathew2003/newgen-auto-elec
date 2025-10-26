@@ -768,6 +768,62 @@ router.post('/migrate/fix-tables', async (req, res) => {
 });
 
 /**
+ * Fix auto-increment sequence for trid column
+ */
+router.post('/fix/sequence', async (req, res) => {
+  try {
+    console.log('Fixing auto-increment sequence for trid...');
+    
+    // Get the current maximum trid value
+    const maxResult = await pool.query('SELECT COALESCE(MAX(trid), 0) as max_trid FROM tbltrnpurchasedet');
+    const maxTrid = maxResult.rows[0].max_trid;
+    console.log('Current max trid:', maxTrid);
+    
+    // Get the sequence name for the trid column
+    const seqResult = await pool.query(`
+      SELECT pg_get_serial_sequence('tbltrnpurchasedet', 'trid') as sequence_name
+    `);
+    const sequenceName = seqResult.rows[0].sequence_name;
+    console.log('Sequence name:', sequenceName);
+    
+    if (sequenceName) {
+      // Reset the sequence to start from max_trid + 1
+      const nextVal = maxTrid + 1;
+      await pool.query(`SELECT setval('${sequenceName}', $1, false)`, [nextVal]);
+      console.log(`Sequence reset to start from: ${nextVal}`);
+      
+      // Test the sequence by getting the next value
+      const testResult = await pool.query(`SELECT nextval('${sequenceName}') as next_val`);
+      const nextValue = testResult.rows[0].next_val;
+      console.log('Next sequence value will be:', nextValue);
+      
+      res.json({
+        success: true,
+        message: 'Auto-increment sequence fixed successfully',
+        max_existing_trid: maxTrid,
+        sequence_name: sequenceName,
+        next_trid_will_be: nextValue,
+        timestamp: new Date().toISOString()
+      });
+    } else {
+      res.status(400).json({
+        success: false,
+        error: 'Could not find sequence for trid column'
+      });
+    }
+    
+  } catch (err) {
+    console.error('Sequence fix error:', err);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fix sequence',
+      details: err.message,
+      code: err.code
+    });
+  }
+});
+
+/**
  * Simple test route to try inserting a purchase item
  */
 router.post('/test/insert-item', async (req, res) => {
