@@ -20,6 +20,7 @@ import {
   FiMoon,
 } from "react-icons/fi";
 import { useDarkMode } from './contexts/DarkModeContext';
+import logo2 from "./assets/logo2.png";
 
 export default function Navbar() {
   const [masterOpen, setMasterOpen] = useState(false);
@@ -91,7 +92,7 @@ export default function Navbar() {
           <div className="flex items-center space-x-3">
             <div className="relative">
               <img 
-                src="/logo2.png" 
+                src={logo2} 
                 alt="NewGen Logo" 
                 className="w-10 h-10 rounded-lg shadow-sm" 
               />

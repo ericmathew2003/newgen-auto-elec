@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { FaArrowRight } from "react-icons/fa";
+import shopLogo from "./assets/shoplogo.png";
 
 export default function LandingPage() {
   const navigate = useNavigate();
@@ -68,7 +69,7 @@ export default function LandingPage() {
             <motion.div variants={item} className="flex flex-col sm:flex-row justify-between items-center mb-10 sm:mb-16 gap-6">
               <div className="flex items-center gap-3">
                 <motion.img
-                  src="/shoplogo.png"
+                  src={shopLogo}
                   alt="NewGen"
                   className="w-8 h-8 sm:w-10 sm:h-10 object-contain"
                   animate={floatingAnimation}
@@ -141,7 +142,7 @@ export default function LandingPage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 md:px-8 py-8 sm:py-12">
           <div className="text-center">
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-6">
-              <img src="/shoplogo.png" alt="NewGen" className="w-10 h-10 sm:w-12 sm:h-12 object-contain" />
+              <img src={shopLogo} alt="NewGen" className="w-10 h-10 sm:w-12 sm:h-12 object-contain" />
               <span className="text-xl sm:text-2xl font-semibold text-white">
                 NewGen Automobile Spare Parts & Electric
               </span>

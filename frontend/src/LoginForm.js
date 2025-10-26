@@ -3,6 +3,7 @@ import axios from "axios";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import API_BASE_URL from "./config/api";
+import shopLogo from "./assets/shoplogo.png";
 
 export default function LoginForm() {
   const [username, setUsername] = useState("");
@@ -116,7 +117,7 @@ export default function LoginForm() {
           >
             <div className="absolute inset-0 bg-gradient-to-r from-purple-600 to-blue-600 rounded-full blur-lg opacity-30"></div>
             <motion.img 
-              src="/shoplogo.png" 
+              src={shopLogo} 
               alt="New Gen Auto"
               className="h-20 w-20 rounded-full border-4 border-white shadow-lg relative z-10"
             />
