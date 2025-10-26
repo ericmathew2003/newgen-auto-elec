@@ -438,14 +438,22 @@ router.post('/:tranId/items', async (req, res) => {
 
     // Ensure idempotency without relying on a DB unique constraint: delete then insert
     console.log("Purchase Items POST - Deleting existing record if any");
-    await pool.query(`DELETE FROM tbltrnpurchasedet WHERE tranmasid = $1 AND srno = $2`, [tranId, Srno]);
+    console.log("Purchase Items POST - Delete params:", { tranId, Srno });
+    const deleteResult = await pool.query(`DELETE FROM tbltrnpurchasedet WHERE tranmasid = $1 AND srno = $2`, [tranId, Srno]);
+    console.log("Purchase Items POST - Deleted rows:", deleteResult.rowCount);
 
     console.log("Purchase Items POST - Inserting new record");
-    await pool.query(
+    console.log("Purchase Items POST - Insert values:", [
+      FYearID, tranId, Srno, ItemCode, Qty, Rate, InvAmount, OHAmt, NetRate, Rounded,
+      CGSTAmount, SGSTAmout, IGSTAmount, GTotal, CGSTPer, SGSTPer, IGSTPer
+    ]);
+    
+    const insertResult = await pool.query(
       `INSERT INTO tbltrnpurchasedet
        (fyearid, tranmasid, srno, itemcode, qty, rate, invamount, ohamt, netrate, rounded,
         cgst, sgst, igst, gtotal, cgstp, sgstp, igstp)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)`,
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
+       RETURNING trid`,
       [
         FYearID,
         tranId,
@@ -466,6 +474,8 @@ router.post('/:tranId/items', async (req, res) => {
         IGSTPer
       ]
     );
+    
+    console.log("Purchase Items POST - Insert successful, new trid:", insertResult.rows[0]?.trid);
 
     console.log("Purchase Items POST - Successfully inserted item");
     res.json({ success: true });
@@ -754,6 +764,49 @@ router.post('/migrate/fix-tables', async (req, res) => {
     });
   } finally {
     client.release();
+  }
+});
+
+/**
+ * Simple test route to try inserting a purchase item
+ */
+router.post('/test/insert-item', async (req, res) => {
+  try {
+    console.log('Testing purchase item insert...');
+    
+    // Try to insert a test record
+    const result = await pool.query(
+      `INSERT INTO tbltrnpurchasedet
+       (fyearid, tranmasid, srno, itemcode, qty, rate, invamount, ohamt, netrate, rounded,
+        cgst, sgst, igst, gtotal, cgstp, sgstp, igstp)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
+       RETURNING trid`,
+      [1, 999999, 1, 1001, 1.00, 100.00, 100.00, 0.00, 100.00, 0.00, 9.00, 9.00, 0.00, 118.00, 9.00, 9.00, 0.00]
+    );
+    
+    const newTrid = result.rows[0]?.trid;
+    console.log('Insert successful, new trid:', newTrid);
+    
+    // Clean up - delete the test record
+    await pool.query(`DELETE FROM tbltrnpurchasedet WHERE trid = $1`, [newTrid]);
+    console.log('Test record cleaned up');
+    
+    res.json({
+      success: true,
+      message: 'Insert test successful',
+      new_trid: newTrid,
+      timestamp: new Date().toISOString()
+    });
+    
+  } catch (err) {
+    console.error('Insert test error:', err);
+    res.status(500).json({
+      success: false,
+      error: 'Insert test failed',
+      details: err.message,
+      code: err.code,
+      hint: err.hint
+    });
   }
 });
 
