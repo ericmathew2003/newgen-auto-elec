@@ -15,7 +15,6 @@ import {
   FiUser,
   FiSettings,
   FiBell,
-  FiSearch,
   FiSun,
   FiMoon,
 } from "react-icons/fi";
@@ -105,17 +104,8 @@ export default function Navbar() {
           </div>
         </div>
 
-        {/* Center - Search Bar */}
-        <div className="flex-1 max-w-2xl mx-8">
-          <div className="relative">
-            <FiSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 dark:text-gray-500" size={18} />
-            <input
-              type="text"
-              placeholder="Search for anything..."
-              className="w-full pl-10 pr-4 py-2.5 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 text-sm text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400"
-            />
-          </div>
-        </div>
+        {/* Center - Empty space (search bar removed) */}
+        <div className="flex-1"></div>
 
         {/* Right side - Dark Mode, Notifications, Profile, and Logout */}
         <div className="flex items-center space-x-4">
