@@ -13,16 +13,16 @@ router.post("/", async (req, res) => {
   } = req.body;
 
   try {
-    const maxIdResult = await pool.query('SELECT COALESCE(MAX(TranID), 0) + 1 as next_id FROM tblTrnPurchase');
+    const maxIdResult = await pool.query('SELECT COALESCE(MAX(tranid), 0) + 1 as next_id FROM tbltrnpurchase');
     const nextTranID = maxIdResult.rows[0].next_id;
 
     const result = await pool.query(
-      `INSERT INTO tblTrnPurchase
-       (TranID, FYearID, TrNo, TrDate, SuppInvNo, SuppInvDt, PartyID, Remark,
-        InvAmt, TptCharge, LabCharge, MiscCharge, PackCharge, Rounded,
-        CGST, SGST, IGST, CostSheetPrepared, GRNPosted, Costconfirmed)
+      `INSERT INTO tbltrnpurchase
+       (tranid, fyearid, trno, trdate, suppinvno, suppinvdt, partyid, remark,
+        invamt, tptcharge, labcharge, misccharge, packcharge, rounded,
+        cgst, sgst, igst, costsheetprepared, grnposted, costconfirmed)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20)
-       RETURNING TranID`,
+       RETURNING tranid`,
       [nextTranID, FYearID, TrNo, TrDate, SuppInvNo, SuppInvDt, PartyID, Remark,
        InvAmt, TptCharge, LabCharge, MiscCharge, PackCharge, Rounded,
        CGST, SGST, IGST, CostSheetPrepared, GRNPosted, Costconfirmed]
@@ -188,7 +188,7 @@ router.get("/:tranId", async (req, res) => {
     );
 
     const details = await pool.query(
-      `SELECT * FROM tblTrnPurchaseDet WHERE TranMasID = $1 ORDER BY Srno`,
+      `SELECT * FROM tbltrnpurchasedet WHERE tranmasid = $1 ORDER BY srno`,
       [tranId]
     );
 
@@ -279,8 +279,8 @@ router.post('/:tranId/costing/confirm', async (req, res) => {
       const { Srno, OHAmt = 0, NetRate = 0, GTotal = null } = it || {};
       if (Srno == null) continue;
       await client.query(
-        `UPDATE tblTrnPurchaseDet SET OHAmt = $1, NetRate = $2${GTotal != null ? ', GTotal = $3' : ''}
-         WHERE TranMasID = $4 AND Srno = $5`,
+        `UPDATE tbltrnpurchasedet SET ohamt = $1, netrate = $2${GTotal != null ? ', gtotal = $3' : ''}
+         WHERE tranmasid = $4 AND srno = $5`,
         GTotal != null ? [OHAmt, NetRate, GTotal, tranId, Srno] : [OHAmt, NetRate, tranId, Srno]
       );
     }
@@ -294,7 +294,7 @@ router.post('/:tranId/costing/confirm', async (req, res) => {
 
     // 3) Fetch purchase details to compute item master updates
     const det = await client.query(
-      `SELECT ItemCode, Qty, Rate, NetRate FROM tblTrnPurchaseDet WHERE TranMasID = $1`,
+      `SELECT itemcode, qty, rate, netrate FROM tbltrnpurchasedet WHERE tranmasid = $1`,
       [tranId]
     );
 
@@ -342,10 +342,10 @@ router.post('/:tranId/costing/confirm', async (req, res) => {
       
       // Get purchase details with item info for stock ledger
       const detailsForLedger = await client.query(
-        `SELECT d.ItemCode, d.Qty, i.Unit 
-         FROM tblTrnPurchaseDet d
-         LEFT JOIN tblMasItem i ON d.ItemCode = i.ItemCode
-         WHERE d.TranMasID = $1`,
+        `SELECT d.itemcode, d.qty, i.unit 
+         FROM tbltrnpurchasedet d
+         LEFT JOIN tblmasitem i ON d.itemcode = i.itemcode
+         WHERE d.tranmasid = $1`,
         [tranId]
       );
 
@@ -408,14 +408,19 @@ router.post('/:tranId/items', async (req, res) => {
     IGSTPer
   } = req.body || {};
 
+  console.log("Purchase Items POST - Request data:", {
+    tranId, FYearID, Srno, ItemCode, Qty, Rate, InvAmount, OHAmt, NetRate, Rounded,
+    CGSTAmount, SGSTAmout, IGSTAmount, GTotal, CGSTPer, SGSTPer, IGSTPer
+  });
+
   try {
     // Ensure idempotency without relying on a DB unique constraint: delete then insert
-    await pool.query(`DELETE FROM tblTrnPurchaseDet WHERE TranMasID = $1 AND Srno = $2`, [tranId, Srno]);
+    await pool.query(`DELETE FROM tbltrnpurchasedet WHERE tranmasid = $1 AND srno = $2`, [tranId, Srno]);
 
     await pool.query(
-      `INSERT INTO tblTrnPurchaseDet
-       (FYearID, TranMasID, Srno, ItemCode, Qty, Rate, InvAmount, OHAmt, NetRate, Rounded,
-        CGST, SGST, IGST, GTotal, CGSTP, SGSTP, IGSTP)
+      `INSERT INTO tbltrnpurchasedet
+       (fyearid, tranmasid, srno, itemcode, qty, rate, invamount, ohamt, netrate, rounded,
+        cgst, sgst, igst, gtotal, cgstp, sgstp, igstp)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)`,
       [
         FYearID,
@@ -438,10 +443,17 @@ router.post('/:tranId/items', async (req, res) => {
       ]
     );
 
+    console.log("Purchase Items POST - Successfully inserted item");
     res.json({ success: true });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Failed to save purchase item' });
+    console.error("Purchase Items POST - Error:", err);
+    console.error("Purchase Items POST - Error message:", err.message);
+    console.error("Purchase Items POST - Error code:", err.code);
+    res.status(500).json({ 
+      error: 'Failed to save purchase item',
+      details: err.message,
+      code: err.code
+    });
   }
 });
 
@@ -451,7 +463,7 @@ router.post('/:tranId/items', async (req, res) => {
 router.delete("/:tranId", async (req, res) => {
   const { tranId } = req.params;
   try {
-    await pool.query(`DELETE FROM tblTrnPurchaseDet WHERE TranMasID = $1`, [tranId]);
+    await pool.query(`DELETE FROM tbltrnpurchasedet WHERE tranmasid = $1`, [tranId]);
     await pool.query(`DELETE FROM tblTrnPurchase WHERE TranID = $1`, [tranId]);
     res.json({ success: true });
   } catch (err) {
@@ -561,9 +573,9 @@ router.get('/supplier/:partyId/items', async (req, res) => {
         pd.qty,
         p.tranid,
         p.trdate
-       FROM tblTrnPurchaseDet pd
-       INNER JOIN tblTrnPurchase p ON pd.tranmasid = p.tranid
-       INNER JOIN tblMasItem i ON pd.itemcode = i.itemcode
+       FROM tbltrnpurchasedet pd
+       INNER JOIN tbltrnpurchase p ON pd.tranmasid = p.tranid
+       INNER JOIN tblmasitem i ON pd.itemcode = i.itemcode
        WHERE p.partyid = $1
          AND p.is_cancelled IS NOT TRUE
        ORDER BY pd.itemcode, p.trdate DESC`,
