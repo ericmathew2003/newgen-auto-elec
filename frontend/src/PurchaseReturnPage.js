@@ -99,7 +99,7 @@ export default function PurchaseReturnPage() {
 
   const handleEdit = async (pr) => {
     try {
-      const res = await axios.get(`http://localhost:5000/api/purchase-return/${pr.purch_ret_id}`);
+      const res = await axios.get(`${API_BASE_URL}/api/purchase-return/${pr.purch_ret_id}`);
       const { header, details } = res.data;
 
       // Restructure the data to match what PurchaseReturnForm expects

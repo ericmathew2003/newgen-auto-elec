@@ -159,7 +159,7 @@ export default function PurchasePage() {
     if (!id) return;
     (async () => {
       try {
-        const res = await axios.get(`http://localhost:5000/api/purchase/${id}/costing`);
+        const res = await axios.get(`${API_BASE_URL}/api/purchase/${id}/costing`);
         const rows = Array.isArray(res.data) ? res.data : [];
         if (rows.length > 0) {
           setCostingRows(rows.map(r => ({
@@ -829,7 +829,7 @@ export default function PurchasePage() {
   const handleDeletePurchase = async (purchase) => {
     if (!window.confirm(`Delete purchase TrNo ${purchase.trno}? This cannot be undone.`)) return;
     try {
-      await axios.delete(`http://localhost:5000/api/purchase/${purchase.tranid}`);
+      await axios.delete(`${API_BASE_URL}/api/purchase/${purchase.tranid}`);
       setNotice({ open: true, type: 'success', message: 'Purchase deleted' });
       fetchPurchases();
     } catch (err) {
@@ -841,7 +841,7 @@ export default function PurchasePage() {
   // Edit purchase function
   const editPurchase = async (purchase) => {
     try {
-      const res = await axios.get(`http://localhost:5000/api/purchase/${purchase.tranid}`);
+      const res = await axios.get(`${API_BASE_URL}/api/purchase/${purchase.tranid}`);
       const { header: purchaseHeader, details: purchaseDetails } = res.data;
       
       // Set header data (ensure date inputs get YYYY-MM-DD)
@@ -1017,7 +1017,7 @@ export default function PurchasePage() {
       let tranId;
       if (editingPurchase) {
         // Update existing purchase
-        await axios.put(`http://localhost:5000/api/purchase/${editingPurchase.tranid}`, payloadHeader);
+        await axios.put(`${API_BASE_URL}/api/purchase/${editingPurchase.tranid}`, payloadHeader);
         tranId = editingPurchase.tranid;
       } else {
         // Create new purchase - generate TrNo at save time to prevent number clashes
@@ -1035,7 +1035,7 @@ export default function PurchasePage() {
       // Add line items (only valid rows)
       for (const row of rowsToSave) {
         const line = recalcItem({ ...row, FYearID: selectedFYearID });
-        await axios.post(`http://localhost:5000/api/purchase/${tranId}/items`, {
+        await axios.post(`${API_BASE_URL}/api/purchase/${tranId}/items`, {
           FYearID: selectedFYearID,
           Srno: line.Srno,
           ItemCode: line.ItemCode,
@@ -1582,7 +1582,7 @@ export default function PurchasePage() {
                       onClick={async () => {
                         if (!editingPurchase?.tranid) return;
                         try {
-                          await axios.post(`http://localhost:5000/api/purchase/${editingPurchase.tranid}/cancel`);
+                          await axios.post(`${API_BASE_URL}/api/purchase/${editingPurchase.tranid}/cancel`);
                           setHeader(h => ({ ...h, GRNPosted: false, CostSheetPrepared: false, Costconfirmed: false, is_cancelled: true }));
                           setNoOverhead(false);
                           setNotice({ open: true, type: 'success', message: 'Purchase cancelled' });
@@ -1605,7 +1605,7 @@ export default function PurchasePage() {
                       onClick={async () => {
                         if (!editingPurchase?.tranid) return;
                         try {
-                          await axios.post(`http://localhost:5000/api/purchase/${editingPurchase.tranid}/set-draft`);
+                          await axios.post(`${API_BASE_URL}/api/purchase/${editingPurchase.tranid}/set-draft`);
                           setHeader(h => ({ ...h, GRNPosted: false, CostSheetPrepared: false, Costconfirmed: false, is_cancelled: false }));
                           setGrnStatus('draft');
                           setNotice({ open: true, type: 'success', message: 'Purchase set to Draft' });
@@ -2042,7 +2042,7 @@ export default function PurchasePage() {
                         if (!currentTranId && !editingPurchase?.tranid) return;
                         const id = currentTranId || editingPurchase.tranid;
                         try {
-                          const resp = await axios.put(`http://localhost:5000/api/purchase/${id}/costing`, { rows: costingRows });
+                          const resp = await axios.put(`${API_BASE_URL}/api/purchase/${id}/costing`, { rows: costingRows });
                           const d = resp?.data || {};
                           setHeader(h => ({
                             ...h,
@@ -2057,7 +2057,7 @@ export default function PurchasePage() {
 
                           // Re-fetch saved rows to reflect DB state
                           try {
-                            const r = await axios.get(`http://localhost:5000/api/purchase/${id}/costing`);
+                            const r = await axios.get(`${API_BASE_URL}/api/purchase/${id}/costing`);
                             const rows = Array.isArray(r.data) ? r.data : [];
                             setCostingRows(
                               (rows.length > 0)
@@ -2130,14 +2130,14 @@ export default function PurchasePage() {
                           });
                         }
                         try {
-                          await axios.post(`http://localhost:5000/api/purchase/${id}/costing/confirm`, { items: preview });
+                          await axios.post(`${API_BASE_URL}/api/purchase/${id}/costing/confirm`, { items: preview });
                           setHeader(h => ({ ...h, Costconfirmed: true, CostSheetPrepared: true }));
                           setNotice({ open: true, type: 'success', message: 'Costing confirmed' });
                           setShowCostingModal(false);
                           // Refresh list and reload items for confirmed OH
                           fetchPurchases();
                           try {
-                            const res = await axios.get(`http://localhost:5000/api/purchase/${id}`);
+                            const res = await axios.get(`${API_BASE_URL}/api/purchase/${id}`);
                             const purchaseHeader = res.data?.header || {};
                             const purchaseDetails = res.data?.details || [];
                             const formattedItems = purchaseDetails.map((detail, index) => {
@@ -2301,7 +2301,7 @@ export default function PurchasePage() {
                       if (!partyId || !suppInvNo) return;
                       // Exclude current TranID when editing existing record
                       const exclude = editingPurchase?.tranid ? `&excludeTranId=${editingPurchase.tranid}` : '';
-                      const url = `http://localhost:5000/api/purchase/check-suppinv?partyId=${encodeURIComponent(partyId)}&suppInvNo=${encodeURIComponent(suppInvNo)}${exclude}`;
+                      const url = `${API_BASE_URL}/api/purchase/check-suppinv?partyId=${encodeURIComponent(partyId)}&suppInvNo=${encodeURIComponent(suppInvNo)}${exclude}`;
                       const resp = await axios.get(url);
                       if (resp?.data?.exists) {
                         setNotice({ open: true, type: 'warning', message: 'Duplicate supplier invoice found for this supplier' });
@@ -2364,9 +2364,9 @@ export default function PurchasePage() {
                           if (!editingPurchase?.tranid) return;
                           try {
                             // Ensure header charges are zero and mark not prepared
-                            await axios.put(`http://localhost:5000/api/purchase/${editingPurchase.tranid}/costing`, { rows: [] });
+                            await axios.put(`${API_BASE_URL}/api/purchase/${editingPurchase.tranid}/costing`, { rows: [] });
                             // Confirm with no items overhead
-                            await axios.post(`http://localhost:5000/api/purchase/${editingPurchase.tranid}/costing/confirm`, { items: [] });
+                            await axios.post(`${API_BASE_URL}/api/purchase/${editingPurchase.tranid}/costing/confirm`, { items: [] });
                             setHeader(h => ({ ...h, TptCharge: 0, LabCharge: 0, MiscCharge: 0, CostSheetPrepared: false, Costconfirmed: true }));
                             setNotice({ open: true, type: 'success', message: 'Costing confirmed with no overhead' });
                             await fetchPurchases();

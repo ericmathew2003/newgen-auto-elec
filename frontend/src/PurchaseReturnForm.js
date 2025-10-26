@@ -253,7 +253,7 @@ export default function PurchaseReturnForm({ onClose, onSaved, onDataChanged, in
         return;
       }
       try {
-        const res = await axios.get(`http://localhost:5000/api/purchase/supplier/${header.PartyID}/items`);
+        const res = await axios.get(`${API_BASE_URL}/api/purchase/supplier/${header.PartyID}/items`);
         setAllItems(res.data || []);
       } catch (error) {
         console.error(error);
@@ -793,11 +793,11 @@ export default function PurchaseReturnForm({ onClose, onSaved, onDataChanged, in
 
       if (initialData?.pret_id) {
         await axios.put(
-          `http://localhost:5000/api/purchase-return/${initialData.pret_id}`,
+          `${API_BASE_URL}/api/purchase-return/${initialData.pret_id}`,
           payload.header
         );
         await axios.post(
-          `http://localhost:5000/api/purchase-return/${initialData.pret_id}/items/replace`,
+          `${API_BASE_URL}/api/purchase-return/${initialData.pret_id}/items/replace`,
           { items: payload.items, fyear_id: header.FYearID }
         );
         setNoticeMessage("success", "Purchase return updated successfully");
@@ -1197,7 +1197,7 @@ export default function PurchaseReturnForm({ onClose, onSaved, onDataChanged, in
     try {
       const payload = mapHeaderToApi(true);
       const response = await axios.put(
-        `http://localhost:5000/api/purchase-return/${initialData.pret_id}`,
+        `${API_BASE_URL}/api/purchase-return/${initialData.pret_id}`,
         payload
       );
 
@@ -1218,7 +1218,7 @@ export default function PurchaseReturnForm({ onClose, onSaved, onDataChanged, in
       const message = error?.response?.data?.message || error?.response?.data?.error || error?.message || "Failed to post purchase return";
       try {
         await axios.put(
-          `http://localhost:5000/api/purchase-return/${initialData.pret_id}`,
+          `${API_BASE_URL}/api/purchase-return/${initialData.pret_id}`,
           { ...mapHeaderToApi(false), is_posted: false }
         );
       } catch (rollbackErr) {

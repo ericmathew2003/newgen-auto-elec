@@ -40,7 +40,7 @@ const SalesPurchaseReportsPage = () => {
       // Fetch company data and sales summary data
       const [compRes, salesRes] = await Promise.all([
         axios.get(`${API_BASE_URL}/api/company`),
-        axios.get(`http://localhost:5000/api/sales/summary?fromDate=${fromDate}&toDate=${toDate}`)
+        axios.get(`${API_BASE_URL}/api/sales/summary?fromDate=${fromDate}&toDate=${toDate}`)
       ]);
 
       const company = compRes.data || {};
@@ -204,7 +204,7 @@ const SalesPurchaseReportsPage = () => {
       // Fetch company data and purchase summary data
       const [compRes, purchaseRes] = await Promise.all([
         axios.get(`${API_BASE_URL}/api/company`),
-        axios.get(`http://localhost:5000/api/purchase/summary?fromDate=${fromDate}&toDate=${toDate}`)
+        axios.get(`${API_BASE_URL}/api/purchase/summary?fromDate=${fromDate}&toDate=${toDate}`)
       ]);
 
       const company = compRes.data || {};

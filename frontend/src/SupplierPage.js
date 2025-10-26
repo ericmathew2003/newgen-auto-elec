@@ -187,7 +187,7 @@ export default function SupplierPage() {
         // PUT edit (PartyID in URL; body excludes PartyID per backend route)
         const { PartyID, ...rest } = formData;
         // Ensure supplier type stays 2 on edit
-        await axios.put(`http://localhost:5000/api/party/edit/${editingParty.partyid}`, { ...rest, PartyType: 2 });
+        await axios.put(`${API_BASE_URL}/api/party/edit/${editingParty.partyid}`, { ...rest, PartyType: 2 });
         showToast("Supplier updated successfully!", 'success');
       } else {
         // POST add - exclude PartyID since it's auto-generated, force supplier type to 2
@@ -228,7 +228,7 @@ export default function SupplierPage() {
   const handleDelete = async (id) => {
     if (!window.confirm("Are you sure you want to delete this Supplier?")) return;
     try {
-      await axios.delete(`http://localhost:5000/api/party/delete/${id}`);
+      await axios.delete(`${API_BASE_URL}/api/party/delete/${id}`);
       showToast("Supplier deleted successfully!", 'success');
       fetchParties();
     } catch (err) {

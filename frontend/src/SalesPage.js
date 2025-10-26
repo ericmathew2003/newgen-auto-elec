@@ -656,7 +656,7 @@ export default function SalesPage() {
 
       let tranId;
       if (editing?.tranid) {
-        await axios.put(`http://localhost:5000/api/sales/${editing.tranid}`, payloadHeader);
+        await axios.put(`${API_BASE_URL}/api/sales/${editing.tranid}`, payloadHeader);
         tranId = editing.tranid;
       } else {
         const r = await axios.post(`${API_BASE_URL}/api/sales`, payloadHeader);
@@ -670,7 +670,7 @@ export default function SalesPage() {
 
       // Replace all details at once
       const payloadItems = rowsToSave.map(r => mapItemToApi(r, selectedFYearID));
-      await axios.post(`http://localhost:5000/api/sales/${tranId}/items/replace`, { items: payloadItems });
+      await axios.post(`${API_BASE_URL}/api/sales/${tranId}/items/replace`, { items: payloadItems });
 
       if (!post) {
         setNotice({ open: true, type: 'success', message: 'Sales saved successfully.' });
@@ -691,8 +691,8 @@ export default function SalesPage() {
   const openPrintById = async (tranId) => {
     try {
       const [invRes, compRes] = await Promise.all([
-        axios.get(`http://localhost:5000/api/sales/${tranId}`),
-        axios.get(`http://localhost:5000/api/company`)
+        axios.get(`${API_BASE_URL}/api/sales/${tranId}`),
+        axios.get(`${API_BASE_URL}/api/company`)
       ]);
       const h = invRes.data?.header || {};
       const d = invRes.data?.details || [];
@@ -991,7 +991,7 @@ export default function SalesPage() {
   const printMultipleInvoices = async (tranIds) => {
     try {
       // Get company data once
-      const compRes = await axios.get(`http://localhost:5000/api/company`);
+      const compRes = await axios.get(`${API_BASE_URL}/api/company`);
       const c = compRes.data || {};
 
       const win = window.open('', '_blank');
@@ -1006,7 +1006,7 @@ export default function SalesPage() {
       for (let i = 0; i < tranIds.length; i++) {
         const tranId = tranIds[i];
         try {
-          const invRes = await axios.get(`http://localhost:5000/api/sales/${tranId}`);
+          const invRes = await axios.get(`${API_BASE_URL}/api/sales/${tranId}`);
           const h = invRes.data?.header || {};
           const d = invRes.data?.details || [];
 
@@ -1289,7 +1289,7 @@ export default function SalesPage() {
 
   const handleEdit = async (row) => {
     try {
-      const r = await axios.get(`http://localhost:5000/api/sales/${row.tranid}`);
+      const r = await axios.get(`${API_BASE_URL}/api/sales/${row.tranid}`);
       const h = r.data?.header || {};
       const d = r.data?.details || [];
       setHeader({
@@ -1646,7 +1646,7 @@ export default function SalesPage() {
                         setNotice({ open:true, type:'error', message:'Save invoice first' });
                         return;
                       }
-                      await axios.post(`http://localhost:5000/api/sales/${id}/post`);
+                      await axios.post(`${API_BASE_URL}/api/sales/${id}/post`);
                       setHeader(h=>({ ...h, Is_Posted: true }));
                       await fetchSales();
                       setNotice({ open:true, type:'success', message:'Sales posted successfully.' });
