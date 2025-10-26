@@ -495,18 +495,10 @@ router.post("/:invMasterId/post", async (req, res) => {
       return res.status(404).json({ error: "Invoice not found" });
     }
 
-    // Prevent duplicates: already posted or existing journal
+    // Prevent duplicates: already posted
     if (m.is_posted) {
       await client.query("ROLLBACK");
       return res.status(409).json({ error: "Invoice already posted" });
-    }
-    const dup = await client.query(
-      `SELECT COUNT(*)::int AS c FROM public.acc_trn_journal WHERE tran_master_id=$1`,
-      [invMasterId]
-    );
-    if ((dup.rows[0]?.c ?? 0) > 0) {
-      await client.query("ROLLBACK");
-      return res.status(409).json({ error: "Posting already exists for this invoice" });
     }
 
     const totAmount = num(m.tot_amount);
@@ -517,137 +509,9 @@ router.post("/:invMasterId/post", async (req, res) => {
     const igstAmt = num(m.igst_amount);
     const finalTotal = totAmount + roundOff; // final invoice amount
 
-    // Note: acc_trn_invoice table updates removed as requested
+    // Note: acc_trn_invoice and journal table updates removed as requested
 
-    const descSalesParty = `Being receivable from customer for sales invoice #${m.inv_no}`;
-    const descSalesAmount = `Being Sales amount for sales invoice #${m.inv_no}`;
-    const descCGST = `Being CGST amount for sales invoice #${m.inv_no}`;
-    const descSGST = `Being SGST amount for sales invoice #${m.inv_no}`;
-    const descIGST = `Being IGST amount for sales invoice #${m.inv_no}`;
-    const descRound = `Being round off amount for sales invoice #${m.inv_no}`;
-    const descJournal = `Being sales invoice #${m.inv_no}`;
-
-    // Create Journal Master (manual id to satisfy NOT NULL PK)
-    await client.query(`LOCK TABLE public.acc_trn_journal IN EXCLUSIVE MODE`);
-    const idRes = await client.query(`SELECT COALESCE(MAX(journal_mas_id),0)+1 AS next_id FROM public.acc_trn_journal`);
-    const journalMasId = idRes.rows[0]?.next_id || 1;
-    await client.query(
-      `INSERT INTO public.acc_trn_journal
-         (fyear_id, journal_mas_id, serial_no, journal_date, journal_type, tran_master_id, description, total, is_deleted, created_date, edited_date)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,false,NOW(),NOW())`,
-      [m.fyear_id, journalMasId, m.inv_no, m.inv_date, 'Sale', invMasterId, descJournal, finalTotal]
-    );
-
-    // Party account id from tblmasparty (lowercase column name: accountid)
-    const pRes = await client.query(
-      `SELECT accountid FROM public.tblmasparty WHERE partyid=$1`,
-      [m.party_id]
-    );
-    const partyAccountId = pRes.rows[0]?.accountid;
-    if (!partyAccountId) {
-      await client.query("ROLLBACK");
-      return res.status(400).json({ error: "Party account not found for this customer" });
-    }
-
-    // Insert Journal Details
-    let jdPartyId = null, jdSalesId = null, jdCGSTId = null, jdSGSTId = null, jdIGSTId = null, jdRoundId = null;
-    // 1) Party DR (final invoice amount)
-    const jdPartyRes = await client.query(
-      `INSERT INTO public.acc_trn_journal_det
-         (fyear_id, journal_mas_id, account_id, party_id, dr_amount, cr_amount, description, is_deleted, created_date, edited_date)
-       VALUES ($1,$2,$3,$4,$5,0,$6,false,NOW(),NOW()) RETURNING journal_det_id`,
-      [m.fyear_id, journalMasId, partyAccountId, m.party_id, finalTotal, descSalesParty]
-    );
-    jdPartyId = jdPartyRes.rows[0]?.journal_det_id || null;
-
-    // 2) Sales CR (account_id = 16)
-    if (taxableTot !== 0) {
-      const jdSalesRes = await client.query(
-        `INSERT INTO public.acc_trn_journal_det
-           (fyear_id, journal_mas_id, account_id, party_id, dr_amount, cr_amount, description, is_deleted, created_date, edited_date)
-         VALUES ($1,$2,16,$3,0,$4,$5,false,NOW(),NOW()) RETURNING journal_det_id`,
-        [m.fyear_id, journalMasId, m.party_id, taxableTot, descSalesAmount]
-      );
-      jdSalesId = jdSalesRes.rows[0]?.journal_det_id || null;
-    }
-
-    // 3) CGST CR (account_id = 33)
-    if (cgstAmt > 0) {
-      const jdCGSTRes = await client.query(
-        `INSERT INTO public.acc_trn_journal_det
-           (fyear_id, journal_mas_id, account_id, party_id, dr_amount, cr_amount, description, is_deleted, created_date, edited_date)
-         VALUES ($1,$2,33,$3,0,$4,$5,false,NOW(),NOW()) RETURNING journal_det_id`,
-        [m.fyear_id, journalMasId, m.party_id, cgstAmt, descCGST]
-      );
-      jdCGSTId = jdCGSTRes.rows[0]?.journal_det_id || null;
-    }
-
-    // 4) SGST CR (account_id = 35)
-    if (sgstAmt > 0) {
-      const jdSGSTRes = await client.query(
-        `INSERT INTO public.acc_trn_journal_det
-           (fyear_id, journal_mas_id, account_id, party_id, dr_amount, cr_amount, description, is_deleted, created_date, edited_date)
-         VALUES ($1,$2,35,$3,0,$4,$5,false,NOW(),NOW()) RETURNING journal_det_id`,
-        [m.fyear_id, journalMasId, m.party_id, sgstAmt, descSGST]
-      );
-      jdSGSTId = jdSGSTRes.rows[0]?.journal_det_id || null;
-    }
-
-    // 5) IGST CR (account_id = 37) when applicable
-    if (igstAmt > 0) {
-      const jdIGSTRes = await client.query(
-        `INSERT INTO public.acc_trn_journal_det
-           (fyear_id, journal_mas_id, account_id, party_id, dr_amount, cr_amount, description, is_deleted, created_date, edited_date)
-         VALUES ($1,$2,37,$3,0,$4,$5,false,NOW(),NOW()) RETURNING journal_det_id`,
-        [m.fyear_id, journalMasId, m.party_id, igstAmt, descIGST]
-      );
-      jdIGSTId = jdIGSTRes.rows[0]?.journal_det_id || null;
-    }
-
-    // 6) Rounding Adjustment (account_id = 56)
-    if (roundOff > 0) {
-      // CREDIT rounding when rounded_off > 0 (invoice rounded up)
-      const jdRoundCrRes = await client.query(
-        `INSERT INTO public.acc_trn_journal_det
-           (fyear_id, journal_mas_id, account_id, party_id, dr_amount, cr_amount, description, is_deleted, created_date, edited_date)
-         VALUES ($1,$2,56,$3,0,$4,$5,false,NOW(),NOW()) RETURNING journal_det_id`,
-        [m.fyear_id, journalMasId, m.party_id, roundOff, descRound]
-      );
-      jdRoundId = jdRoundCrRes.rows[0]?.journal_det_id || null;
-    } else if (roundOff < 0) {
-      // DEBIT rounding when rounded_off < 0 (invoice rounded down)
-      const jdRoundDrRes = await client.query(
-        `INSERT INTO public.acc_trn_journal_det
-           (fyear_id, journal_mas_id, account_id, party_id, dr_amount, cr_amount, description, is_deleted, created_date, edited_date)
-         VALUES ($1,$2,56,$3,$4,0,$5,false,NOW(),NOW()) RETURNING journal_det_id`,
-        [m.fyear_id, journalMasId, m.party_id, Math.abs(roundOff), descRound]
-      );
-      jdRoundId = jdRoundDrRes.rows[0]?.journal_det_id || null;
-    }
-
-    // Mirror Journal Details into acc_ledger with account-specific narration
-    const insertLedger = async (accountId, partyId, amount, tranType, description, detailId = null) => {
-      await client.query(
-        `INSERT INTO public.acc_ledger
-           (fyear_id, master_id, detail_id, serial_no, tran_date, account_id, party_id, tran_amount, tran_type, description, doc_type)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
-        [m.fyear_id, m.inv_master_id, detailId, m.inv_no, m.inv_date, accountId, partyId, amount, tranType, description, 'Sale']
-      );
-    };
-
-    // Party DR → link to its journal detail id
-    await insertLedger(partyAccountId, m.party_id, finalTotal, 'Dr', descSalesParty, jdPartyId);
-    // Sales CR
-    if (taxableTot !== 0) await insertLedger(16, null, taxableTot, 'Cr', descSalesAmount, jdSalesId);
-    // CGST CR
-    if (cgstAmt > 0) await insertLedger(33, null, cgstAmt, 'Cr', descCGST, jdCGSTId);
-    // SGST CR
-    if (sgstAmt > 0) await insertLedger(35, null, sgstAmt, 'Cr', descSGST, jdSGSTId);
-    // IGST CR
-    if (igstAmt > 0) await insertLedger(37, null, igstAmt, 'Cr', descIGST, jdIGSTId);
-    // Rounding
-    if (roundOff > 0) await insertLedger(56, null, roundOff, 'Cr', descRound, jdRoundId);
-    else if (roundOff < 0) await insertLedger(56, null, Math.abs(roundOff), 'Dr', descRound, jdRoundId);
+    // Note: Journal entries and ledger entries removed as requested
 
     // Stock ledger (per item detail; negative quantity for sales)
     const detRes = await client.query(
@@ -677,7 +541,7 @@ router.post("/:invMasterId/post", async (req, res) => {
     await client.query(`UPDATE public.trn_invoice_master SET is_posted = TRUE WHERE inv_master_id = $1`, [invMasterId]);
 
     await client.query("COMMIT");
-    res.json({ success: true, journal_mas_id: journalMasId });
+    res.json({ success: true });
   } catch (err) {
     await client.query("ROLLBACK");
     console.error(err);
