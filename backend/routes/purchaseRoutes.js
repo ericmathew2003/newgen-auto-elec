@@ -48,12 +48,12 @@ router.put("/:tranId", async (req, res) => {
 
   try {
     await pool.query(
-      `UPDATE tblTrnPurchase
-       SET FYearID = $1, TrNo = $2, TrDate = $3, SuppInvNo = $4, SuppInvDt = $5, 
-           PartyID = $6, Remark = $7, InvAmt = $8, TptCharge = $9, LabCharge = $10, 
-           MiscCharge = $11, PackCharge = $12, Rounded = $13, CGST = $14, SGST = $15, 
-           IGST = $16, CostSheetPrepared = $17, GRNPosted = $18, Costconfirmed = $19
-       WHERE TranID = $20`,
+      `UPDATE tbltrnpurchase
+       SET fyearid = $1, trno = $2, trdate = $3, suppinvno = $4, suppinvdt = $5, 
+           partyid = $6, remark = $7, invamt = $8, tptcharge = $9, labcharge = $10, 
+           misccharge = $11, packcharge = $12, rounded = $13, cgst = $14, sgst = $15, 
+           igst = $16, costsheetprepared = $17, grnposted = $18, costconfirmed = $19
+       WHERE tranid = $20`,
       [FYearID, TrNo, TrDate, SuppInvNo, SuppInvDt, PartyID, Remark,
        InvAmt, TptCharge, LabCharge, MiscCharge, PackCharge, Rounded,
        CGST, SGST, IGST, CostSheetPrepared, GRNPosted, Costconfirmed, tranId]
@@ -209,8 +209,8 @@ router.get('/:tranId/costing', async (req, res) => {
   const { tranId } = req.params;
   try {
     const r = await pool.query(
-      `SELECT CostTRID, PruchMasID, OHType, Amount
-       FROM tblTrnPurchaseCosting WHERE PruchMasID = $1 ORDER BY CostTRID`,
+      `SELECT costtrid, pruchmasid, ohtype, amount
+       FROM tbltrnpurchasecosting WHERE pruchmasid = $1 ORDER BY costtrid`,
       [tranId]
     );
     res.json(r.rows);
@@ -230,13 +230,13 @@ router.put('/:tranId/costing', async (req, res) => {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-    await client.query(`DELETE FROM tblTrnPurchaseCosting WHERE PruchMasID = $1`, [tranId]);
+    await client.query(`DELETE FROM tbltrnpurchasecosting WHERE pruchmasid = $1`, [tranId]);
 
     let tpt = 0, lab = 0, misc = 0;
     for (const r of rows) {
       const { OHType = '', Amount = 0 } = r || {};
       await client.query(
-        `INSERT INTO tblTrnPurchaseCosting (PruchMasID, OHType, Amount)
+        `INSERT INTO tbltrnpurchasecosting (pruchmasid, ohtype, amount)
          VALUES ($1,$2,$3)`,
         [tranId, OHType, Amount]
       );
@@ -248,7 +248,7 @@ router.put('/:tranId/costing', async (req, res) => {
 
     const prepared = rows.some(r => Number(r?.Amount) > 0);
     await client.query(
-      `UPDATE tblTrnPurchase SET TptCharge = $1, LabCharge = $2, MiscCharge = $3, CostSheetPrepared = $4 WHERE TranID = $5`,
+      `UPDATE tbltrnpurchase SET tptcharge = $1, labcharge = $2, misccharge = $3, costsheetprepared = $4 WHERE tranid = $5`,
       [tpt, lab, misc, prepared, tranId]
     );
 

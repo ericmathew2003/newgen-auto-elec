@@ -353,3 +353,49 @@ CREATE TABLE public.trn_stock_ledger (
     unit character varying(6),
     qty numeric(12,2)
 );
+
+-- Purchase Return Master
+CREATE TABLE public.trn_purchase_return_master (
+    pret_id bigint NOT NULL,
+    fyear_id smallint,
+    purch_ret_no character varying(20),
+    tran_date date,
+    party_id bigint,
+    remark character varying(200),
+    taxable_total numeric(12,2),
+    cgst_amount numeric(12,2),
+    sgst_amount numeric(12,2),
+    igst_amount numeric(12,2),
+    rounded_off numeric(12,2),
+    total_amount numeric(12,2),
+    is_posted boolean DEFAULT false,
+    deleted boolean DEFAULT false,
+    created_date timestamp without time zone DEFAULT now() NOT NULL,
+    edited_date timestamp without time zone DEFAULT now() NOT NULL
+);
+
+-- Purchase Return Detail
+CREATE TABLE public.trn_purchase_return_detail (
+    pret_det_id bigint NOT NULL,
+    fyear_id smallint,
+    pret_mas_id bigint NOT NULL,
+    srno integer,
+    item_code bigint,
+    qty numeric(12,3) DEFAULT 0,
+    taxable_rate numeric(12,2) DEFAULT 0,
+    taxable_amount numeric(12,2) DEFAULT 0,
+    cgst_per numeric(5,2) DEFAULT 0,
+    sgst_per numeric(5,2) DEFAULT 0,
+    igst_per numeric(5,2) DEFAULT 0,
+    cgst_amount numeric(12,2) DEFAULT 0,
+    sgst_amount numeric(12,2) DEFAULT 0,
+    igst_amount numeric(12,2) DEFAULT 0,
+    oh_amt numeric(12,2) DEFAULT 0,
+    netrate numeric(12,2) DEFAULT 0,
+    rounded_off numeric(12,2) DEFAULT 0,
+    total_amount numeric(12,2) DEFAULT 0,
+    supp_inv_no character varying(50),
+    supp_inv_date date,
+    created_date timestamp without time zone DEFAULT now() NOT NULL,
+    edited_date timestamp without time zone DEFAULT now() NOT NULL
+);

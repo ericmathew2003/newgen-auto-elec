@@ -216,15 +216,17 @@ CREATE TABLE IF NOT EXISTS public.tbltrnpurchase (
 
 -- Purchase Detail
 CREATE TABLE IF NOT EXISTS public.tbltrnpurchasedet (
-    tranmasid bigint,
-    srno smallint,
-    itemcode bigint,
+    fyearid smallint NOT NULL,
+    trid bigint GENERATED ALWAYS AS IDENTITY,
+    tranmasid bigint NOT NULL,
+    srno bigint,
+    itemcode bigint NOT NULL,
     qty numeric(12,2),
     rate numeric(12,2),
     invamount numeric(12,2),
     ohamt numeric(12,2),
     netrate numeric(12,2),
-    rounded numeric(12,2),
+    rounded numeric(4,2),
     cgst numeric(12,2),
     sgst numeric(12,2),
     igst numeric(12,2),
@@ -232,9 +234,23 @@ CREATE TABLE IF NOT EXISTS public.tbltrnpurchasedet (
     cgstp numeric(5,2),
     sgstp numeric(5,2),
     igstp numeric(5,2),
-    fyearid smallint,
     created_date timestamp without time zone DEFAULT now() NOT NULL,
-    edited_date timestamp without time zone DEFAULT now() NOT NULL
+    edited_date timestamp without time zone DEFAULT now() NOT NULL,
+    PRIMARY KEY (trid)
+);
+
+-- Purchase Costing
+CREATE TABLE IF NOT EXISTS public.tbltrnpurchasecosting (
+    costtrid bigint GENERATED ALWAYS AS IDENTITY,
+    pruchmasid bigint NOT NULL,
+    ohtype character varying(100) NOT NULL,
+    amount numeric(12,2) NOT NULL,
+    referenceno character varying(50),
+    ohdate date,
+    remark character varying(200),
+    created_date timestamp without time zone DEFAULT now() NOT NULL,
+    edited_date timestamp without time zone DEFAULT now() NOT NULL,
+    PRIMARY KEY (costtrid)
 );
 
 -- Stock Ledger (with auto-generated ID)
@@ -299,6 +315,34 @@ CREATE TABLE IF NOT EXISTS public.trn_purchase_return_master (
     created_date timestamp without time zone DEFAULT now() NOT NULL,
     edited_date timestamp without time zone DEFAULT now() NOT NULL,
     PRIMARY KEY (pret_id)
+);
+
+-- Purchase Return Detail
+CREATE TABLE IF NOT EXISTS public.trn_purchase_return_detail (
+    pret_det_id bigint GENERATED ALWAYS AS IDENTITY,
+    fyear_id smallint,
+    pret_mas_id bigint NOT NULL,
+    srno integer,
+    item_code bigint,
+    qty numeric(12,3) DEFAULT 0,
+    taxable_rate numeric(12,2) DEFAULT 0,
+    taxable_amount numeric(12,2) DEFAULT 0,
+    cgst_per numeric(5,2) DEFAULT 0,
+    sgst_per numeric(5,2) DEFAULT 0,
+    igst_per numeric(5,2) DEFAULT 0,
+    cgst_amount numeric(12,2) DEFAULT 0,
+    sgst_amount numeric(12,2) DEFAULT 0,
+    igst_amount numeric(12,2) DEFAULT 0,
+    oh_amt numeric(12,2) DEFAULT 0,
+    netrate numeric(12,2) DEFAULT 0,
+    rounded_off numeric(12,2) DEFAULT 0,
+    total_amount numeric(12,2) DEFAULT 0,
+    supp_inv_no character varying(50),
+    supp_inv_date date,
+    created_date timestamp without time zone DEFAULT now() NOT NULL,
+    edited_date timestamp without time zone DEFAULT now() NOT NULL,
+    PRIMARY KEY (pret_det_id),
+    FOREIGN KEY (pret_mas_id) REFERENCES public.trn_purchase_return_master(pret_id) ON DELETE CASCADE
 );
 
 -- Insert default admin user (password: admin123)
