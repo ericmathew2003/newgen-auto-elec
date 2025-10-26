@@ -498,11 +498,21 @@ export default function ItemPage() {
 
       // Split search term into individual words and filter out empty strings
       const searchTerms = searchTerm.toLowerCase().split(/\s+/).filter(term => term.length > 0);
+      
+      if (searchTerms.length === 0) return true;
 
       // Helper function to check if all search terms are contained in a field
       const containsAllTerms = (fieldValue) => {
-        const fieldText = String(fieldValue || '').toLowerCase();
+        if (!fieldValue) return false;
+        const fieldText = String(fieldValue).toLowerCase().trim();
         return searchTerms.every(term => fieldText.includes(term));
+      };
+
+      // Helper function to check if any search term is contained in a field
+      const containsAnyTerm = (fieldValue) => {
+        if (!fieldValue) return false;
+        const fieldText = String(fieldValue).toLowerCase().trim();
+        return searchTerms.some(term => fieldText.includes(term));
       };
 
       // Search in specific field or all fields
@@ -519,17 +529,30 @@ export default function ItemPage() {
           return containsAllTerms(item.brandname);
         case 'all':
         default:
-          // Search across all specified fields - item matches if ANY field contains ALL terms
-          return (
-            containsAllTerms(item.itemcode) ||
-            containsAllTerms(item.itemname) ||
-            containsAllTerms(item.groupname) ||
-            containsAllTerms(item.makename) ||
-            containsAllTerms(item.brandame) ||
-            containsAllTerms(item.groupname) ||
-            containsAllTerms(item.makename) ||
-            containsAllTerms(item.brandname)
+          // For "all fields" search, item matches if ANY field contains ALL search terms
+          // OR if multiple fields each contain at least one search term
+          const fieldsToSearch = [
+            item.itemcode,
+            item.itemname,
+            item.groupname,
+            item.makename,
+            item.brandname,
+            item.hsncode,
+            item.partno,
+            item.model
+          ];
+          
+          // Check if any single field contains all terms
+          const singleFieldMatch = fieldsToSearch.some(field => containsAllTerms(field));
+          
+          // Check if all terms are found across different fields
+          const allTermsFound = searchTerms.every(term => 
+            fieldsToSearch.some(field => 
+              field && String(field).toLowerCase().includes(term)
+            )
           );
+          
+          return singleFieldMatch || allTermsFound;
       }
     });
 
@@ -729,7 +752,7 @@ export default function ItemPage() {
                   <div className="relative flex-1">
                     <input
                       type="text"
-                      placeholder={searchField === 'all' ? 'Search... (e.g., "bosch 110")' : `Search in ${searchField === 'itemcode' ? 'Item Code' : searchField === 'suppliername' ? 'Supplier Name' : searchField === 'itemname' ? 'Item Name' : searchField === 'groupname' ? 'Group' : searchField === 'makename' ? 'Make' : 'Brand'}...`}
+                      placeholder={searchField === 'all' ? 'Search across all fields... (e.g., "bosch brake pad")' : `Search in ${searchField === 'itemcode' ? 'Item Code' : searchField === 'itemname' ? 'Item Name' : searchField === 'groupname' ? 'Group' : searchField === 'makename' ? 'Make' : searchField === 'brandname' ? 'Brand' : 'selected field'}...`}
                       value={searchTerm}
                       onChange={(e) => {
                         setSearchTerm(e.target.value);
