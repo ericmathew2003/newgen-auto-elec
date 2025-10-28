@@ -64,7 +64,7 @@ export default function LoginForm() {
   return (
     <div className="min-h-screen bg-white flex items-center justify-center p-4 relative overflow-hidden">
       {/* Subtle background elements */}
-      <motion.div 
+      <motion.div
         className="fixed inset-0 -z-10 overflow-hidden"
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
@@ -106,7 +106,7 @@ export default function LoginForm() {
         className="bg-white shadow-2xl rounded-3xl p-10 w-full max-w-md border border-gray-200 relative"
       >
         {/* Logo */}
-        <motion.div 
+        <motion.div
           variants={item}
           className="flex justify-center mb-8"
         >
@@ -116,8 +116,8 @@ export default function LoginForm() {
             transition={{ type: "spring", stiffness: 300 }}
           >
             <div className="absolute inset-0 bg-gradient-to-r from-purple-600 to-blue-600 rounded-full blur-lg opacity-30"></div>
-            <motion.img 
-              src={shopLogo} 
+            <motion.img
+              src={shopLogo}
               alt="New Gen Auto"
               className="h-20 w-20 rounded-full border-4 border-white shadow-lg relative z-10"
             />
@@ -125,21 +125,21 @@ export default function LoginForm() {
         </motion.div>
 
         {/* Title */}
-        <motion.h1 
+        <motion.h1
           variants={item}
           className="text-center text-4xl font-bold bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent mb-2"
         >
           New Gen Auto
         </motion.h1>
-        
-        <motion.h2 
+
+        <motion.h2
           variants={item}
           className="text-center text-2xl font-semibold text-gray-800 mb-2"
         >
           Welcome Back
         </motion.h2>
-        
-        <motion.p 
+
+        <motion.p
           variants={item}
           className="text-center text-gray-600 mb-8"
         >
@@ -153,7 +153,7 @@ export default function LoginForm() {
             <label className="block text-sm font-semibold text-gray-700 mb-2">
               Username
             </label>
-            <motion.div 
+            <motion.div
               className="relative"
               whileHover={{ scale: 1.01 }}
               whileFocus={{ scale: 1.01 }}
@@ -175,19 +175,10 @@ export default function LoginForm() {
 
           {/* Password */}
           <motion.div variants={item}>
-            <div className="flex justify-between items-center mb-2">
-              <label className="block text-sm font-semibold text-gray-700">
-                Password
-              </label>
-              <motion.a
-                href="#"
-                className="text-sm text-purple-600 hover:text-purple-800 font-medium"
-                whileHover={{ x: 2 }}
-              >
-                Forgot password?
-              </motion.a>
-            </div>
-            <motion.div 
+            <label className="block text-sm font-semibold text-gray-700 mb-2">
+              Password
+            </label>
+            <motion.div
               className="relative"
               whileHover={{ scale: 1.01 }}
               whileFocus={{ scale: 1.01 }}
@@ -230,7 +221,7 @@ export default function LoginForm() {
 
           {/* Error Message */}
           {error && (
-            <motion.div 
+            <motion.div
               initial={{ opacity: 0, y: -10, scale: 0.95 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               className="bg-red-50 border border-red-200 rounded-xl p-3 flex items-center space-x-2"
@@ -245,8 +236,8 @@ export default function LoginForm() {
           {/* Sign In Button */}
           <motion.button
             variants={item}
-            whileHover={{ 
-              scale: 1.02, 
+            whileHover={{
+              scale: 1.02,
               boxShadow: "0 10px 25px rgba(147, 51, 234, 0.3)",
               y: -2
             }}
@@ -293,7 +284,7 @@ export default function LoginForm() {
           </motion.button>
 
           {/* Additional Info */}
-          <motion.div 
+          <motion.div
             variants={item}
             className="text-center mt-6"
           >

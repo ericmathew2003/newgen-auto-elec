@@ -1,6 +1,7 @@
 // components/Navbar.js
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import axios from "axios";
 import {
   FiBox,
   FiChevronDown,
@@ -17,6 +18,7 @@ import {
 } from "react-icons/fi";
 
 import logo2 from "./assets/logo2.png";
+import API_BASE_URL from "./config/api";
 
 export default function Navbar() {
   const [masterOpen, setMasterOpen] = useState(false);
@@ -26,8 +28,30 @@ export default function Navbar() {
   const [reportsOpen, setReportsOpen] = useState(false);
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const [notifications, setNotifications] = useState([]);
+  const [notificationCount, setNotificationCount] = useState(0);
 
   const navigate = useNavigate();
+
+  // Fetch notifications
+  const fetchNotifications = async () => {
+    try {
+      const response = await axios.get(`${API_BASE_URL}/api/notifications`);
+      setNotifications(response.data || []);
+      setNotificationCount(response.data?.length || 0);
+    } catch (error) {
+      console.error("Error fetching notifications:", error);
+      setNotifications([]);
+      setNotificationCount(0);
+    }
+  };
+
+  // Fetch notifications on component mount and every 5 minutes
+  useEffect(() => {
+    fetchNotifications();
+    const interval = setInterval(fetchNotifications, 5 * 60 * 1000); // 5 minutes
+    return () => clearInterval(interval);
+  }, []);
 
   const toggleSidebar = () => {
     setSidebarOpen(!sidebarOpen);
@@ -114,30 +138,71 @@ export default function Navbar() {
               title="Notifications"
             >
               <FiBell size={20} className="text-gray-600 group-hover:text-gray-800" />
-              <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-xs rounded-full flex items-center justify-center font-semibold">
-                3
-              </span>
+              {notificationCount > 0 && (
+                <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-xs rounded-full flex items-center justify-center font-semibold">
+                  {notificationCount > 9 ? '9+' : notificationCount}
+                </span>
+              )}
             </button>
             
             {notificationsOpen && (
-              <div className="absolute right-0 mt-2 w-80 bg-white dark:bg-gray-800 rounded-xl shadow-xl border border-gray-200 dark:border-gray-700 py-2 z-50">
-                <div className="px-4 py-3 border-b border-gray-100 dark:border-gray-700">
-                  <h3 className="font-semibold text-gray-900 dark:text-gray-100">Notifications</h3>
+              <div className="absolute right-0 mt-2 w-80 bg-white rounded-xl shadow-xl border border-gray-200 py-2 z-50">
+                <div className="px-4 py-3 border-b border-gray-100 flex justify-between items-center">
+                  <h3 className="font-semibold text-gray-900">Notifications</h3>
+                  <button 
+                    onClick={fetchNotifications}
+                    className="text-xs text-blue-600 hover:text-blue-800"
+                    title="Refresh notifications"
+                  >
+                    Refresh
+                  </button>
                 </div>
                 <div className="max-h-64 overflow-y-auto">
-                  <div className="px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer border-b border-gray-50 dark:border-gray-700">
-                    <p className="text-sm font-medium text-gray-900 dark:text-gray-100">New order received</p>
-                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Order #12345 has been placed</p>
-                  </div>
-                  <div className="px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer border-b border-gray-50 dark:border-gray-700">
-                    <p className="text-sm font-medium text-gray-900 dark:text-gray-100">Inventory update</p>
-                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Stock levels updated for 15 items</p>
-                  </div>
-                  <div className="px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer">
-                    <p className="text-sm font-medium text-gray-900 dark:text-gray-100">System maintenance</p>
-                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Scheduled maintenance in 2 hours</p>
-                  </div>
+                  {notifications.length === 0 ? (
+                    <div className="px-4 py-6 text-center">
+                      <p className="text-sm text-gray-500">No notifications</p>
+                    </div>
+                  ) : (
+                    notifications.map((notification, index) => (
+                      <div 
+                        key={notification.id} 
+                        className={`px-4 py-3 hover:bg-gray-50 cursor-pointer ${
+                          index < notifications.length - 1 ? 'border-b border-gray-50' : ''
+                        }`}
+                      >
+                        <div className="flex items-start space-x-2">
+                          <div className={`w-2 h-2 rounded-full mt-2 flex-shrink-0 ${
+                            notification.type === 'error' ? 'bg-red-500' :
+                            notification.type === 'warning' ? 'bg-yellow-500' :
+                            notification.type === 'success' ? 'bg-green-500' :
+                            'bg-blue-500'
+                          }`}></div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium text-gray-900 truncate">
+                              {notification.title}
+                            </p>
+                            <p className="text-xs text-gray-500 mt-1 line-clamp-2">
+                              {notification.message}
+                            </p>
+                            <p className="text-xs text-gray-400 mt-1">
+                              {new Date(notification.timestamp).toLocaleDateString()} {new Date(notification.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    ))
+                  )}
                 </div>
+                {notifications.length > 0 && (
+                  <div className="px-4 py-2 border-t border-gray-100">
+                    <button 
+                      onClick={() => setNotificationsOpen(false)}
+                      className="text-xs text-gray-500 hover:text-gray-700 w-full text-center"
+                    >
+                      Close
+                    </button>
+                  </div>
+                )}
               </div>
             )}
           </div>

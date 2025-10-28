@@ -16,6 +16,7 @@ const purchaseReturnRoutes = require("./routes/purchaseReturnRoutes");
 const companyRoutes = require("./routes/companyRoutes");
 const dashboardRoutes = require("./routes/dashboard");
 const accountRoutes = require("./routes/accountRoutes");
+const notificationRoutes = require("./routes/notificationRoutes");
 
 // CORS Configuration
 const corsOptions = {
@@ -59,6 +60,7 @@ app.use("/api/accounting-periods", accountingPeriodRoutes);
 app.use("/api/company", companyRoutes);
 app.use("/api/dashboard", dashboardRoutes);
 app.use("/api/acc-mas-account", accountRoutes);
+app.use("/api/notifications", notificationRoutes);
 
 const PORT = process.env.PORT || 5000;
 
