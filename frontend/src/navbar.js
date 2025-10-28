@@ -12,13 +12,10 @@ import {
   FiX,
   FiLogOut,
   FiHome,
-  FiUser,
   FiSettings,
   FiBell,
-  FiSun,
-  FiMoon,
 } from "react-icons/fi";
-import { useDarkMode } from './contexts/DarkModeContext';
+
 import logo2 from "./assets/logo2.png";
 
 export default function Navbar() {
@@ -29,7 +26,7 @@ export default function Navbar() {
   const [reportsOpen, setReportsOpen] = useState(false);
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
-  const { isDarkMode, toggleDarkMode } = useDarkMode();
+
   const navigate = useNavigate();
 
   const toggleSidebar = () => {
@@ -107,21 +104,8 @@ export default function Navbar() {
         {/* Center - Empty space (search bar removed) */}
         <div className="flex-1"></div>
 
-        {/* Right side - Dark Mode, Notifications, Profile, and Logout */}
+        {/* Right side - Notifications and Logout */}
         <div className="flex items-center space-x-4">
-          {/* Dark Mode Toggle */}
-          <button
-            onClick={toggleDarkMode}
-            className="relative p-2.5 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-700 transition-all duration-200 hover:shadow-md group"
-            title={isDarkMode ? "Switch to Light Mode" : "Switch to Dark Mode"}
-          >
-            {isDarkMode ? (
-              <FiSun size={20} className="text-yellow-500 group-hover:text-yellow-600" />
-            ) : (
-              <FiMoon size={20} className="text-gray-600 group-hover:text-gray-800 dark:text-gray-300" />
-            )}
-          </button>
-
           {/* Notifications */}
           <div className="relative">
             <button
@@ -156,17 +140,6 @@ export default function Navbar() {
                 </div>
               </div>
             )}
-          </div>
-
-          {/* Profile */}
-          <div className="flex items-center space-x-3 p-2 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-700 transition-all duration-200 cursor-pointer group">
-            <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center">
-              <FiUser size={16} className="text-white" />
-            </div>
-            <div className="hidden md:block">
-              <p className="text-sm font-medium text-gray-900 dark:text-gray-100">Admin User</p>
-              <p className="text-xs text-gray-500 dark:text-gray-400">Administrator</p>
-            </div>
           </div>
 
           {/* Logout Button */}
