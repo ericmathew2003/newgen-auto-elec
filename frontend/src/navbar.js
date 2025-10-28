@@ -13,7 +13,6 @@ import {
   FiX,
   FiLogOut,
   FiHome,
-  FiSettings,
   FiBell,
 } from "react-icons/fi";
 
@@ -396,16 +395,7 @@ export default function Navbar() {
               )}
             </div>
 
-            {/* Settings */}
-            <Link
-              to="/settings"
-              className="flex items-center p-4 rounded-xl hover:bg-gradient-to-r hover:from-gray-50 hover:to-slate-50 hover:text-gray-700 transition-all duration-200 group border border-transparent hover:border-gray-100 mt-8"
-            >
-              <div className="p-2 bg-gray-100 rounded-lg group-hover:bg-gray-200 transition-colors duration-200 mr-4">
-                <FiSettings size={18} className="text-gray-600" />
-              </div>
-              <span className="font-medium">Settings</span>
-            </Link>
+
           </nav>
           </div>
         </div>
