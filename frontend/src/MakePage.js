@@ -361,7 +361,6 @@ export default function MakePage() {
             <table className="w-full border-collapse">
               <thead className="bg-gray-100 text-left sticky top-0 z-10">
                 <tr>
-                  <th className="px-2 py-1 border-b">Make ID</th>
                   <th className="px-2 py-1 border-b">Make Name</th>
                   <th className="px-2 py-1 border-b text-right">Actions</th>
                 </tr>
@@ -374,7 +373,6 @@ export default function MakePage() {
                     className="cursor-pointer hover:bg-indigo-50 transition-colors"
                     title="Click to edit make"
                   >
-                    <td className="px-2 py-1 border-b">{make.makeid}</td>
                     <td className="px-2 py-1 border-b">{make.makename}</td>
                     <td className="px-2 py-1 border-b text-right">
                       <button

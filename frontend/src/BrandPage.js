@@ -379,7 +379,6 @@ export default function BrandPage() {
             <table className="w-full border-collapse">
               <thead className="bg-gray-100 text-left sticky top-0 z-10">
                 <tr>
-                  <th className="p-3 border-b">Brand ID</th>
                   <th className="p-3 border-b">Brand Name</th>
                   <th className="p-3 border-b text-right">Actions</th>
                 </tr>
@@ -392,7 +391,6 @@ export default function BrandPage() {
                     className="cursor-pointer hover:bg-indigo-50 transition-colors"
                     title="Click to edit brand"
                   >
-                    <td className="px-2 py-1 border-b">{brand.brandid}</td>
                     <td className="px-2 py-1 border-b">{brand.brandname}</td>
                     <td className="px-2 py-1 border-b text-right">
                       <button

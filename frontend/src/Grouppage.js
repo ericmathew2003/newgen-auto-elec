@@ -388,7 +388,6 @@ export default function GroupPage() {
             <table className="w-full border-collapse">
               <thead className="bg-gray-100 text-left sticky top-0 z-10">
                 <tr>
-                  <th className="p-3 border-b">Group ID</th>
                   <th className="p-3 border-b">Group Name</th>
                   <th className="p-3 border-b text-right">Actions</th>
                 </tr>
@@ -401,7 +400,6 @@ export default function GroupPage() {
                     className="cursor-pointer hover:bg-indigo-50 transition-colors"
                     title="Click to edit group"
                   >
-                    <td className="px-2 py-1 border-b">{group.groupid}</td>
                     <td className="px-2 py-1 border-b">{group.groupname}</td>
                     <td className="px-2 py-1 border-b text-right">
                       <button
