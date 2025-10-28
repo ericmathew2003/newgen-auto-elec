@@ -133,8 +133,11 @@ export default function GroupPage() {
       fetchGroups();
     } catch (err) {
       console.error(err);
-      const errorMessage = err.response?.data?.message || err.response?.data?.error || "Error deleting group";
-      showToast(errorMessage, 'error');
+      if (err.response?.status === 400) {
+        showToast("Record exists in item master, cannot delete", 'error');
+      } else {
+        showToast("Error deleting group", 'error');
+      }
     }
   };
 
