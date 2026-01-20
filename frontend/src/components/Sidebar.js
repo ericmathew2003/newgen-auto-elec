@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useNavigate, useLocation } from 'react-router-dom';
 import {
   FiHome,
   FiPackage,
@@ -8,6 +9,7 @@ import {
   FiRefreshCw,
   FiBarChart2,
   FiSettings,
+  FiDollarSign,
   FiMenu,
   FiX,
   FiChevronDown,
@@ -17,6 +19,8 @@ import {
 const Sidebar = ({ activeTab, setActiveTab }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [expandedMenus, setExpandedMenus] = useState({});
+  const navigate = useNavigate();
+  const location = useLocation();
 
   const menuItems = [
     {
@@ -53,6 +57,15 @@ const Sidebar = ({ activeTab, setActiveTab }) => {
       path: '/parties'
     },
     {
+      id: 'accounts',
+      label: 'Accounts',
+      icon: FiDollarSign,
+      submenu: [
+        { id: 'group-master', label: 'Group Master', path: '/accounts/group-master' },
+        { id: 'coa-master', label: 'Account Master', path: '/accounts/coa-master' }
+      ]
+    },
+    {
       id: 'reports',
       label: 'Reports',
       icon: FiBarChart2,
@@ -82,12 +95,18 @@ const Sidebar = ({ activeTab, setActiveTab }) => {
       toggleSubmenu(item.id);
     } else {
       setActiveTab(item.id);
+      if (item.path) {
+        navigate(item.path);
+      }
       setIsOpen(false);
     }
   };
 
   const handleSubmenuClick = (item) => {
     setActiveTab(item.id);
+    if (item.path) {
+      navigate(item.path);
+    }
     setIsOpen(false);
   };
 

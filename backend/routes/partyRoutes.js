@@ -1,6 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const pool = require("../db");
+const { authenticateToken } = require("../middleware/auth");
 
 // ➕ Add Party
 router.post("/add", async (req, res) => {
@@ -46,17 +47,29 @@ router.post("/add", async (req, res) => {
 });
 
 // 📖 Get All Parties (with account information)
-router.get("/all", async (req, res) => {
+router.get("/all", authenticateToken, async (req, res) => {
   try {
+    console.log("Fetching all parties...");
     const result = await pool.query(`
       SELECT 
-        p.PartyID, p.PartyCode, p.PartyType, p.PartyName, p.ContactNo, 
-        p.Address1, p.AccountID, p.GSTNum, p.Address2, p.created_date, p.edited_date,
-        a.account_name, a.account_code
+        p.PartyID as partyid, 
+        p.PartyCode as partycode, 
+        p.PartyType as partytype, 
+        p.PartyName as partyname, 
+        p.ContactNo as contactno, 
+        p.Address1 as address1, 
+        p.AccountID as accountid, 
+        p.GSTNum as gstnum, 
+        p.Address2 as address2, 
+        p.created_date, 
+        p.edited_date,
+        a.account_name, 
+        a.account_code
       FROM tblMasParty p
       LEFT JOIN acc_mas_account a ON p.AccountID = a.account_id
       ORDER BY p.PartyID
     `);
+    console.log(`Found ${result.rows.length} parties`);
     res.json(result.rows);
   } catch (err) {
     console.error("Fetch error:", err.message);

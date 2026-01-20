@@ -2,6 +2,35 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Force light mode - override system dark mode */
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: light !important;
+  }
+  
+  html, body, #root {
+    background-color: white !important;
+    color: black !important;
+  }
+  
+  /* Override any dark mode classes */
+  .dark\:bg-gray-800 {
+    background-color: white !important;
+  }
+  
+  .dark\:bg-gray-900 {
+    background-color: white !important;
+  }
+  
+  .dark\:text-white {
+    color: black !important;
+  }
+  
+  .dark\:text-gray-100 {
+    color: black !important;
+  }
+}
+
 /* Optional: Keep your custom styles after Tailwind so they override when needed */
 body {
   margin: 0;
@@ -10,6 +39,8 @@ body {
     sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  background-color: white !important;
+  color: black !important;
 }
 
 code {

@@ -52,14 +52,14 @@ router.get('/summary', async (req, res) => {
     const total_purchase = Number(purchaseTotals.rows[0]?.total_purchase || 0);
     const total_purchase_tax = Number(purchaseTotals.rows[0]?.total_purchase_tax || 0);
     const purchase_count = Number(purchaseTotals.rows[0]?.purchase_count || 0);
-    
+
     const total_sales = Number(salesTotals.rows[0]?.total_sales || 0);
     const total_sales_tax = Number(salesTotals.rows[0]?.total_sales_tax || 0);
     const sales_count = Number(salesTotals.rows[0]?.sales_count || 0);
-    
+
     const suppliers_count = Number(suppliers.rows[0]?.suppliers || 0);
     const customers_count = Number(customers.rows[0]?.customers || 0);
-    
+
     const total_items = Number(itemStats.rows[0]?.total_items || 0);
     const low_stock_items = Number(itemStats.rows[0]?.low_stock_items || 0);
     const out_of_stock_items = Number(itemStats.rows[0]?.out_of_stock_items || 0);
@@ -91,6 +91,11 @@ router.get('/summary', async (req, res) => {
   }
 });
 
+// Simple test endpoint
+router.get('/test', (req, res) => {
+  res.json({ message: 'Dashboard routes working!' });
+});
+
 // Dashboard statistics endpoint
 router.get('/stats', async (req, res) => {
   try {
@@ -107,7 +112,7 @@ router.get('/stats', async (req, res) => {
 
     // Get total items count
     try {
-      const itemsResult = await db.query(
+      const itemsResult = await pool.query(
         'SELECT COUNT(*) as count FROM tblmasitem WHERE deleted = false OR deleted IS NULL'
       );
       stats.totalItems = parseInt(itemsResult.rows[0].count) || 0;
@@ -118,7 +123,7 @@ router.get('/stats', async (req, res) => {
 
     // Get total suppliers count
     try {
-      const suppliersResult = await db.query(
+      const suppliersResult = await pool.query(
         'SELECT COUNT(*) as count FROM tblmasparty WHERE partytype = 1'
       );
       stats.totalSuppliers = parseInt(suppliersResult.rows[0].count) || 0;
@@ -129,7 +134,7 @@ router.get('/stats', async (req, res) => {
 
     // Get total customers count
     try {
-      const customersResult = await db.query(
+      const customersResult = await pool.query(
         'SELECT COUNT(*) as count FROM tblmasparty WHERE partytype = 2'
       );
       stats.totalCustomers = parseInt(customersResult.rows[0].count) || 0;
@@ -140,7 +145,7 @@ router.get('/stats', async (req, res) => {
 
     // Get monthly purchases amount
     try {
-      const monthlyPurchasesResult = await db.query(`
+      const monthlyPurchasesResult = await pool.query(`
         SELECT COALESCE(SUM(invamt), 0) as total 
         FROM tbltrnpurchase 
         WHERE EXTRACT(MONTH FROM trdate) = EXTRACT(MONTH FROM CURRENT_DATE)
@@ -155,7 +160,7 @@ router.get('/stats', async (req, res) => {
 
     // Get monthly sales amount (from invoice master)
     try {
-      const monthlySalesResult = await db.query(`
+      const monthlySalesResult = await pool.query(`
         SELECT COALESCE(SUM(tot_amount), 0) as total 
         FROM trn_invoice_master 
         WHERE EXTRACT(MONTH FROM inv_date) = EXTRACT(MONTH FROM CURRENT_DATE)
@@ -170,7 +175,7 @@ router.get('/stats', async (req, res) => {
 
     // Get low stock items (items with stock less than 10)
     try {
-      const lowStockResult = await db.query(
+      const lowStockResult = await pool.query(
         'SELECT COUNT(*) as count FROM tblmasitem WHERE curstock < 10 AND (deleted = false OR deleted IS NULL)'
       );
       stats.lowStockItems = parseInt(lowStockResult.rows[0].count) || 0;
@@ -181,7 +186,7 @@ router.get('/stats', async (req, res) => {
 
     // Get recent transactions (purchases only if sales table doesn't exist)
     try {
-      const recentPurchasesResult = await db.query(`
+      const recentPurchasesResult = await pool.query(`
         SELECT 
           p.trdate as date,
           p.invamt as amount,
@@ -204,7 +209,7 @@ router.get('/stats', async (req, res) => {
 
       // Try to add sales transactions if table exists
       try {
-        const recentSalesResult = await db.query(`
+        const recentSalesResult = await pool.query(`
           SELECT 
             i.inv_date as date,
             i.tot_amount as amount,
@@ -217,7 +222,7 @@ router.get('/stats', async (req, res) => {
           ORDER BY i.inv_date DESC
           LIMIT 3
         `);
-        
+
         const salesTransactions = recentSalesResult.rows.map(row => ({
           date: row.date ? new Date(row.date).toLocaleDateString() : 'Unknown',
           amount: parseFloat(row.amount || 0).toLocaleString(),
@@ -229,7 +234,7 @@ router.get('/stats', async (req, res) => {
         const allTransactions = [...stats.recentTransactions, ...salesTransactions]
           .sort((a, b) => new Date(b.date) - new Date(a.date))
           .slice(0, 5);
-        
+
         stats.recentTransactions = allTransactions;
       } catch (salesError) {
         console.log('Sales transactions query failed, showing purchases only');
@@ -242,7 +247,7 @@ router.get('/stats', async (req, res) => {
 
     // Get stock alerts (items with low stock)
     try {
-      const stockAlertsResult = await db.query(`
+      const stockAlertsResult = await pool.query(`
         SELECT 
           itemname,
           curstock as current_stock
@@ -253,7 +258,7 @@ router.get('/stats', async (req, res) => {
         ORDER BY curstock ASC
         LIMIT 10
       `);
-      
+
       stats.stockAlerts = stockAlertsResult.rows.map(row => ({
         itemName: row.itemname || 'Unknown Item',
         currentStock: parseFloat(row.current_stock) || 0
@@ -265,7 +270,7 @@ router.get('/stats', async (req, res) => {
 
     // Get top items by stock value
     try {
-      const topItemsResult = await db.query(`
+      const topItemsResult = await pool.query(`
         SELECT 
           itemname,
           curstock,
@@ -279,7 +284,7 @@ router.get('/stats', async (req, res) => {
         ORDER BY stock_value DESC
         LIMIT 10
       `);
-      
+
       stats.topItems = topItemsResult.rows.map(row => ({
         itemName: row.itemname || 'Unknown Item',
         stock: parseFloat(row.curstock) || 0,
@@ -294,9 +299,9 @@ router.get('/stats', async (req, res) => {
     res.json(stats);
   } catch (error) {
     console.error('Dashboard stats error:', error);
-    res.status(500).json({ 
+    res.status(500).json({
       error: 'Failed to fetch dashboard statistics',
-      details: error.message 
+      details: error.message
     });
   }
 });
@@ -312,7 +317,7 @@ router.get('/trends', async (req, res) => {
 
     // Get last 6 months purchase trends
     try {
-      const purchaseTrendsResult = await db.query(`
+      const purchaseTrendsResult = await pool.query(`
         SELECT 
           EXTRACT(MONTH FROM trdate) as month,
           EXTRACT(YEAR FROM trdate) as year,
@@ -338,7 +343,7 @@ router.get('/trends', async (req, res) => {
 
     // Get sales trends from invoice master
     try {
-      const salesTrendsResult = await db.query(`
+      const salesTrendsResult = await pool.query(`
         SELECT 
           EXTRACT(MONTH FROM inv_date) as month,
           EXTRACT(YEAR FROM inv_date) as year,
@@ -364,7 +369,7 @@ router.get('/trends', async (req, res) => {
 
     // Get inventory movement trends from stock ledger
     try {
-      const inventoryTrendsResult = await db.query(`
+      const inventoryTrendsResult = await pool.query(`
         SELECT 
           EXTRACT(MONTH FROM tran_date) as month,
           EXTRACT(YEAR FROM tran_date) as year,
@@ -392,9 +397,9 @@ router.get('/trends', async (req, res) => {
     res.json(trends);
   } catch (error) {
     console.error('Dashboard trends error:', error);
-    res.status(500).json({ 
+    res.status(500).json({
       error: 'Failed to fetch dashboard trends',
-      details: error.message 
+      details: error.message
     });
   }
 });
@@ -411,7 +416,7 @@ router.get('/performance', async (req, res) => {
 
     // Calculate inventory turnover ratio
     try {
-      const avgInventoryResult = await db.query(`
+      const avgInventoryResult = await pool.query(`
         SELECT AVG(COALESCE(curstock, 0) * COALESCE(cost, 0)) as avg_inventory_value
         FROM tblmasitem 
         WHERE (deleted = false OR deleted IS NULL)
@@ -419,7 +424,7 @@ router.get('/performance', async (req, res) => {
         AND COALESCE(cost, 0) > 0
       `);
 
-      const cogsSalesResult = await db.query(`
+      const cogsSalesResult = await pool.query(`
         SELECT COALESCE(SUM(invamt), 0) as total_purchases
         FROM tbltrnpurchase 
         WHERE EXTRACT(YEAR FROM trdate) = EXTRACT(YEAR FROM CURRENT_DATE)
@@ -428,7 +433,7 @@ router.get('/performance', async (req, res) => {
 
       const avgInventoryValue = parseFloat(avgInventoryResult.rows[0].avg_inventory_value) || 1;
       const totalPurchases = parseFloat(cogsSalesResult.rows[0].total_purchases) || 0;
-      
+
       if (avgInventoryValue > 0) {
         performance.inventoryTurnover = (totalPurchases / avgInventoryValue).toFixed(2);
       }
@@ -439,7 +444,7 @@ router.get('/performance', async (req, res) => {
 
     // Calculate purchase growth metrics
     try {
-      const currentMonthPurchases = await db.query(`
+      const currentMonthPurchases = await pool.query(`
         SELECT COALESCE(SUM(invamt), 0) as total
         FROM tbltrnpurchase 
         WHERE EXTRACT(MONTH FROM trdate) = EXTRACT(MONTH FROM CURRENT_DATE)
@@ -447,7 +452,7 @@ router.get('/performance', async (req, res) => {
         AND (is_cancelled = false OR is_cancelled IS NULL)
       `);
 
-      const lastMonthPurchases = await db.query(`
+      const lastMonthPurchases = await pool.query(`
         SELECT COALESCE(SUM(invamt), 0) as total
         FROM tbltrnpurchase 
         WHERE EXTRACT(MONTH FROM trdate) = EXTRACT(MONTH FROM CURRENT_DATE - INTERVAL '1 month')
@@ -457,9 +462,9 @@ router.get('/performance', async (req, res) => {
 
       const currentPurchaseTotal = parseFloat(currentMonthPurchases.rows[0].total) || 0;
       const lastPurchaseTotal = parseFloat(lastMonthPurchases.rows[0].total) || 0;
-      
+
       performance.currentMonthPurchases = currentPurchaseTotal;
-      
+
       if (lastPurchaseTotal > 0) {
         performance.purchaseGrowthRate = (((currentPurchaseTotal - lastPurchaseTotal) / lastPurchaseTotal) * 100).toFixed(1);
       } else if (currentPurchaseTotal > 0) {
@@ -473,7 +478,7 @@ router.get('/performance', async (req, res) => {
 
     // Calculate sales metrics
     try {
-      const currentMonthSales = await db.query(`
+      const currentMonthSales = await pool.query(`
         SELECT COALESCE(SUM(tot_amount), 0) as total
         FROM trn_invoice_master 
         WHERE EXTRACT(MONTH FROM inv_date) = EXTRACT(MONTH FROM CURRENT_DATE)
@@ -490,9 +495,9 @@ router.get('/performance', async (req, res) => {
     res.json(performance);
   } catch (error) {
     console.error('Dashboard performance error:', error);
-    res.status(500).json({ 
+    res.status(500).json({
       error: 'Failed to fetch performance metrics',
-      details: error.message 
+      details: error.message
     });
   }
 });

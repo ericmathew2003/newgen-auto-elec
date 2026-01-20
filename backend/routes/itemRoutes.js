@@ -1,11 +1,13 @@
 const express = require("express");
 const router = express.Router();
 const pool = require("../db"); // <-- your PostgreSQL pool/connection file
+const { authenticateToken } = require("../middleware/auth");
+const { checkPermission } = require("../middleware/checkPermission");
 
 
 
 // ✅ Get all items with related data
-router.get("/all", async (req, res) => {
+router.get("/all", authenticateToken, checkPermission('INVENTORY_ITEM_MASTER_VIEW'), async (req, res) => {
   try {
     const result = await pool.query(`
       SELECT DISTINCT ON (i.itemcode)
@@ -39,7 +41,7 @@ router.get("/all", async (req, res) => {
 });
 
 // ✅ Get dropdown data for Groups, Makes, and Brands
-router.get("/dropdown-data", async (req, res) => {
+router.get("/dropdown-data", authenticateToken, checkPermission('INVENTORY_ITEM_MASTER_VIEW'), async (req, res) => {
   try {
     const [groups, makes, brands, parties] = await Promise.all([
       pool.query("SELECT groupid, groupname FROM tblMasGroup ORDER BY groupname ASC"),
@@ -61,7 +63,7 @@ router.get("/dropdown-data", async (req, res) => {
 });
 
 // ✅ Get next available ItemCode
-router.get("/next-itemcode", async (req, res) => {
+router.get("/next-itemcode", authenticateToken, checkPermission('INVENTORY_ITEM_MASTER_VIEW'), async (req, res) => {
   try {
     const result = await pool.query('SELECT COALESCE(MAX(ItemCode), 0) + 1 as next_code FROM tblMasItem');
     res.json({ nextItemCode: result.rows[0].next_code });
@@ -72,7 +74,7 @@ router.get("/next-itemcode", async (req, res) => {
 });
 
 // ✅ Add new item
-router.post("/add", async (req, res) => {
+router.post("/add", authenticateToken, checkPermission('INVENTORY_ITEM_MASTER_ADD'), async (req, res) => {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
@@ -164,7 +166,7 @@ router.post("/add", async (req, res) => {
 });
 
 // ✅ Edit/Update item
-router.put("/edit/:id", async (req, res) => {
+router.put("/edit/:id", authenticateToken, checkPermission('INVENTORY_ITEM_MASTER_EDIT'), async (req, res) => {
   try {
     const { id } = req.params;
     const fields = req.body;
@@ -204,7 +206,7 @@ router.put("/edit/:id", async (req, res) => {
 });
 
 // ✅ Delete item
-router.delete("/delete/:id", async (req, res) => {
+router.delete("/delete/:id", authenticateToken, checkPermission('INVENTORY_ITEM_MASTER_DELETE'), async (req, res) => {
   try {
     const { id } = req.params;
     await pool.query("DELETE FROM tblMasItem WHERE itemcode = $1", [id]);
@@ -216,7 +218,7 @@ router.delete("/delete/:id", async (req, res) => {
 });
 
 // ✅ Get purchase history for an item (confirmed only)
-router.get("/:itemCode/purchases", async (req, res) => {
+router.get("/:itemCode/purchases", authenticateToken, checkPermission('INVENTORY_ITEM_MASTER_VIEW'), async (req, res) => {
   try {
     const { itemCode } = req.params;
     const result = await pool.query(`
@@ -245,7 +247,7 @@ router.get("/:itemCode/purchases", async (req, res) => {
 });
 
 // ✅ Get sales history for an item (posted only)
-router.get("/:itemCode/sales", async (req, res) => {
+router.get("/:itemCode/sales", authenticateToken, checkPermission('INVENTORY_ITEM_MASTER_VIEW'), async (req, res) => {
   try {
     const { itemCode } = req.params;
     const result = await pool.query(`
@@ -273,7 +275,7 @@ router.get("/:itemCode/sales", async (req, res) => {
 });
 
 // ✅ Get item ledger (opening stock from tblmasitem + transactions from trn_stock_ledger)
-router.get("/:itemCode/ledger", async (req, res) => {
+router.get("/:itemCode/ledger", authenticateToken, checkPermission('INVENTORY_ITEM_MASTER_VIEW'), async (req, res) => {
   try {
     const { itemCode } = req.params;
     console.log(`Fetching ledger for item: ${itemCode}`);

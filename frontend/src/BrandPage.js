@@ -2,9 +2,11 @@ import React, { useEffect, useState, useRef } from "react";
 import axios from "axios";
 import { usePageNavigation, Breadcrumb } from "./components/NavigationHelper";
 import API_BASE_URL from "./config/api";
+import { usePermissions } from "./hooks/usePermissions";
 
 export default function BrandPage() {
   const { id, isNewMode, isEditMode, showForm, navigateToList, navigateToNew, navigateToEdit } = usePageNavigation('/brands');
+  const { canCreate, canEdit, canDelete, canView } = usePermissions();
   
   const [brands, setBrands] = useState([]);
   const [editingBrand, setEditingBrand] = useState(null);
@@ -249,12 +251,14 @@ export default function BrandPage() {
         <div className="flex flex-col items-start mb-4">
           <div className="flex items-center justify-between w-full mb-2">
             <div className="flex items-center gap-2">
-            <button
-              onClick={navigateToNew}
-              className="bg-purple-600 text-white px-4 py-2 rounded-lg shadow hover:bg-purple-700"
-            >
-              New
-            </button>
+            {canCreate('INVENTORY', 'BRAND_MASTER') && (
+              <button
+                onClick={navigateToNew}
+                className="bg-purple-600 text-white px-4 py-2 rounded-lg shadow hover:bg-purple-700"
+              >
+                New
+              </button>
+            )}
 
             {/* 🔎 Show search bar only when not adding/editing */}
             {!showForm && (
@@ -269,7 +273,7 @@ export default function BrandPage() {
 
             {showForm && (
               <>
-                {!editingBrand && (
+                {!editingBrand && canCreate('INVENTORY', 'BRAND_MASTER') && (
                   <button
                     type="button"
                     disabled={!canSave}
@@ -286,14 +290,16 @@ export default function BrandPage() {
                 >
                   Cancel
                 </button>
-                <button
-                  type="button"
-                  disabled={!canSave}
-                  onClick={() => handleSubmit({ preventDefault: () => {} })}
-                  className={`px-4 py-2 text-sm rounded text-white ${canSave ? "bg-purple-600 hover:bg-purple-700" : "bg-purple-400 cursor-not-allowed opacity-60"}`}
-                >
-                  Save
-                </button>
+                {((isEditMode && canEdit('INVENTORY', 'BRAND_MASTER')) || (!isEditMode && canCreate('INVENTORY', 'BRAND_MASTER'))) && (
+                  <button
+                    type="button"
+                    disabled={!canSave}
+                    onClick={() => handleSubmit({ preventDefault: () => {} })}
+                    className={`px-4 py-2 text-sm rounded text-white ${canSave ? "bg-purple-600 hover:bg-purple-700" : "bg-purple-400 cursor-not-allowed opacity-60"}`}
+                  >
+                    Save
+                  </button>
+                )}
               </>
             )}
             </div>
@@ -387,21 +393,23 @@ export default function BrandPage() {
                 {currentRecords.map((brand) => (
                   <tr
                     key={brand.brandid}
-                    onClick={() => handleDoubleClick(brand)}
-                    className="cursor-pointer hover:bg-indigo-50 transition-colors"
-                    title="Click to edit brand"
+                    onClick={canEdit('INVENTORY', 'BRAND_MASTER') ? () => handleDoubleClick(brand) : undefined}
+                    className={canEdit('INVENTORY', 'BRAND_MASTER') ? "cursor-pointer hover:bg-indigo-50 transition-colors" : ""}
+                    title={canEdit('INVENTORY', 'BRAND_MASTER') ? "Click to edit brand" : "View only"}
                   >
                     <td className="px-2 py-1 border-b">{brand.brandname}</td>
                     <td className="px-2 py-1 border-b text-right">
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation(); // Prevent row click event
-                          handleDelete(brand.brandid);
-                        }}
-                        className="text-red-600 hover:underline"
-                      >
-                        Delete
-                      </button>
+                      {canDelete('INVENTORY', 'BRAND_MASTER') && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation(); // Prevent row click event
+                            handleDelete(brand.brandid);
+                          }}
+                          className="text-red-600 hover:underline"
+                        >
+                          Delete
+                        </button>
+                      )}
                     </td>
                   </tr>
                 ))}
@@ -452,6 +460,7 @@ export default function BrandPage() {
                       required
                       placeholder="Enter brand name"
                       autoFocus={isNewMode}
+                      disabled={(isEditMode && !canEdit('INVENTORY', 'BRAND_MASTER')) || (!isEditMode && !canCreate('INVENTORY', 'BRAND_MASTER'))}
                     />
                   </div>
                 </div>

@@ -2,9 +2,11 @@ import React, { useEffect, useState, useRef } from "react";
 import axios from "axios";
 import { usePageNavigation, Breadcrumb } from "./components/NavigationHelper";
 import API_BASE_URL from "./config/api";
+import { usePermissions } from "./hooks/usePermissions";
 
 export default function GroupPage() {
   const { id, isNewMode, isEditMode, showForm, navigateToList, navigateToNew, navigateToEdit } = usePageNavigation('/groups');
+  const { canCreate, canEdit, canDelete, canView } = usePermissions();
   
   const [groups, setGroups] = useState([]);
   const [editingGroup, setEditingGroup] = useState(null);
@@ -250,12 +252,14 @@ export default function GroupPage() {
           
           <div className="flex items-center justify-between w-full mb-2">
             <div className="flex items-center gap-2">
-            <button
-              onClick={navigateToNew}
-              className="bg-purple-600 text-white px-4 py-2 rounded-lg shadow hover:bg-purple-700"
-            >
-              New
-            </button>
+            {canCreate('INVENTORY', 'GROUP_MASTER') && (
+              <button
+                onClick={navigateToNew}
+                className="bg-purple-600 text-white px-4 py-2 rounded-lg shadow hover:bg-purple-700"
+              >
+                New
+              </button>
+            )}
 
             {/* 🔎 Show search bar only when not adding/editing */}
             {!showForm && (
@@ -270,7 +274,7 @@ export default function GroupPage() {
 
             {showForm && (
               <>
-                {!editingGroup && (
+                {!editingGroup && canCreate('INVENTORY', 'GROUP_MASTER') && (
                   <button
                     type="button"
                     disabled={!canSave}
@@ -291,18 +295,20 @@ export default function GroupPage() {
                 >
                   Cancel
                 </button>
-                <button
-                  type="button"
-                  disabled={!canSave}
-                  onClick={() => handleSubmit({ preventDefault: () => {} })}
-                  className={`px-4 py-2 text-sm rounded text-white ${
-                    canSave
-                      ? "bg-purple-600 hover:bg-purple-700"
-                      : "bg-purple-400 cursor-not-allowed opacity-60"
-                  }`}
-                >
-                  Save
-                </button>
+                {((isEditMode && canEdit('INVENTORY', 'GROUP_MASTER')) || (!isEditMode && canCreate('INVENTORY', 'GROUP_MASTER'))) && (
+                  <button
+                    type="button"
+                    disabled={!canSave}
+                    onClick={() => handleSubmit({ preventDefault: () => {} })}
+                    className={`px-4 py-2 text-sm rounded text-white ${
+                      canSave
+                        ? "bg-purple-600 hover:bg-purple-700"
+                        : "bg-purple-400 cursor-not-allowed opacity-60"
+                    }`}
+                  >
+                    Save
+                  </button>
+                )}
               </>
             )}
             </div>
@@ -396,21 +402,23 @@ export default function GroupPage() {
                 {currentRecords.map((group) => (
                   <tr
                     key={group.groupid}
-                    onClick={() => handleDoubleClick(group)}
-                    className="cursor-pointer hover:bg-indigo-50 transition-colors"
-                    title="Click to edit group"
+                    onClick={canEdit('INVENTORY', 'GROUP_MASTER') ? () => handleDoubleClick(group) : undefined}
+                    className={canEdit('INVENTORY', 'GROUP_MASTER') ? "cursor-pointer hover:bg-indigo-50 transition-colors" : ""}
+                    title={canEdit('INVENTORY', 'GROUP_MASTER') ? "Click to edit group" : "View only"}
                   >
                     <td className="px-2 py-1 border-b">{group.groupname}</td>
                     <td className="px-2 py-1 border-b text-right">
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation(); // Prevent row click event
-                          handleDelete(group.groupid);
-                        }}
-                        className="text-red-600 hover:underline"
-                      >
-                        Delete
-                      </button>
+                      {canDelete('INVENTORY', 'GROUP_MASTER') && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation(); // Prevent row click event
+                            handleDelete(group.groupid);
+                          }}
+                          className="text-red-600 hover:underline"
+                        >
+                          Delete
+                        </button>
+                      )}
                     </td>
                   </tr>
                 ))}
@@ -461,6 +469,7 @@ export default function GroupPage() {
                       required
                       placeholder="Enter group name"
                       autoFocus={isNewMode}
+                      disabled={(isEditMode && !canEdit('INVENTORY', 'GROUP_MASTER')) || (!isEditMode && !canCreate('INVENTORY', 'GROUP_MASTER'))}
                     />
                   </div>
                 </div>

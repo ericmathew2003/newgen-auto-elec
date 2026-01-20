@@ -5,6 +5,13 @@ import jsPDF from "jspdf";
 import { validateTransactionDate, getDefaultTransactionDate } from "./utils/accountingPeriodUtils";
 import { usePageNavigation, Breadcrumb } from "./components/NavigationHelper";
 import API_BASE_URL from "./config/api";
+import { usePermissions } from "./hooks/usePermissions";
+
+// Helper to get auth headers
+const getAuthHeaders = () => {
+  const token = localStorage.getItem('token');
+  return { headers: { Authorization: `Bearer ${token}` } };
+};
 
 // Helper to format number safely
 const n = (v) => (isNaN(Number(v)) ? 0 : Number(v));
@@ -39,6 +46,19 @@ const dateToInput = (val) => {
 
 export default function PurchasePage() {
   const { id, isNewMode, isEditMode, showForm, navigateToList, navigateToNew, navigateToEdit } = usePageNavigation('/purchase');
+  const { canCreate, canEdit, canDelete, canView } = usePermissions();
+
+  // Check permissions and redirect if unauthorized
+  React.useEffect(() => {
+    if (isNewMode && !canCreate('INVENTORY', 'PURCHASE')) {
+      navigateToList();
+    } else if (isEditMode && !canEdit('INVENTORY', 'PURCHASE')) {
+      navigateToList();
+    } else if (!canView('INVENTORY', 'PURCHASE')) {
+      // If user can't even view, redirect to dashboard or show error
+      window.location.href = '/';
+    }
+  }, [isNewMode, isEditMode, canCreate, canEdit, canView, navigateToList]);
   
   // List state
   const [purchases, setPurchases] = useState([]);
@@ -161,7 +181,7 @@ export default function PurchasePage() {
     if (!id) return;
     (async () => {
       try {
-        const res = await axios.get(`${API_BASE_URL}/api/purchase/${id}/costing`);
+        const res = await axios.get(`${API_BASE_URL}/api/purchase/${id}/costing`, getAuthHeaders());
         const rows = Array.isArray(res.data) ? res.data : [];
         if (rows.length > 0) {
           setCostingRows(rows.map(r => ({
@@ -310,7 +330,7 @@ export default function PurchasePage() {
 
   const loadCompanyProfile = async () => {
     try {
-      const res = await axios.get(`${API_BASE_URL}/api/company`);
+      const res = await axios.get(`${API_BASE_URL}/api/company`, getAuthHeaders());
       setCompanyProfile(res.data || {});
     } catch (err) {
       console.error(err);
@@ -350,7 +370,7 @@ export default function PurchasePage() {
   // Fetch suppliers
   const fetchSuppliers = async () => {
     try {
-      const res = await axios.get(`${API_BASE_URL}/api/party/all`);
+      const res = await axios.get(`${API_BASE_URL}/api/party/all`, getAuthHeaders());
       const onlySuppliers = (res.data || []).filter((p) => parseInt(p.partytype ?? 0, 10) === 2);
       const sortedByName = [...onlySuppliers].sort((a, b) => String(a.partyname || '').localeCompare(String(b.partyname || ''), undefined, { sensitivity: 'base' }));
       setSuppliers(sortedByName);
@@ -362,7 +382,7 @@ export default function PurchasePage() {
   // Generate next TrNo (called only at save time)
   const generateNextTrNo = async () => {
     try {
-      const res = await axios.get(`${API_BASE_URL}/api/purchase`);
+      const res = await axios.get(`${API_BASE_URL}/api/purchase`, getAuthHeaders());
       const purchases = res.data || [];
       const lastTrNo = Math.max(0, ...purchases.map(p => parseInt(p.trno) || 0));
       const nextTrNo = lastTrNo + 1;
@@ -377,7 +397,7 @@ export default function PurchasePage() {
   // Fetch all items for the modal
   const fetchAllItems = async () => {
     try {
-      const res = await axios.get(`${API_BASE_URL}/api/items/all`);
+      const res = await axios.get(`${API_BASE_URL}/api/items/all`, getAuthHeaders());
       setAllItems(res.data || []);
     } catch (e) {
       console.error(e);
@@ -397,7 +417,7 @@ export default function PurchasePage() {
         params.fyearid = selectedFYearID;
       }
       
-      const res = await axios.get(`${API_BASE_URL}/api/purchase`, { params });
+      const res = await axios.get(`${API_BASE_URL}/api/purchase`, { params, ...getAuthHeaders() });
       setPurchases(res.data || []);
     } catch (e) {
       console.error(e);
@@ -920,7 +940,7 @@ export default function PurchasePage() {
   const handleDeletePurchase = async (purchase) => {
     if (!window.confirm(`Delete purchase TrNo ${purchase.trno}? This cannot be undone.`)) return;
     try {
-      await axios.delete(`${API_BASE_URL}/api/purchase/${purchase.tranid}`);
+      await axios.delete(`${API_BASE_URL}/api/purchase/${purchase.tranid}`, getAuthHeaders());
       setNotice({ open: true, type: 'success', message: 'Purchase deleted' });
       fetchPurchases();
     } catch (err) {
@@ -932,7 +952,7 @@ export default function PurchasePage() {
   // Edit purchase function
   const editPurchase = async (purchase) => {
     try {
-      const res = await axios.get(`${API_BASE_URL}/api/purchase/${purchase.tranid}`);
+      const res = await axios.get(`${API_BASE_URL}/api/purchase/${purchase.tranid}`, getAuthHeaders());
       const { header: purchaseHeader, details: purchaseDetails } = res.data;
       
       // Set header data (ensure date inputs get YYYY-MM-DD)
@@ -1107,14 +1127,14 @@ export default function PurchasePage() {
       let tranId;
       if (editingPurchase) {
         // Update existing purchase
-        await axios.put(`${API_BASE_URL}/api/purchase/${editingPurchase.tranid}`, payloadHeader);
+        await axios.put(`${API_BASE_URL}/api/purchase/${editingPurchase.tranid}`, payloadHeader, getAuthHeaders());
         tranId = editingPurchase.tranid;
       } else {
         // Create new purchase - generate TrNo at save time to prevent number clashes
         const nextTrNo = await generateNextTrNo();
         const payloadWithTrNo = { ...payloadHeader, TrNo: nextTrNo };
         
-        const headerRes = await axios.post(`${API_BASE_URL}/api/purchase`, payloadWithTrNo);
+        const headerRes = await axios.post(`${API_BASE_URL}/api/purchase`, payloadWithTrNo, getAuthHeaders());
         tranId = headerRes.data?.TranID;
         if (!tranId) throw new Error("TranID not returned");
         
@@ -1142,7 +1162,7 @@ export default function PurchasePage() {
           CGSTPer: n(line.CGSTPer),
           SGSTPer: n(line.SGSTPer),
           IGSTPer: n(line.IGSTPer),
-        });
+        }, getAuthHeaders());
       }
 
       if (!post) {
@@ -1542,37 +1562,39 @@ export default function PurchasePage() {
           </div>
           <div className="flex items-center justify-between w-full mb-2">
             <div className="flex items-center gap-2">
-              <button
-                onClick={() => {
-                  // Allow new purchase if form is not open OR if current purchase is saved OR confirmed
-                  const isSaved = editingPurchase?.tranid;
-                  const isConfirmed = header.Costconfirmed;
-                  
-                  if (showForm && !isSaved && !isConfirmed) {
-                    return;
-                  }
-                  
-                  // Reset form state before navigating
-                  setEditingPurchase(null);
-                  setHeader(initialHeader);
-                  setItems([]);
-                  setCurrentTranId(null);
-                  setGrnStatus('draft');
-                  setNoOverhead(false);
-                  
-                  // Navigate to new purchase
-                  navigateToNew();
-                }}
+              {canCreate('INVENTORY', 'PURCHASE') && (
+                <button
+                  onClick={() => {
+                    // Allow new purchase if form is not open OR if current purchase is saved OR confirmed
+                    const isSaved = editingPurchase?.tranid;
+                    const isConfirmed = header.Costconfirmed;
+                    
+                    if (showForm && !isSaved && !isConfirmed) {
+                      return;
+                    }
+                    
+                    // Reset form state before navigating
+                    setEditingPurchase(null);
+                    setHeader(initialHeader);
+                    setItems([]);
+                    setCurrentTranId(null);
+                    setGrnStatus('draft');
+                    setNoOverhead(false);
+                    
+                    // Navigate to new purchase
+                    navigateToNew();
+                  }}
 
-                disabled={showForm && !editingPurchase?.tranid && !header.Costconfirmed}
-                className={`px-4 py-2 rounded-lg shadow text-white ${
-                  (showForm && !editingPurchase?.tranid && !header.Costconfirmed) 
-                    ? "bg-gray-400 cursor-not-allowed opacity-50" 
-                    : "bg-purple-600 hover:bg-purple-700"
-                }`}
-              >
-                New
-              </button>
+                  disabled={showForm && !editingPurchase?.tranid && !header.Costconfirmed}
+                  className={`px-4 py-2 rounded-lg shadow text-white ${
+                    (showForm && !editingPurchase?.tranid && !header.Costconfirmed) 
+                      ? "bg-gray-400 cursor-not-allowed opacity-50" 
+                      : "bg-purple-600 hover:bg-purple-700"
+                  }`}
+                >
+                  New
+                </button>
+              )}
 
               {!showForm && (
                 <>
@@ -1630,18 +1652,20 @@ export default function PurchasePage() {
 
               {showForm && (
                 <>
-                  <button
-                    type="button"
-                    disabled={saving || !isDirty}
-                    onClick={() => handleSave({ post: false })}
-                    className={`px-4 py-2 text-sm rounded text-white ${
-                      !saving && isDirty ? "bg-purple-600 hover:bg-purple-700" : "bg-purple-400 cursor-not-allowed opacity-60"
-                    }`}
-                  >
-                    {saving ? "Saving..." : "Save"}
-                  </button>
+                  {((isNewMode && canCreate('INVENTORY', 'PURCHASE')) || (isEditMode && canEdit('INVENTORY', 'PURCHASE'))) && (
+                    <button
+                      type="button"
+                      disabled={saving || !isDirty}
+                      onClick={() => handleSave({ post: false })}
+                      className={`px-4 py-2 text-sm rounded text-white ${
+                        !saving && isDirty ? "bg-purple-600 hover:bg-purple-700" : "bg-purple-400 cursor-not-allowed opacity-60"
+                      }`}
+                    >
+                      {saving ? "Saving..." : "Save"}
+                    </button>
+                  )}
 
-                  {!isCancelled && !isPosted && (
+                  {!isCancelled && !isPosted && ((isNewMode && canCreate('INVENTORY', 'PURCHASE')) || (isEditMode && canEdit('INVENTORY', 'PURCHASE'))) && (
                     <button
                       type="button"
                       className="px-3 py-2 text-sm border rounded"
@@ -1990,9 +2014,9 @@ export default function PurchasePage() {
                 {currentRecords.map((r) => (
                   <tr
                     key={r.tranid}
-                    className="hover:bg-indigo-50 cursor-pointer"
-                    onClick={() => navigateToEdit(r.tranid)}
-                    title="Click to edit"
+                    className={canEdit('INVENTORY', 'PURCHASE') ? "hover:bg-indigo-50 cursor-pointer" : ""}
+                    onClick={canEdit('INVENTORY', 'PURCHASE') ? () => navigateToEdit(r.tranid) : undefined}
+                    title={canEdit('INVENTORY', 'PURCHASE') ? "Click to edit" : ""}
                   >
                     <td className="p-2 border-b w-8 text-center" onClick={(e) => e.stopPropagation()}>
                       <input

@@ -2,6 +2,15 @@ import React, { useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import PurchaseReturnForm from "./PurchaseReturnForm";
 import API_BASE_URL from "./config/api";
+import { usePermissions } from "./hooks/usePermissions";
+import { useAuth } from "./contexts/AuthContext";
+import { useNavigate } from "react-router-dom";
+
+// Helper to get auth headers
+const getAuthHeaders = () => {
+  const token = localStorage.getItem('token');
+  return { headers: { Authorization: `Bearer ${token}` } };
+};
 
 const n = (v) => (isNaN(Number(v)) ? 0 : Number(v));
 const formatNumber = (val) => {
@@ -34,6 +43,28 @@ const dateToInput = (val) => {
 };
 
 export default function PurchaseReturnPage() {
+  const navigate = useNavigate();
+  const { user, loading: authLoading } = useAuth();
+  const { canCreate, canEdit, canView } = usePermissions();
+
+  // Check permissions - redirect if user can't view purchase returns
+  useEffect(() => {
+    // Wait for auth to load before checking permissions
+    if (authLoading) return;
+    
+    // Skip permission check if no user (will be handled by auth)
+    if (!user) return;
+    
+    // Admins have full access - skip permission check
+    if (user.role === 'ADMIN') return;
+    
+    // For non-admin users, check permissions
+    if (!canView('INVENTORY', 'PURCHASE_RETURN')) {
+      alert('You do not have permission to view Purchase Returns');
+      navigate('/dashboard');
+    }
+  }, [authLoading, user, canView, navigate]);
+
   // List state
   const [purchaseReturns, setPurchaseReturns] = useState([]);
   const [searchTerm, setSearchTerm] = useState("");
@@ -62,7 +93,7 @@ export default function PurchaseReturnPage() {
         params.fyearId = selectedFYearID;
       }
       
-      const r = await axios.get(`${API_BASE_URL}/api/purchase-return`, { params });
+      const r = await axios.get(`${API_BASE_URL}/api/purchase-return`, { params, ...getAuthHeaders() });
       const raw = r.data || [];
       // Map API to UI fields
       const mapped = raw.map(x => ({
@@ -99,7 +130,7 @@ export default function PurchaseReturnPage() {
 
   const handleEdit = async (pr) => {
     try {
-      const res = await axios.get(`${API_BASE_URL}/api/purchase-return/${pr.purch_ret_id}`);
+      const res = await axios.get(`${API_BASE_URL}/api/purchase-return/${pr.purch_ret_id}`, getAuthHeaders());
       const { header, details } = res.data;
 
       // Restructure the data to match what PurchaseReturnForm expects
@@ -252,7 +283,9 @@ export default function PurchaseReturnPage() {
               </div>
               <div className="flex items-center gap-2 mt-4 md:mt-0 md:ml-auto">
                 <button onClick={fetchPurchaseReturns} className="px-3 py-2 border rounded">Refresh</button>
-                <button onClick={handleNewReturn} className="px-3 py-2 bg-blue-600 text-white rounded">New Purchase Return</button>
+                {canCreate('INVENTORY', 'PURCHASE_RETURN') && (
+                  <button onClick={handleNewReturn} className="px-3 py-2 bg-blue-600 text-white rounded">New Purchase Return</button>
+                )}
               </div>
             </div>
           </div>
@@ -376,9 +409,9 @@ export default function PurchaseReturnPage() {
                 {currentRecords.map((pr) => (
                   <tr
                     key={pr.purch_ret_id}
-                    className="border-t hover:bg-blue-50 cursor-pointer"
-                    onClick={() => handleEdit(pr)}
-                    title="Click to edit"
+                    className={`border-t ${canEdit('INVENTORY', 'PURCHASE_RETURN') ? 'hover:bg-blue-50 cursor-pointer' : ''}`}
+                    onClick={canEdit('INVENTORY', 'PURCHASE_RETURN') ? () => handleEdit(pr) : undefined}
+                    title={canEdit('INVENTORY', 'PURCHASE_RETURN') ? "Click to edit" : "View only"}
                   >
                     <td className="p-2">{pr.purch_ret_no}</td>
                     <td className="p-2">{dateToInput(pr.tran_date)}</td>

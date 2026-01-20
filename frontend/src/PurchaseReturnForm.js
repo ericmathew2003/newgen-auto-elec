@@ -2,6 +2,13 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import axios from "axios";
 import { validateTransactionDate, getDefaultTransactionDate } from "./utils/accountingPeriodUtils";
 import API_BASE_URL from "./config/api";
+import { usePermissions } from "./hooks/usePermissions";
+
+// Helper to get auth headers
+const getAuthHeaders = () => {
+  const token = localStorage.getItem('token');
+  return { headers: { Authorization: `Bearer ${token}` } };
+};
 
 const n = (value) => (isNaN(Number(value)) ? 0 : Number(value));
 const formatNumber = (val) => {
@@ -174,6 +181,18 @@ function SearchableItemTable({ items, highlightIndex, onSelect, onHover, tableId
 }
 
 export default function PurchaseReturnForm({ onClose, onSaved, onDataChanged, initialData, allReturns = [], onNavigate }) {
+  const { canCreate, canEdit, canDelete } = usePermissions();
+  const isEditMode = !!initialData;
+
+  // Check permissions and redirect if unauthorized
+  useEffect(() => {
+    if (isEditMode && !canEdit('INVENTORY', 'PURCHASE_RETURN')) {
+      onClose();
+    } else if (!isEditMode && !canCreate('INVENTORY', 'PURCHASE_RETURN')) {
+      onClose();
+    }
+  }, [isEditMode, canEdit, canCreate, onClose]);
+
   const [header, setHeader] = useState({ ...initialHeaderState });
   const [items, setItems] = useState([makeEmptyItem(1)]);
   const [suppliers, setSuppliers] = useState([]);
@@ -228,7 +247,7 @@ export default function PurchaseReturnForm({ onClose, onSaved, onDataChanged, in
   useEffect(() => {
     const loadSuppliers = async () => {
       try {
-        const res = await axios.get(`${API_BASE_URL}/api/party/all`);
+        const res = await axios.get(`${API_BASE_URL}/api/party/all`, getAuthHeaders());
         const supplierList = (res.data || []).filter(
           (p) => parseInt(p.partytype ?? 0, 10) === 2
         );
@@ -253,7 +272,7 @@ export default function PurchaseReturnForm({ onClose, onSaved, onDataChanged, in
         return;
       }
       try {
-        const res = await axios.get(`${API_BASE_URL}/api/purchase/supplier/${header.PartyID}/items`);
+        const res = await axios.get(`${API_BASE_URL}/api/purchase/supplier/${header.PartyID}/items`, getAuthHeaders());
         setAllItems(res.data || []);
       } catch (error) {
         console.error(error);
@@ -729,7 +748,7 @@ export default function PurchaseReturnForm({ onClose, onSaved, onDataChanged, in
     try {
       const params = header.FYearID ? { fyear_id: header.FYearID } : {};
       console.log("Frontend: Generating next return number with params:", params);
-      const res = await axios.get(`${API_BASE_URL}/api/purchase-return/next-number`, { params });
+      const res = await axios.get(`${API_BASE_URL}/api/purchase-return/next-number`, { params, ...getAuthHeaders() });
       console.log("Frontend: API response:", res.data);
       const next = res.data?.next_no || "1";
       console.log("Frontend: Generated return number:", next);
@@ -794,11 +813,13 @@ export default function PurchaseReturnForm({ onClose, onSaved, onDataChanged, in
       if (initialData?.pret_id) {
         await axios.put(
           `${API_BASE_URL}/api/purchase-return/${initialData.pret_id}`,
-          payload.header
+          payload.header,
+          getAuthHeaders()
         );
         await axios.post(
           `${API_BASE_URL}/api/purchase-return/${initialData.pret_id}/items/replace`,
-          { items: payload.items, fyear_id: header.FYearID }
+          { items: payload.items, fyear_id: header.FYearID },
+          getAuthHeaders()
         );
         setNoticeMessage("success", "Purchase return updated successfully");
       } else {
@@ -814,7 +835,7 @@ export default function PurchaseReturnForm({ onClose, onSaved, onDataChanged, in
         }
         
         console.log("Frontend: Saving with payload:", payload.header);
-        const saveResponse = await axios.post(`${API_BASE_URL}/api/purchase-return`, payload);
+        const saveResponse = await axios.post(`${API_BASE_URL}/api/purchase-return`, payload, getAuthHeaders());
         console.log("Frontend: Save response:", saveResponse.data);
         
         // Use the return number from the server response (most reliable)
@@ -905,8 +926,8 @@ export default function PurchaseReturnForm({ onClose, onSaved, onDataChanged, in
     try {
       // Get company data and all items (for HSN codes)
       const [compRes, itemsRes] = await Promise.all([
-        axios.get(`${API_BASE_URL}/api/company`),
-        axios.get(`${API_BASE_URL}/api/items/all`)
+        axios.get(`${API_BASE_URL}/api/company`, getAuthHeaders()),
+        axios.get(`${API_BASE_URL}/api/items/all`, getAuthHeaders())
       ]);
       const company = compRes.data || {};
       const allItems = itemsRes.data || [];
@@ -1198,7 +1219,8 @@ export default function PurchaseReturnForm({ onClose, onSaved, onDataChanged, in
       const payload = mapHeaderToApi(true);
       const response = await axios.put(
         `${API_BASE_URL}/api/purchase-return/${initialData.pret_id}`,
-        payload
+        payload,
+        getAuthHeaders()
       );
 
       if (!response?.data?.success) {
@@ -1219,7 +1241,8 @@ export default function PurchaseReturnForm({ onClose, onSaved, onDataChanged, in
       try {
         await axios.put(
           `${API_BASE_URL}/api/purchase-return/${initialData.pret_id}`,
-          { ...mapHeaderToApi(false), is_posted: false }
+          { ...mapHeaderToApi(false), is_posted: false },
+          getAuthHeaders()
         );
       } catch (rollbackErr) {
         console.error("Rollback failed", rollbackErr);
@@ -1268,13 +1291,15 @@ export default function PurchaseReturnForm({ onClose, onSaved, onDataChanged, in
             >
               New
             </button>
-            <button
-              disabled={saving || header.IsPosted || !isDirty}
-              onClick={() => handleSave(false)}
-              className="px-4 py-2 rounded-lg text-white shadow bg-gradient-to-r from-purple-400 to-purple-600 hover:from-purple-500 hover:to-purple-700 disabled:opacity-50"
-            >
-              {saving ? "Saving..." : "Save"}
-            </button>
+            {((isEditMode && canEdit('INVENTORY', 'PURCHASE_RETURN')) || (!isEditMode && canCreate('INVENTORY', 'PURCHASE_RETURN'))) && (
+              <button
+                disabled={saving || header.IsPosted || !isDirty}
+                onClick={() => handleSave(false)}
+                className="px-4 py-2 rounded-lg text-white shadow bg-gradient-to-r from-purple-400 to-purple-600 hover:from-purple-500 hover:to-purple-700 disabled:opacity-50"
+              >
+                {saving ? "Saving..." : "Save"}
+              </button>
+            )}
             <button
               disabled={!initialData?.pret_id}
               onClick={handlePrint}
@@ -1283,13 +1308,15 @@ export default function PurchaseReturnForm({ onClose, onSaved, onDataChanged, in
             >
               Print
             </button>
-            <button
-              disabled={saving || header.IsPosted || !initialData?.pret_id}
-              onClick={handlePost}
-              className="px-4 py-2 rounded-lg border bg-white text-gray-800 hover:bg-gray-50 disabled:opacity-50"
-            >
-              Post
-            </button>
+            {isEditMode && canEdit('INVENTORY', 'PURCHASE_RETURN') && (
+              <button
+                disabled={saving || header.IsPosted || !initialData?.pret_id}
+                onClick={handlePost}
+                className="px-4 py-2 rounded-lg border bg-white text-gray-800 hover:bg-gray-50 disabled:opacity-50"
+              >
+                Post
+              </button>
+            )}
             <button
               onClick={handleClose}
               className="px-4 py-2 rounded-lg border bg-white text-gray-800 hover:bg-gray-50"
@@ -1380,7 +1407,7 @@ export default function PurchaseReturnForm({ onClose, onSaved, onDataChanged, in
                 }
               }}
               className="mt-1 w-full px-3 py-2 rounded border border-gray-300"
-              disabled={header.IsPosted}
+              disabled={header.IsPosted || (isEditMode && !canEdit('INVENTORY', 'PURCHASE_RETURN')) || (!isEditMode && !canCreate('INVENTORY', 'PURCHASE_RETURN'))}
             />
           </div>
           <div>
@@ -1397,7 +1424,7 @@ export default function PurchaseReturnForm({ onClose, onSaved, onDataChanged, in
                 }));
               }}
               className="mt-1 w-full px-3 py-2 rounded border border-gray-300"
-              disabled={header.IsPosted}
+              disabled={header.IsPosted || (isEditMode && !canEdit('INVENTORY', 'PURCHASE_RETURN')) || (!isEditMode && !canCreate('INVENTORY', 'PURCHASE_RETURN'))}
             >
               <option value="">-- Select --</option>
               {suppliers.map((supplier) => (
@@ -1417,7 +1444,7 @@ export default function PurchaseReturnForm({ onClose, onSaved, onDataChanged, in
                 setHeader((prev) => ({ ...prev, Remark: event.target.value }))
               }
               className="mt-1 w-full px-3 py-2 border rounded border-gray-300"
-              disabled={header.IsPosted}
+              disabled={header.IsPosted || (isEditMode && !canEdit('INVENTORY', 'PURCHASE_RETURN')) || (!isEditMode && !canCreate('INVENTORY', 'PURCHASE_RETURN'))}
             />
           </div>
         </div>
@@ -1439,14 +1466,16 @@ export default function PurchaseReturnForm({ onClose, onSaved, onDataChanged, in
 
             </div>
             <div className="space-x-2">
-              <button
-                type="button"
-                onClick={addNewRow}
-                className="inline-flex items-center px-3 py-2 text-sm font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
-                disabled={header.IsPosted}
-              >
-                + Add Item
-              </button>
+              {((isEditMode && canEdit('INVENTORY', 'PURCHASE_RETURN')) || (!isEditMode && canCreate('INVENTORY', 'PURCHASE_RETURN'))) && (
+                <button
+                  type="button"
+                  onClick={addNewRow}
+                  className="inline-flex items-center px-3 py-2 text-sm font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                  disabled={header.IsPosted}
+                >
+                  + Add Item
+                </button>
+              )}
             </div>
           </div>
 
@@ -1492,7 +1521,18 @@ export default function PurchaseReturnForm({ onClose, onSaved, onDataChanged, in
                     {items.map((row, index) => (
                       <tr key={row.Srno} className="border-t border-gray-100 hover:bg-gray-50">
                         <td className="px-1 py-2 font-semibold text-gray-700 text-center border-r border-gray-100">{row.Srno}</td>
-                        <td className={`px-1 py-2 border-r border-gray-100 ${!header.IsPosted ? 'cursor-pointer' : 'cursor-not-allowed'}`} onClick={!header.IsPosted ? () => openItemModal(index) : undefined}>
+                        <td 
+                          className={`px-1 py-2 border-r border-gray-100 ${
+                            !header.IsPosted && ((isEditMode && canEdit('INVENTORY', 'PURCHASE_RETURN')) || (!isEditMode && canCreate('INVENTORY', 'PURCHASE_RETURN'))) 
+                              ? 'cursor-pointer' 
+                              : 'cursor-not-allowed'
+                          }`} 
+                          onClick={
+                            !header.IsPosted && ((isEditMode && canEdit('INVENTORY', 'PURCHASE_RETURN')) || (!isEditMode && canCreate('INVENTORY', 'PURCHASE_RETURN'))) 
+                              ? () => openItemModal(index) 
+                              : undefined
+                          }
+                        >
                           <span className="text-sm text-gray-900">
                             {row.ItemName || "Select an item"}
                           </span>
@@ -1504,7 +1544,7 @@ export default function PurchaseReturnForm({ onClose, onSaved, onDataChanged, in
                             onChange={(event) => updateItem(index, "Qty", parseNumber(event.target.value))}
                             className="w-full border border-gray-300 rounded px-1 py-1 text-xs text-right [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                             min="0"
-                            disabled={header.IsPosted}
+                            disabled={header.IsPosted || (isEditMode && !canEdit('INVENTORY', 'PURCHASE_RETURN')) || (!isEditMode && !canCreate('INVENTORY', 'PURCHASE_RETURN'))}
                           />
                         </td>
                         <td className="px-1 py-2 text-right border-r border-gray-100">
@@ -1514,7 +1554,7 @@ export default function PurchaseReturnForm({ onClose, onSaved, onDataChanged, in
                             onChange={(event) => updateItem(index, "Rate", parseNumber(event.target.value))}
                             className="w-full border border-gray-300 rounded px-1 py-1 text-xs text-right [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                             min="0"
-                            disabled={header.IsPosted}
+                            disabled={header.IsPosted || (isEditMode && !canEdit('INVENTORY', 'PURCHASE_RETURN')) || (!isEditMode && !canCreate('INVENTORY', 'PURCHASE_RETURN'))}
                           />
                         </td>
                         <td className="px-1 py-2 text-gray-800 font-semibold text-right border-r border-gray-100">
@@ -1529,7 +1569,7 @@ export default function PurchaseReturnForm({ onClose, onSaved, onDataChanged, in
                               className="w-12 border border-gray-300 rounded px-1 py-1 text-xs text-right [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                               placeholder="%"
                               max="99.99"
-                              disabled={header.IsPosted}
+                              disabled={header.IsPosted || (isEditMode && !canEdit('INVENTORY', 'PURCHASE_RETURN')) || (!isEditMode && !canCreate('INVENTORY', 'PURCHASE_RETURN'))}
                             />
                             <div className="text-xs bg-gray-100 border rounded px-1 py-1 text-right w-12">
                               {formatNumber(row.CGSTAmount)}
@@ -1545,7 +1585,7 @@ export default function PurchaseReturnForm({ onClose, onSaved, onDataChanged, in
                               className="w-12 border border-gray-300 rounded px-1 py-1 text-xs text-right [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                               placeholder="%"
                               max="99.99"
-                              disabled={header.IsPosted}
+                              disabled={header.IsPosted || (isEditMode && !canEdit('INVENTORY', 'PURCHASE_RETURN')) || (!isEditMode && !canCreate('INVENTORY', 'PURCHASE_RETURN'))}
                             />
                             <div className="text-xs bg-gray-100 border rounded px-1 py-1 text-right w-12">
                               {formatNumber(row.SGSTAmount)}
@@ -1561,7 +1601,7 @@ export default function PurchaseReturnForm({ onClose, onSaved, onDataChanged, in
                               className="w-12 border border-gray-300 rounded px-1 py-1 text-xs text-right [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                               placeholder="%"
                               max="99.99"
-                              disabled={header.IsPosted}
+                              disabled={header.IsPosted || (isEditMode && !canEdit('INVENTORY', 'PURCHASE_RETURN')) || (!isEditMode && !canCreate('INVENTORY', 'PURCHASE_RETURN'))}
                             />
                             <div className="text-xs bg-gray-100 border rounded px-1 py-1 text-right w-12">
                               {formatNumber(row.IGSTAmount)}
@@ -1578,14 +1618,16 @@ export default function PurchaseReturnForm({ onClose, onSaved, onDataChanged, in
                           <span className="text-xs text-gray-600">{row.SupplierInvDate || '-'}</span>
                         </td>
                         <td className="px-3 py-2 text-center">
-                          <button
-                            type="button"
-                            onClick={() => removeRow(index)}
-                            className="inline-flex items-center px-3 py-1 text-xs font-semibold text-red-600 hover:bg-red-50 rounded disabled:opacity-50 disabled:cursor-not-allowed"
-                            disabled={header.IsPosted}
-                          >
-                            Remove
-                          </button>
+                          {canDelete('INVENTORY', 'PURCHASE_RETURN') && (
+                            <button
+                              type="button"
+                              onClick={() => removeRow(index)}
+                              className="inline-flex items-center px-3 py-1 text-xs font-semibold text-red-600 hover:bg-red-50 rounded disabled:opacity-50 disabled:cursor-not-allowed"
+                              disabled={header.IsPosted}
+                            >
+                              Remove
+                            </button>
+                          )}
                         </td>
                       </tr>
                     ))}

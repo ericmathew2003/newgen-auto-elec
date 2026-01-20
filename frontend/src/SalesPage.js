@@ -3,6 +3,13 @@ import axios from "axios";
 import { motion } from "framer-motion";
 import { validateTransactionDate, getDefaultTransactionDate } from "./utils/accountingPeriodUtils";
 import API_BASE_URL from "./config/api";
+import { usePermissions } from "./hooks/usePermissions";
+
+// Helper to get auth headers
+const getAuthHeaders = () => {
+  const token = localStorage.getItem('token');
+  return { headers: { Authorization: `Bearer ${token}` } };
+};
 
 // Helpers
 const n = (v) => (isNaN(Number(v)) ? 0 : Number(v));
@@ -30,6 +37,16 @@ const dateToInput = (val) => {
 };
 
 export default function SalesPage() {
+  const { canCreate, canEdit, canDelete, canView } = usePermissions();
+
+  // Check permissions - redirect if user can't view sales
+  useEffect(() => {
+    if (!canView('INVENTORY', 'SALES')) {
+      // If user can't even view, redirect to dashboard
+      window.location.href = '/';
+    }
+  }, [canView]);
+
   // List state
   const [sales, setSales] = useState([]);
   const [searchTerm, setSearchTerm] = useState("");
@@ -171,7 +188,7 @@ export default function SalesPage() {
         params.fyearId = selectedFYearID;
       }
       
-      const r = await axios.get(`${API_BASE_URL}/api/sales`, { params });
+      const r = await axios.get(`${API_BASE_URL}/api/sales`, { params, ...getAuthHeaders() });
       const raw = r.data || [];
       // Map API snake_case to UI-friendly fields
       const mapped = raw.map(x => ({
@@ -193,14 +210,14 @@ export default function SalesPage() {
   };
   const fetchCustomers = async () => {
     try {
-      const r = await axios.get(`${API_BASE_URL}/api/party/all`);
+      const r = await axios.get(`${API_BASE_URL}/api/party/all`, getAuthHeaders());
       const onlyCustomers = (r.data || []).filter(p => parseInt(p.partytype ?? 0, 10) === 1);
       setCustomers(onlyCustomers.sort((a,b)=>String(a.partyname||'').localeCompare(String(b.partyname||''), undefined, {sensitivity: 'base'})));
     } catch(e){ console.error(e); }
   };
   const fetchItems = async () => {
     try {
-      const r = await axios.get(`${API_BASE_URL}/api/items/all`);
+      const r = await axios.get(`${API_BASE_URL}/api/items/all`, getAuthHeaders());
       setAllItems(r.data || []);
     } catch(e){ console.error(e);} 
   };
@@ -225,14 +242,14 @@ export default function SalesPage() {
     try {
       const selectedFYearID = localStorage.getItem("selectedFYearID");
       const params = selectedFYearID ? { params: { fyearId: selectedFYearID } } : {};
-      const r = await axios.get(`${API_BASE_URL}/api/sales/next-invno`, params);
+      const r = await axios.get(`${API_BASE_URL}/api/sales/next-invno`, { ...params, ...getAuthHeaders() });
       const next = r.data?.next_inv_no || "1";
       setHeader(h => ({ ...h, FYearID: selectedFYearID || h.FYearID, InvNo: String(next) }));
     } catch (e) {
       console.error(e);
       // Fallback to list-based computation if endpoint fails
       try {
-        const r2 = await axios.get(`${API_BASE_URL}/api/sales`);
+        const r2 = await axios.get(`${API_BASE_URL}/api/sales`, getAuthHeaders());
         const list = r2.data || [];
         const nums = list.map(s => parseInt(String(s.inv_no ?? s.invno ?? s.invNo ?? "").replace(/[^0-9]/g, ""), 10)).filter(n=>!isNaN(n));
         const last = nums.length ? Math.max(...nums) : 0;
@@ -656,10 +673,10 @@ export default function SalesPage() {
 
       let tranId;
       if (editing?.tranid) {
-        await axios.put(`${API_BASE_URL}/api/sales/${editing.tranid}`, payloadHeader);
+        await axios.put(`${API_BASE_URL}/api/sales/${editing.tranid}`, payloadHeader, getAuthHeaders());
         tranId = editing.tranid;
       } else {
-        const r = await axios.post(`${API_BASE_URL}/api/sales`, payloadHeader);
+        const r = await axios.post(`${API_BASE_URL}/api/sales`, payloadHeader, getAuthHeaders());
         tranId = r.data?.inv_master_id;
         const assignedInvNo = r.data?.inv_no;
         if (assignedInvNo) {
@@ -670,7 +687,7 @@ export default function SalesPage() {
 
       // Replace all details at once
       const payloadItems = rowsToSave.map(r => mapItemToApi(r, selectedFYearID));
-      await axios.post(`${API_BASE_URL}/api/sales/${tranId}/items/replace`, { items: payloadItems });
+      await axios.post(`${API_BASE_URL}/api/sales/${tranId}/items/replace`, { items: payloadItems }, getAuthHeaders());
 
       if (!post) {
         setNotice({ open: true, type: 'success', message: 'Sales saved successfully.' });
@@ -991,7 +1008,7 @@ export default function SalesPage() {
   const printMultipleInvoices = async (tranIds) => {
     try {
       // Get company data once
-      const compRes = await axios.get(`${API_BASE_URL}/api/company`);
+      const compRes = await axios.get(`${API_BASE_URL}/api/company`, getAuthHeaders());
       const c = compRes.data || {};
 
       const win = window.open('', '_blank');
@@ -1006,7 +1023,7 @@ export default function SalesPage() {
       for (let i = 0; i < tranIds.length; i++) {
         const tranId = tranIds[i];
         try {
-          const invRes = await axios.get(`${API_BASE_URL}/api/sales/${tranId}`);
+          const invRes = await axios.get(`${API_BASE_URL}/api/sales/${tranId}`, getAuthHeaders());
           const h = invRes.data?.header || {};
           const d = invRes.data?.details || [];
 
@@ -1289,7 +1306,7 @@ export default function SalesPage() {
 
   const handleEdit = async (row) => {
     try {
-      const r = await axios.get(`${API_BASE_URL}/api/sales/${row.tranid}`);
+      const r = await axios.get(`${API_BASE_URL}/api/sales/${row.tranid}`, getAuthHeaders());
       const h = r.data?.header || {};
       const d = r.data?.details || [];
       setHeader({
@@ -1414,12 +1431,14 @@ export default function SalesPage() {
               Print Selected
             </button>
             <button onClick={fetchSales} className="px-3 py-2 border rounded">Refresh</button>
-            <button onClick={async () => await handleNewInvoice()} className="px-3 py-2 bg-blue-600 text-white rounded">New Invoice</button>
+            {canCreate('INVENTORY', 'SALES') && (
+              <button onClick={async () => await handleNewInvoice()} className="px-3 py-2 bg-blue-600 text-white rounded">New Invoice</button>
+            )}
           </div>
 
           <div className="border rounded">
             <table className="w-full text-sm">
-              <thead className="bg-gray-100">
+              <thead className="bg-gray-50">
                 <tr>
                   <th className="p-2 text-center w-8">
                     <input
@@ -1433,7 +1452,7 @@ export default function SalesPage() {
                     />
                   </th>
                   <th 
-                    className="p-2 text-left cursor-pointer hover:bg-gray-200 select-none"
+                    className="p-2 text-left cursor-pointer hover:bg-gray-50 select-none"
                     onClick={() => handleSort('invno')}
                     title="Click to sort by Invoice Number"
                   >
@@ -1445,7 +1464,7 @@ export default function SalesPage() {
                     </div>
                   </th>
                   <th 
-                    className="p-2 text-left cursor-pointer hover:bg-gray-200 select-none"
+                    className="p-2 text-left cursor-pointer hover:bg-gray-50 select-none"
                     onClick={() => handleSort('invdate')}
                     title="Click to sort by Date"
                   >
@@ -1457,7 +1476,7 @@ export default function SalesPage() {
                     </div>
                   </th>
                   <th 
-                    className="p-2 text-left cursor-pointer hover:bg-gray-200 select-none"
+                    className="p-2 text-left cursor-pointer hover:bg-gray-50 select-none"
                     onClick={() => handleSort('customername')}
                     title="Click to sort by Customer"
                   >
@@ -1469,7 +1488,7 @@ export default function SalesPage() {
                     </div>
                   </th>
                   <th 
-                    className="p-2 text-right cursor-pointer hover:bg-gray-200 select-none"
+                    className="p-2 text-right cursor-pointer hover:bg-gray-50 select-none"
                     onClick={() => handleSort('taxabletot')}
                     title="Click to sort by Taxable Amount"
                   >
@@ -1481,7 +1500,7 @@ export default function SalesPage() {
                     </div>
                   </th>
                   <th 
-                    className="p-2 text-right cursor-pointer hover:bg-gray-200 select-none"
+                    className="p-2 text-right cursor-pointer hover:bg-gray-50 select-none"
                     onClick={() => handleSort('cgst')}
                     title="Click to sort by CGST"
                   >
@@ -1493,7 +1512,7 @@ export default function SalesPage() {
                     </div>
                   </th>
                   <th 
-                    className="p-2 text-right cursor-pointer hover:bg-gray-200 select-none"
+                    className="p-2 text-right cursor-pointer hover:bg-gray-50 select-none"
                     onClick={() => handleSort('sgst')}
                     title="Click to sort by SGST"
                   >
@@ -1505,7 +1524,7 @@ export default function SalesPage() {
                     </div>
                   </th>
                   <th 
-                    className="p-2 text-right cursor-pointer hover:bg-gray-200 select-none"
+                    className="p-2 text-right cursor-pointer hover:bg-gray-50 select-none"
                     onClick={() => handleSort('igst')}
                     title="Click to sort by IGST"
                   >
@@ -1517,7 +1536,7 @@ export default function SalesPage() {
                     </div>
                   </th>
                   <th 
-                    className="p-2 text-right cursor-pointer hover:bg-gray-200 select-none"
+                    className="p-2 text-right cursor-pointer hover:bg-gray-50 select-none"
                     onClick={() => handleSort('totamount')}
                     title="Click to sort by Total Amount"
                   >
@@ -1529,7 +1548,7 @@ export default function SalesPage() {
                     </div>
                   </th>
                   <th 
-                    className="p-2 text-center cursor-pointer hover:bg-gray-200 select-none"
+                    className="p-2 text-center cursor-pointer hover:bg-gray-50 select-none"
                     onClick={() => handleSort('is_posted')}
                     title="Click to sort by Posted Status"
                   >
@@ -1546,9 +1565,9 @@ export default function SalesPage() {
                 {currentRecords.map((r) => (
                   <tr
                     key={r.tranid}
-                    className="border-t hover:bg-blue-50 cursor-pointer"
-                    onClick={() => handleEdit(r)}
-                    title="Click to edit"
+                    className={canEdit('INVENTORY', 'SALES') ? "border-t hover:bg-blue-50 cursor-pointer" : "border-t"}
+                    onClick={canEdit('INVENTORY', 'SALES') ? () => handleEdit(r) : undefined}
+                    title={canEdit('INVENTORY', 'SALES') ? "Click to edit" : ""}
                   >
                     <td className="p-2 text-center" onClick={(e)=>e.stopPropagation()}>
                       <input
@@ -1620,13 +1639,15 @@ export default function SalesPage() {
                 >
                   New
                 </button>
-                <button
-                  disabled={saving || header.Is_Posted}
-                  onClick={()=>handleSave({ post:false })}
-                  className="px-4 py-2 rounded-lg text-white shadow bg-gradient-to-r from-purple-400 to-purple-600 hover:from-purple-500 hover:to-purple-700 disabled:opacity-50"
-                >
-                  Save
-                </button>
+                {((editing?.tranid && canEdit('INVENTORY', 'SALES')) || (!editing?.tranid && canCreate('INVENTORY', 'SALES'))) && (
+                  <button
+                    disabled={saving || header.Is_Posted}
+                    onClick={()=>handleSave({ post:false })}
+                    className="px-4 py-2 rounded-lg text-white shadow bg-gradient-to-r from-purple-400 to-purple-600 hover:from-purple-500 hover:to-purple-700 disabled:opacity-50"
+                  >
+                    Save
+                  </button>
+                )}
                 <button
                   disabled={!editing?.tranid}
                   onClick={()=> editing?.tranid && openPrintById(editing.tranid)}
@@ -1646,7 +1667,7 @@ export default function SalesPage() {
                         setNotice({ open:true, type:'error', message:'Save invoice first' });
                         return;
                       }
-                      await axios.post(`${API_BASE_URL}/api/sales/${id}/post`);
+                      await axios.post(`${API_BASE_URL}/api/sales/${id}/post`, {}, getAuthHeaders());
                       setHeader(h=>({ ...h, Is_Posted: true }));
                       await fetchSales();
                       setNotice({ open:true, type:'success', message:'Sales posted successfully.' });
@@ -1659,6 +1680,7 @@ export default function SalesPage() {
                 >
                   Post
                 </button>
+                )}
                 <button
                   onClick={()=>setShowForm(false)}
                   className="px-4 py-2 rounded-lg border bg-white text-gray-800 hover:bg-gray-50"
@@ -1699,10 +1721,10 @@ export default function SalesPage() {
                 </button>
               </div>
               <div className="flex items-center gap-2">
-                <span className={`px-3 py-1 rounded-full text-xs font-semibold shadow ${header.Is_Posted ? 'bg-gray-200 text-gray-600 line-through' : 'bg-purple-600 text-white'}`}>
+                <span className={`px-3 py-1 rounded-full text-xs font-semibold shadow ${header.Is_Posted ? 'bg-gray-100 text-gray-500 line-through' : 'bg-purple-600 text-white'}`}>
                   DRAFT
                 </span>
-                <span className={`px-3 py-1 rounded-full text-xs font-semibold shadow ${header.Is_Posted ? 'bg-green-500 text-white' : 'bg-gray-200 text-gray-500'}`}>
+                <span className={`px-3 py-1 rounded-full text-xs font-semibold shadow ${header.Is_Posted ? 'bg-green-500 text-white' : 'bg-gray-100 text-gray-500'}`}>
                   POSTED
                 </span>
               </div>
@@ -1712,7 +1734,7 @@ export default function SalesPage() {
           {/* Header fields aligned to Purchase layout */}
           <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
             <div>
-              <label className="block text-sm text-gray-600">Inv No</label>
+              <label className="block text-sm text-gray-500">Inv No</label>
               <input
                 value={header.InvNo}
                 onChange={()=>{ /* disabled input - no manual edits */ }}
@@ -1722,7 +1744,7 @@ export default function SalesPage() {
               />
             </div>
             <div>
-              <label className="block text-sm text-gray-600">Date</label>
+              <label className="block text-sm text-gray-500">Date</label>
               <input
                 type="date"
                 value={header.InvDate}
@@ -1751,7 +1773,7 @@ export default function SalesPage() {
               />
             </div>
             <div>
-              <label className="block text-sm text-gray-600">Customer</label>
+              <label className="block text-sm text-gray-500">Customer</label>
               <select
                 value={header.PartyID}
                 onChange={e=>setHeader(h=>({...h, PartyID: e.target.value}))}
@@ -1765,7 +1787,7 @@ export default function SalesPage() {
               </select>
             </div>
             <div>
-              <label className="block text-sm text-gray-600">Ref No</label>
+              <label className="block text-sm text-gray-500">Ref No</label>
               <input
                 value={header.RefNo}
                 onChange={e=>setHeader(h=>({...h, RefNo: e.target.value}))}
@@ -1774,7 +1796,7 @@ export default function SalesPage() {
               />
             </div>
             <div className="md:col-span-2">
-              <label className="block text-sm text-gray-600">Remark</label>
+              <label className="block text-sm text-gray-500">Remark</label>
               <input
                 value={header.Remark}
                 onChange={e=>setHeader(h=>({...h, Remark: e.target.value}))}
@@ -1788,10 +1810,12 @@ export default function SalesPage() {
           <div className="border rounded">
             <div className="flex items-center justify-between p-2">
               <div className="font-medium">Items</div>
-              <button onClick={addRow} className="px-3 py-1 bg-blue-600 text-white rounded" disabled={header.Is_Posted}>Add Row</button>
+              {((editing?.tranid && canEdit('INVENTORY', 'SALES')) || (!editing?.tranid && canCreate('INVENTORY', 'SALES'))) && (
+                <button onClick={addRow} className="px-3 py-1 bg-blue-600 text-white rounded" disabled={header.Is_Posted}>Add Row</button>
+              )}
             </div>
             <table className="w-full text-sm">
-              <thead className="bg-gray-100">
+              <thead className="bg-gray-50">
                 <tr>
                   <th className="p-2 text-left w-14">Sr</th>
                   <th className="p-2 text-left">Item Name / Code</th>
@@ -1831,7 +1855,9 @@ export default function SalesPage() {
                       <td className="p-2 text-right">{formatNumber(n(it.IGST_Amount).toFixed(2))}</td>
                       <td className="p-2 text-right">{formatNumber(n(it.TotAmt).toFixed(2))}</td>
                       <td className="p-2 text-right">
-                        <button onClick={()=>removeRow(idx)} className="px-2 py-1 border rounded" disabled={header.Is_Posted}>Delete</button>
+                        {canDelete('INVENTORY', 'SALES') && (
+                          <button onClick={()=>removeRow(idx)} className="px-2 py-1 border rounded" disabled={header.Is_Posted}>Delete</button>
+                        )}
                       </td>
                     </tr>
                   );
@@ -1909,7 +1935,7 @@ export default function SalesPage() {
                     </div>
                     <div className="overflow-y-auto flex-1" tabIndex={0} onKeyDown={handleListKeyDown}>
                       <table className="w-full text-sm">
-                        <thead className="bg-gray-100 sticky top-0">
+                        <thead className="bg-gray-50 sticky top-0">
                           <tr>
                             <th className="p-2 text-left">Code</th>
                             <th className="p-2 text-left">Name</th>
@@ -1949,7 +1975,7 @@ export default function SalesPage() {
                     {selectedItem ? (
                       <div className="p-3 space-y-3">
                         <div>
-                          <label className="block text-xs text-gray-600">Item</label>
+                          <label className="block text-xs text-gray-500">Item</label>
                           <textarea readOnly value={selectedItem.itemname || ''} rows={2} className="w-full border rounded p-2 resize-none" />
                         </div>
                         {/* Hide code/unit/stock and cost/price/MRP per requirement */}
@@ -1958,7 +1984,7 @@ export default function SalesPage() {
                         {/* GST % inputs (only show percentages; item name already shown above) */}
                         <div className="grid grid-cols-3 gap-3 text-sm">
                           <div>
-                            <label className="block text-xs text-gray-600">CGST %</label>
+                            <label className="block text-xs text-gray-500">CGST %</label>
                             <input
                               type="number"
                               value={modalItemData.CGSTPer}
@@ -1967,7 +1993,7 @@ export default function SalesPage() {
                             />
                           </div>
                           <div>
-                            <label className="block text-xs text-gray-600">SGST %</label>
+                            <label className="block text-xs text-gray-500">SGST %</label>
                             <input
                               type="number"
                               value={modalItemData.SGSTPer}
@@ -1976,7 +2002,7 @@ export default function SalesPage() {
                             />
                           </div>
                           <div>
-                            <label className="block text-xs text-gray-600">IGST %</label>
+                            <label className="block text-xs text-gray-500">IGST %</label>
                             <input
                               type="number"
                               value={modalItemData.IGSTPer}
@@ -1989,7 +2015,7 @@ export default function SalesPage() {
                         {/* Qty / Rate */}
                         <div className="grid grid-cols-2 gap-3 text-sm">
                           <div>
-                            <label className="block text-xs text-gray-600">Qty</label>
+                            <label className="block text-xs text-gray-500">Qty</label>
                             <input
                               ref={qtyRef}
                               type="number"
@@ -1999,7 +2025,7 @@ export default function SalesPage() {
                             />
                           </div>
                           <div>
-                            <label className="block text-xs text-gray-600">Rate</label>
+                            <label className="block text-xs text-gray-500">Rate</label>
                             <input
                               ref={rateRef}
                               type="number"

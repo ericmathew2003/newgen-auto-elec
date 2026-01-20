@@ -108,6 +108,24 @@ const Layout = () => {
             </div>
           </div>
         );
+      case 'group-master':
+        return (
+          <div className="p-6">
+            <h1 className="text-2xl font-bold text-gray-900 mb-4">Account Group Master</h1>
+            <div className="bg-white rounded-lg shadow p-6">
+              <p className="text-gray-600">Navigate to <a href="/accounts/group-master" className="text-blue-600 hover:underline">Account Group Master</a> to manage account groups.</p>
+            </div>
+          </div>
+        );
+      case 'coa-master':
+        return (
+          <div className="p-6">
+            <h1 className="text-2xl font-bold text-gray-900 mb-4">Chart of Accounts Master</h1>
+            <div className="bg-white rounded-lg shadow p-6">
+              <p className="text-gray-600">Navigate to <a href="/accounts/coa-master" className="text-blue-600 hover:underline">Chart of Accounts Master</a> to manage accounts.</p>
+            </div>
+          </div>
+        );
       case 'settings':
         return (
           <div className="p-6">

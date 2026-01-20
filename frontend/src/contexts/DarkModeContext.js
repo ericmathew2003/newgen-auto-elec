@@ -11,34 +11,23 @@ export const useDarkMode = () => {
 };
 
 export const DarkModeProvider = ({ children }) => {
-  const [isDarkMode, setIsDarkMode] = useState(() => {
-    // Check localStorage for saved preference
-    const saved = localStorage.getItem('darkMode');
-    if (saved !== null) {
-      return JSON.parse(saved);
-    }
-    // Check system preference
-    return window.matchMedia('(prefers-color-scheme: dark)').matches;
-  });
+  const [isDarkMode, setIsDarkMode] = useState(false); // Always force light mode
 
   useEffect(() => {
-    // Save to localStorage
-    localStorage.setItem('darkMode', JSON.stringify(isDarkMode));
+    // Always ensure light mode
+    localStorage.setItem('darkMode', JSON.stringify(false));
     
-    // Apply dark class to document
-    if (isDarkMode) {
-      document.documentElement.classList.add('dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-    }
+    // Always remove dark class from document
+    document.documentElement.classList.remove('dark');
   }, [isDarkMode]);
 
   const toggleDarkMode = () => {
-    setIsDarkMode(prev => !prev);
+    // Disable toggle - always stay in light mode
+    setIsDarkMode(false);
   };
 
   return (
-    <DarkModeContext.Provider value={{ isDarkMode, toggleDarkMode }}>
+    <DarkModeContext.Provider value={{ isDarkMode: false, toggleDarkMode }}>
       {children}
     </DarkModeContext.Provider>
   );

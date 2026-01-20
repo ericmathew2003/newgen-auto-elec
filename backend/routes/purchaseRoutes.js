@@ -1,11 +1,13 @@
 const express = require("express");
 const router = express.Router();
 const pool = require("../db");
+const { authenticateToken } = require("../middleware/auth");
+const { checkPermission } = require("../middleware/checkPermission");
 
 /**
  * Create Purchase Invoice (Header Only)
  */
-router.post("/", async (req, res) => {
+router.post("/", authenticateToken, checkPermission('INVENTORY_PURCHASE_ADD'), async (req, res) => {
   const {
     FYearID, TrNo, TrDate, SuppInvNo, SuppInvDt, PartyID,
     Remark, InvAmt, TptCharge, LabCharge, MiscCharge, PackCharge,
@@ -38,7 +40,7 @@ router.post("/", async (req, res) => {
 /**
  * Update Purchase Invoice (Header Only)
  */
-router.put("/:tranId", async (req, res) => {
+router.put("/:tranId", authenticateToken, checkPermission('INVENTORY_PURCHASE_EDIT'), async (req, res) => {
   const { tranId } = req.params;
   const {
     FYearID, TrNo, TrDate, SuppInvNo, SuppInvDt, PartyID,
@@ -69,7 +71,7 @@ router.put("/:tranId", async (req, res) => {
 /**
  * Get Purchase Summary Data for Purchase Summary Report
  */
-router.get("/summary", async (req, res) => {
+router.get("/summary", authenticateToken, checkPermission('INVENTORY_PURCHASE_VIEW'), async (req, res) => {
   try {
     const { fromDate, toDate } = req.query;
     
@@ -132,7 +134,7 @@ router.get("/summary", async (req, res) => {
 /**
  * Get All Purchases (List View)
  */
-router.get("/", async (req, res) => {
+router.get("/", authenticateToken, checkPermission('INVENTORY_PURCHASE_VIEW'), async (req, res) => {
   const { fromDate, toDate, supplierId, fyearid } = req.query;
   let where = [];
   let params = [];
@@ -179,7 +181,7 @@ router.get("/", async (req, res) => {
 /**
  * Get Single Purchase (Header + Details)
  */
-router.get("/:tranId", async (req, res) => {
+router.get("/:tranId", authenticateToken, checkPermission('INVENTORY_PURCHASE_VIEW'), async (req, res) => {
   const { tranId } = req.params;
 
   try {
@@ -205,7 +207,7 @@ router.get("/:tranId", async (req, res) => {
 /**
  * Costing: get rows for a purchase
  */
-router.get('/:tranId/costing', async (req, res) => {
+router.get('/:tranId/costing', authenticateToken, checkPermission('INVENTORY_PURCHASE_VIEW'), async (req, res) => {
   const { tranId } = req.params;
   try {
     const r = await pool.query(
@@ -224,7 +226,7 @@ router.get('/:tranId/costing', async (req, res) => {
  * Costing: replace rows and update header charges + set prepared flag
  * Body: { rows: [{OHType, Amount}] }
  */
-router.put('/:tranId/costing', async (req, res) => {
+router.put('/:tranId/costing', authenticateToken, checkPermission('INVENTORY_PURCHASE_EDIT'), async (req, res) => {
   const { tranId } = req.params;
   const { rows = [] } = req.body || {};
   const client = await pool.connect();
@@ -267,7 +269,7 @@ router.put('/:tranId/costing', async (req, res) => {
  * Confirm costing and persist computed item overheads
  * Body: { items: [{ Srno, OHAmt, NetRate, GTotal? }] }
  */
-router.post('/:tranId/costing/confirm', async (req, res) => {
+router.post('/:tranId/costing/confirm', authenticateToken, checkPermission('INVENTORY_PURCHASE_EDIT'), async (req, res) => {
   const { tranId } = req.params;
   const { items = [] } = req.body || {};
   const client = await pool.connect();
@@ -387,7 +389,7 @@ router.post('/:tranId/costing/confirm', async (req, res) => {
  * { FYearID, Srno, ItemCode, Qty, Rate, InvAmount, OHAmt, NetRate, Rounded,
  *   CGSTAmount, SGSTAmout, IGSTAmount, GTotal, CGSTPer, SGSTPer, IGSTPer }
  */
-router.post('/:tranId/items', async (req, res) => {
+router.post('/:tranId/items', authenticateToken, checkPermission('INVENTORY_PURCHASE_ADD'), async (req, res) => {
   const { tranId } = req.params;
   const {
     FYearID,
@@ -498,7 +500,7 @@ router.post('/:tranId/items', async (req, res) => {
 /**
  * Delete a Purchase (Header + Details)
  */
-router.delete("/:tranId", async (req, res) => {
+router.delete("/:tranId", authenticateToken, checkPermission('INVENTORY_PURCHASE_DELETE'), async (req, res) => {
   const { tranId } = req.params;
   try {
     await pool.query(`DELETE FROM tbltrnpurchasedet WHERE tranmasid = $1`, [tranId]);

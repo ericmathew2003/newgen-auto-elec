@@ -2,9 +2,11 @@ import React, { useEffect, useState, useRef } from "react";
 import axios from "axios";
 import { usePageNavigation, Breadcrumb } from "./components/NavigationHelper";
 import API_BASE_URL from "./config/api";
+import { usePermissions } from "./hooks/usePermissions";
 
 export default function SupplierPage() {
   const { id, isNewMode, isEditMode, showForm, navigateToList, navigateToNew, navigateToEdit } = usePageNavigation('/suppliers');
+  const { canCreate, canEdit, canDelete, canView } = usePermissions();
   
   // Data and UI state
   const [parties, setParties] = useState([]);
@@ -65,7 +67,10 @@ export default function SupplierPage() {
   // API: fetch all parties (suppliers)
   const fetchParties = async () => {
     try {
-      const res = await axios.get(`${API_BASE_URL}/api/party/all`);
+      const token = localStorage.getItem('token');
+      const res = await axios.get(`${API_BASE_URL}/api/party/all`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
       setParties(res.data || []);
     } catch (err) {
       console.error(err);
@@ -339,18 +344,20 @@ export default function SupplierPage() {
         <div className="flex flex-col items-start mb-2">
           <div className="flex items-center justify-between w-full mb-2">
             <div className="flex items-center gap-2">
-              <button
-                onClick={() => {
-                  if (showForm) return; // disable New while in form
-                  navigateToNew();
-                }}
-                disabled={showForm}
-                className={`px-4 py-2 rounded-lg shadow text-white ${
-                  showForm ? "bg-purple-400 cursor-not-allowed opacity-60" : "bg-purple-600 hover:bg-purple-700"
-                }`}
-              >
-                New
-              </button>
+              {canCreate('INVENTORY', 'SUPPLIER_MASTER') && (
+                <button
+                  onClick={() => {
+                    if (showForm) return; // disable New while in form
+                    navigateToNew();
+                  }}
+                  disabled={showForm}
+                  className={`px-4 py-2 rounded-lg shadow text-white ${
+                    showForm ? "bg-purple-400 cursor-not-allowed opacity-60" : "bg-purple-600 hover:bg-purple-700"
+                  }`}
+                >
+                  New
+                </button>
+              )}
 
               {/* Search bar in table mode */}
               {!showForm && (
@@ -365,7 +372,7 @@ export default function SupplierPage() {
 
               {showForm && (
                 <>
-                  {!editingParty && (
+                  {!editingParty && canCreate('INVENTORY', 'SUPPLIER_MASTER') && (
                     <button
                       type="button"
                       disabled={!canSave}
@@ -391,21 +398,23 @@ export default function SupplierPage() {
                   >
                     Cancel
                   </button>
-                  <button
-                    type="button"
-                    disabled={!canSave}
-                    onClick={(e) => {
-                      e.preventDefault();
-                      handleSubmit(e);
-                    }}
-                    className={`px-4 py-2 text-sm rounded text-white ${
-                      canSave
-                        ? "bg-purple-600 hover:bg-purple-700"
-                        : "bg-purple-400 cursor-not-allowed opacity-60"
-                    }`}
-                  >
-                    Save
-                  </button>
+                  {((isEditMode && canEdit('INVENTORY', 'SUPPLIER_MASTER')) || (!isEditMode && canCreate('INVENTORY', 'SUPPLIER_MASTER'))) && (
+                    <button
+                      type="button"
+                      disabled={!canSave}
+                      onClick={(e) => {
+                        e.preventDefault();
+                        handleSubmit(e);
+                      }}
+                      className={`px-4 py-2 text-sm rounded text-white ${
+                        canSave
+                          ? "bg-purple-600 hover:bg-purple-700"
+                          : "bg-purple-400 cursor-not-allowed opacity-60"
+                      }`}
+                    >
+                      Save
+                    </button>
+                  )}
                 </>
               )}
             </div>
@@ -504,9 +513,9 @@ export default function SupplierPage() {
                 {currentRecords.map((p) => (
                   <tr
                     key={p.partyid}
-                    onClick={() => handleDoubleClick(p)}
-                    className="cursor-pointer hover:bg-indigo-50 transition-colors whitespace-nowrap"
-                    title="Click to edit supplier"
+                    onClick={canEdit('INVENTORY', 'SUPPLIER_MASTER') ? () => handleDoubleClick(p) : undefined}
+                    className={canEdit('INVENTORY', 'SUPPLIER_MASTER') ? "cursor-pointer hover:bg-indigo-50 transition-colors whitespace-nowrap" : "whitespace-nowrap"}
+                    title={canEdit('INVENTORY', 'SUPPLIER_MASTER') ? "Click to edit supplier" : "View only"}
                   >
                     <td className="px-3 py-1 border-b">{p.partyid}</td>
                     <td className="px-3 py-1 border-b truncate max-w-[40ch]">{p.partyname}</td>
@@ -515,15 +524,17 @@ export default function SupplierPage() {
                     <td className="px-3 py-1 border-b">{getAccountName(p)}</td>
                     <td className="px-3 py-1 border-b">{p.gstnum || "-"}</td>
                     <td className="px-3 py-1 border-b text-right">
-                      <button 
-                        onClick={(e) => {
-                          e.stopPropagation(); // Prevent row click event
-                          handleDelete(p.partyid);
-                        }} 
-                        className="text-red-600 hover:underline"
-                      >
-                        Delete
-                      </button>
+                      {canDelete('INVENTORY', 'SUPPLIER_MASTER') && (
+                        <button 
+                          onClick={(e) => {
+                            e.stopPropagation(); // Prevent row click event
+                            handleDelete(p.partyid);
+                          }} 
+                          className="text-red-600 hover:underline"
+                        >
+                          Delete
+                        </button>
+                      )}
                     </td>
                   </tr>
                 ))}
@@ -562,6 +573,7 @@ export default function SupplierPage() {
                   type="text"
                   value={formData.PartyName}
                   onChange={(e) => setFormData({ ...formData, PartyName: e.target.value })}
+                  disabled={(isEditMode && !canEdit('INVENTORY', 'SUPPLIER_MASTER')) || (!isEditMode && !canCreate('INVENTORY', 'SUPPLIER_MASTER'))}
                   className="mt-1 w-full px-3 py-2 border rounded"
                 />
               </div>
@@ -571,6 +583,7 @@ export default function SupplierPage() {
                   type="text"
                   value={formData.ContactNo}
                   onChange={(e) => setFormData({ ...formData, ContactNo: e.target.value })}
+                  disabled={(isEditMode && !canEdit('INVENTORY', 'SUPPLIER_MASTER')) || (!isEditMode && !canCreate('INVENTORY', 'SUPPLIER_MASTER'))}
                   className="mt-1 w-full px-3 py-2 border rounded"
                 />
               </div>
@@ -581,6 +594,7 @@ export default function SupplierPage() {
                   type="text"
                   value={formData.Address1}
                   onChange={(e) => setFormData({ ...formData, Address1: e.target.value })}
+                  disabled={(isEditMode && !canEdit('INVENTORY', 'SUPPLIER_MASTER')) || (!isEditMode && !canCreate('INVENTORY', 'SUPPLIER_MASTER'))}
                   className="mt-1 w-full px-3 py-2 border rounded"
                 />
               </div>
@@ -590,6 +604,7 @@ export default function SupplierPage() {
                   type="text"
                   value={formData.Address2}
                   onChange={(e) => setFormData({ ...formData, Address2: e.target.value })}
+                  disabled={(isEditMode && !canEdit('INVENTORY', 'SUPPLIER_MASTER')) || (!isEditMode && !canCreate('INVENTORY', 'SUPPLIER_MASTER'))}
                   className="mt-1 w-full px-3 py-2 border rounded"
                 />
               </div>
@@ -599,6 +614,7 @@ export default function SupplierPage() {
                 <select
                   value={formData.AccountID}
                   onChange={(e) => setFormData({ ...formData, AccountID: e.target.value })}
+                  disabled={(isEditMode && !canEdit('INVENTORY', 'SUPPLIER_MASTER')) || (!isEditMode && !canCreate('INVENTORY', 'SUPPLIER_MASTER'))}
                   className="mt-1 w-full px-3 py-2 border rounded"
                 >
                   <option value="">Select Account</option>
@@ -620,6 +636,7 @@ export default function SupplierPage() {
                   type="text"
                   value={formData.GSTNum}
                   onChange={(e) => setFormData({ ...formData, GSTNum: e.target.value })}
+                  disabled={(isEditMode && !canEdit('INVENTORY', 'SUPPLIER_MASTER')) || (!isEditMode && !canCreate('INVENTORY', 'SUPPLIER_MASTER'))}
                   className="mt-1 w-full px-3 py-2 border rounded"
                 />
               </div>

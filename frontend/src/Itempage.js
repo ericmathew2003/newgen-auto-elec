@@ -2,9 +2,11 @@ import React, { useEffect, useState, useRef } from "react";
 import axios from "axios";
 import { usePageNavigation, Breadcrumb } from "./components/NavigationHelper";
 import API_BASE_URL from "./config/api";
+import { usePermissions } from "./hooks/usePermissions";
 
 export default function ItemPage() {
   const { id, isNewMode, isEditMode, showForm, navigateToList, navigateToNew, navigateToEdit } = usePageNavigation('/items');
+  const { canCreate, canEdit, canDelete, canView } = usePermissions();
   
   const [items, setItems] = useState([]);
   const [editingItem, setEditingItem] = useState(null);
@@ -48,6 +50,9 @@ export default function ItemPage() {
   });
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [errors, setErrors] = useState({});
+
+  // Permission-based form disable
+  const isFormDisabled = (isEditMode && !canEdit('INVENTORY', 'ITEM_MASTER')) || (!isEditMode && !canCreate('INVENTORY', 'ITEM_MASTER'));
 
   // Sorting state
   const [sortField, setSortField] = useState('itemname');
@@ -148,7 +153,10 @@ export default function ItemPage() {
       if (withSpinner) {
         setIsRefreshing(true);
       }
-      const res = await axios.get(`${API_BASE_URL}/api/items/all`);
+      const token = localStorage.getItem('token');
+      const res = await axios.get(`${API_BASE_URL}/api/items/all`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
       
       // Debug: Check for duplicates in the response
       const itemCodes = res.data.map(item => item.itemcode);
@@ -185,12 +193,17 @@ export default function ItemPage() {
   // Fetch dropdown data
   const fetchDropdownData = async () => {
     try {
-      const res = await axios.get(`${API_BASE_URL}/api/items/dropdown-data`);
+      const token = localStorage.getItem('token');
+      const res = await axios.get(`${API_BASE_URL}/api/items/dropdown-data`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
       setDropdownData((prev) => ({ ...prev, ...res.data }));
     } catch (err) {
       console.error(err);
     }
   };
+
+
 
   // Fetch transaction data for tabs
   const fetchTransactionData = async (itemCode, type) => {
@@ -198,7 +211,10 @@ export default function ItemPage() {
 
     setLoadingTransactions(true);
     try {
-      const res = await axios.get(`${API_BASE_URL}/api/items/${itemCode}/${type}`);
+      const token = localStorage.getItem('token');
+      const res = await axios.get(`${API_BASE_URL}/api/items/${itemCode}/${type}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
       setTransactionData(prev => ({
         ...prev,
         [type]: res.data || []
@@ -289,6 +305,8 @@ export default function ItemPage() {
           IGST: item.igst || "",
           HSNCode: item.hsncode || "",
         });
+        
+
       } else {
         // Item not found, redirect to list
         navigateToList();
@@ -389,15 +407,19 @@ export default function ItemPage() {
     }
 
     try {
+      const token = localStorage.getItem('token');
       const payload = normalizeForApi(formData);
       if (editingItem) {
         await axios.put(
           `${API_BASE_URL}/api/items/edit/${editingItem.itemcode}`,
-          payload
+          payload,
+          { headers: { Authorization: `Bearer ${token}` } }
         );
         showToast("Item updated successfully!", 'success');
       } else {
-        const response = await axios.post(`${API_BASE_URL}/api/items/add`, payload);
+        const response = await axios.post(`${API_BASE_URL}/api/items/add`, payload, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
         showToast("Item added successfully!", 'success');
 
         // For new items, update the form with the generated ItemCode if available
@@ -482,7 +504,10 @@ export default function ItemPage() {
   const handleDelete = async (itemCode) => {
     if (window.confirm("Are you sure you want to delete this item?")) {
       try {
-        await axios.delete(`${API_BASE_URL}/api/items/delete/${itemCode}`);
+        const token = localStorage.getItem('token');
+        await axios.delete(`${API_BASE_URL}/api/items/delete/${itemCode}`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
         showToast("Item deleted successfully!", 'success');
         fetchItems();
       } catch (err) {
@@ -723,12 +748,14 @@ export default function ItemPage() {
         {/* Header with New and Form Actions */}
         <div className="flex items-center justify-between mb-1">
           <div className="flex items-center gap-4">
-            <button
-              className="px-4 py-2 text-sm rounded text-white bg-purple-600 hover:bg-purple-700 shadow-sm"
-              onClick={navigateToNew}
-            >
-              New
-            </button>
+            {canCreate('INVENTORY', 'ITEM_MASTER') && (
+              <button
+                className="px-4 py-2 text-sm rounded text-white bg-purple-600 hover:bg-purple-700 shadow-sm"
+                onClick={navigateToNew}
+              >
+                New
+              </button>
+            )}
 
             {/* 🔎 Odoo-Style Filter */}
             {!showForm && (
@@ -821,7 +848,7 @@ export default function ItemPage() {
 
             {showForm && (
               <>
-                {!editingItem && (
+                {!editingItem && canCreate('INVENTORY', 'ITEM_MASTER') && (
                   <button
                     type="button"
                     disabled={!canSave}
@@ -845,17 +872,19 @@ export default function ItemPage() {
                 >
                   Cancel
                 </button>
-                <button
-                  type="button"
-                  disabled={!canSave}
-                  onClick={() => handleSubmit({ preventDefault: () => { } })}
-                  className={`px-4 py-2 text-sm rounded text-white ${canSave
-                    ? "bg-purple-600 hover:bg-purple-700"
-                    : "bg-purple-400 cursor-not-allowed opacity-60"
-                    }`}
-                >
-                  Save
-                </button>
+                {((isEditMode && canEdit('INVENTORY', 'ITEM_MASTER')) || (!isEditMode && canCreate('INVENTORY', 'ITEM_MASTER'))) && (
+                  <button
+                    type="button"
+                    disabled={!canSave}
+                    onClick={() => handleSubmit({ preventDefault: () => { } })}
+                    className={`px-4 py-2 text-sm rounded text-white ${canSave
+                      ? "bg-purple-600 hover:bg-purple-700"
+                      : "bg-purple-400 cursor-not-allowed opacity-60"
+                      }`}
+                  >
+                    Save
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={() => fetchItems(true)}
@@ -1117,10 +1146,10 @@ export default function ItemPage() {
                 {currentItems.map((item, index) => (
                   <tr
                     key={item.itemcode}
-                    className={`border-b hover:bg-gray-50 cursor-pointer ${index % 2 === 0 ? "bg-white" : "bg-gray-50"
+                    className={`border-b ${canEdit('INVENTORY', 'ITEM_MASTER') ? 'hover:bg-gray-50 cursor-pointer' : ''} ${index % 2 === 0 ? "bg-white" : "bg-gray-50"
                       }`}
-                    onClick={() => handleDoubleClick(item)}
-                    title="Click to edit item"
+                    onClick={canEdit('INVENTORY', 'ITEM_MASTER') ? () => handleDoubleClick(item) : undefined}
+                    title={canEdit('INVENTORY', 'ITEM_MASTER') ? "Click to edit item" : "View only"}
                   >
                     <td className="px-2 py-1 text-sm whitespace-normal align-top w-[25ch] max-w-[25ch] two-line">{item.groupname || '-'}</td>
                     <td className="px-2 py-1 text-sm break-words align-top">{item.makename || '-'}</td>
@@ -1137,12 +1166,17 @@ export default function ItemPage() {
                     <td className="px-2 py-1 text-sm break-words whitespace-normal align-top max-w-[20ch] two-line">{getVendorName(item.partyid)}</td>
                     <td className="p-1 text-right text-sm align-top">{String(item.billable ?? '-')}</td>
                     <td className="p-2 text-sm align-top">
-                      <button
-                        className="text-red-600 hover:text-red-800 text-xs"
-                        onClick={() => handleDelete(item.itemcode)}
-                      >
-                        Delete
-                      </button>
+                      {canDelete('INVENTORY', 'ITEM_MASTER') && (
+                        <button
+                          className="text-red-600 hover:text-red-800 text-xs"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDelete(item.itemcode);
+                          }}
+                        >
+                          Delete
+                        </button>
+                      )}
                     </td>
                   </tr>
                 ))}
@@ -1629,6 +1663,8 @@ export default function ItemPage() {
                       </div>
                     </div>
                   </div>
+
+
                 </div>
               </form>
             ) : (

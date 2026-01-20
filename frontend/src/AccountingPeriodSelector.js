@@ -3,6 +3,7 @@ import axios from "axios";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import API_BASE_URL from "./config/api";
+import { useAuth } from "./contexts/AuthContext";
 
 export default function AccountingPeriodSelector() {
   const [periods, setPeriods] = useState([]);
@@ -10,6 +11,7 @@ export default function AccountingPeriodSelector() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const navigate = useNavigate();
+  const { user } = useAuth();
 
   useEffect(() => {
     fetchAccountingPeriods();
@@ -38,8 +40,14 @@ export default function AccountingPeriodSelector() {
     console.log("Stored FYearID in localStorage:", selectedPeriod);
     console.log("Verification - reading back:", localStorage.getItem("selectedFYearID"));
     
-    // Navigate to home
-    navigate("/home");
+    // Navigate based on user role
+    if (user?.role === 'SALES_STAFF') {
+      navigate("/sale"); // Sales staff goes to sales page
+    } else if (user?.role === 'ACCOUNTS_MANAGER' || user?.role === 'ACCOUNTS_STAFF') {
+      navigate("/report"); // Accounts staff goes to reports page
+    } else {
+      navigate("/home"); // Admin goes to dashboard
+    }
   };
 
   const formatDate = (dateString) => {

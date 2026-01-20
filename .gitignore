@@ -15,6 +15,13 @@ yarn-error.log*
 build/
 dist/
 
+# Documentation and markdown files
+*.md
+!README.md
+
+# Database migrations
+backend/migrations/
+
 # Temporary files and scripts (cleanup)
 backend/import_*.js
 backend/export_*.js

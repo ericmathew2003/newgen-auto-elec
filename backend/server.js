@@ -16,7 +16,18 @@ const purchaseReturnRoutes = require("./routes/purchaseReturnRoutes");
 const companyRoutes = require("./routes/companyRoutes");
 const dashboardRoutes = require("./routes/dashboard");
 const accountRoutes = require("./routes/accountRoutes");
+const accountGroupRoutes = require("./routes/accountGroupRoutes");
+const coaRoutes = require("./routes/coaRoutes");
+const journalRoutes = require("./routes/journalRoutes");
+const transactionMappingRoutes = require("./routes/transactionMappingRoutes");
+const natureRoutes = require("./routes/natureRoutes");
 const notificationRoutes = require("./routes/notificationRoutes");
+const mlRoutes = require("./routes/mlRoutes");
+const mlPythonRoutes = require("./routes/mlRoutes_python");
+const userRoutes = require("./routes/userRoutes");
+const roleRoutes = require("./routes/roleRoutes");
+const rolePermissionRoutes = require("./routes/rolePermissionRoutes");
+const userRoleRoutes = require("./routes/userRoleRoutes");
 
 // CORS Configuration
 const corsOptions = {
@@ -60,7 +71,18 @@ app.use("/api/accounting-periods", accountingPeriodRoutes);
 app.use("/api/company", companyRoutes);
 app.use("/api/dashboard", dashboardRoutes);
 app.use("/api/acc-mas-account", accountRoutes);
+app.use("/api/account-groups", accountGroupRoutes);
+app.use("/api/coa", coaRoutes);
+app.use("/api/accounting/journals", journalRoutes);
+app.use("/api/transaction-mapping", transactionMappingRoutes);
+app.use("/api/account-natures", natureRoutes);
 app.use("/api/notifications", notificationRoutes);
+app.use("/api/ml", mlRoutes);
+app.use("/api/ml", mlPythonRoutes);
+app.use("/api/users", userRoutes);
+app.use("/api/roles", roleRoutes);
+app.use("/api/role-permissions", rolePermissionRoutes);
+app.use("/api/user-roles", userRoleRoutes);
 
 const PORT = process.env.PORT || 5000;
 

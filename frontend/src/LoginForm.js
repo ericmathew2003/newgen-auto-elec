@@ -4,6 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import API_BASE_URL from "./config/api";
 import shopLogo from "./assets/shoplogo.png";
+import { useAuth } from "./contexts/AuthContext";
 
 export default function LoginForm() {
   const [username, setUsername] = useState("");
@@ -12,6 +13,7 @@ export default function LoginForm() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
+  const { login } = useAuth();
 
   const handleLogin = async (e) => {
     e.preventDefault();
@@ -28,7 +30,10 @@ export default function LoginForm() {
         username: username.trim(),
         password: password.trim(),
       });
-      localStorage.setItem("token", res.data.token);
+      
+      // Store token and user data in context
+      login(res.data.token, res.data.user);
+      
       navigate("/select-period");
     } catch (err) {
       setError("Invalid username or password");
