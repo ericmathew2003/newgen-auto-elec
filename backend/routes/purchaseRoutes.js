@@ -5,6 +5,166 @@ const { authenticateToken } = require("../middleware/auth");
 const { checkPermission } = require("../middleware/checkPermission");
 
 /**
+ * Create Complete Purchase (Header + Items) - New Step-based Form
+ */
+router.post("/complete", authenticateToken, checkPermission('INVENTORY_PURCHASE_ADD'), async (req, res) => {
+  const {
+    fyearid = 1,
+    trdate,
+    suppinvno,
+    suppinvdt,
+    partyid,
+    remark,
+    items = [],
+    overheads = {},
+    tptcharge = 0,
+    labcharge = 0,
+    misccharge = 0,
+    packcharge = 0,
+    costsheetprepared = false,
+    grnposted = false,
+    costconfirmed = false
+  } = req.body;
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    // Generate next transaction ID
+    const maxIdResult = await client.query('SELECT COALESCE(MAX(tranid), 0) + 1 as next_id FROM tbltrnpurchase');
+    const nextTranID = maxIdResult.rows[0].next_id;
+
+    // Generate transaction number
+    const trNoResult = await client.query('SELECT COALESCE(MAX(CAST(trno AS INTEGER)), 0) + 1 as next_trno FROM tbltrnpurchase WHERE fyearid = $1', [fyearid]);
+    const nextTrNo = trNoResult.rows[0].next_trno.toString();
+
+    // Calculate totals
+    const invamt = items.reduce((sum, item) => sum + (item.taxableValue || 0), 0);
+    const totalCGST = items.reduce((sum, item) => sum + (item.cgstAmt || 0), 0);
+    const totalSGST = items.reduce((sum, item) => sum + (item.sgstAmt || 0), 0);
+    const totalIGST = items.reduce((sum, item) => sum + (item.igstAmt || 0), 0);
+    const totalOverheads = Object.values(overheads).reduce((sum, cost) => sum + (cost || 0), 0);
+
+    // Insert purchase header
+    const headerResult = await client.query(
+      `INSERT INTO tbltrnpurchase
+       (tranid, fyearid, trno, trdate, suppinvno, suppinvdt, partyid, remark,
+        invamt, tptcharge, labcharge, misccharge, packcharge, rounded,
+        cgst, sgst, igst, costsheetprepared, grnposted, costconfirmed)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20)
+       RETURNING tranid`,
+      [nextTranID, fyearid, nextTrNo, trdate, suppinvno, suppinvdt, partyid, remark,
+       invamt, tptcharge, labcharge, misccharge, packcharge, 0,
+       totalCGST, totalSGST, totalIGST, costsheetprepared, grnposted, costconfirmed]
+    );
+
+    const tranId = headerResult.rows[0].tranid;
+
+    // Insert purchase items
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
+      await client.query(
+        `INSERT INTO tbltrnpurchasedet
+         (fyearid, tranmasid, srno, itemcode, qty, rate, invamount, ohamt, netrate, rounded,
+          cgst, sgst, igst, gtotal, cgstp, sgstp, igstp)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)`,
+        [
+          fyearid,
+          tranId,
+          i + 1, // srno
+          item.itemcode,
+          item.qty || 0,
+          item.rate || 0,
+          item.taxableValue || 0, // invamount is taxable value
+          0, // ohamt - will be calculated later
+          item.rate || 0, // netrate - initially same as rate
+          0, // rounded
+          item.cgstAmt || 0, // cgst amount
+          item.sgstAmt || 0, // sgst amount
+          item.igstAmt || 0, // igst amount
+          item.lineTotal || 0, // gtotal - line total including GST
+          item.cgstPer || 0, // cgstp - cgst percentage
+          item.sgstPer || 0, // sgstp - sgst percentage
+          item.igstPer || 0  // igstp - igst percentage
+        ]
+      );
+    }
+
+    // Insert overhead costs if any
+    if (Object.keys(overheads).length > 0) {
+      for (const [type, amount] of Object.entries(overheads)) {
+        if (amount > 0) {
+          await client.query(
+            `INSERT INTO tbltrnpurchasecosting (pruchmasid, ohtype, amount)
+             VALUES ($1, $2, $3)`,
+            [tranId, type, amount]
+          );
+        }
+      }
+    }
+
+    // If cost confirmed, update item costs and stock
+    if (costconfirmed) {
+      // Update item master costs and stock
+      for (const item of items) {
+        if (item.itemcode && item.qty > 0) {
+          // Get current stock and cost
+          const itemResult = await client.query(
+            `SELECT curstock, avgcost FROM tblmasitem WHERE itemcode = $1 FOR UPDATE`,
+            [item.itemcode]
+          );
+
+          if (itemResult.rows.length > 0) {
+            const currentStock = Number(itemResult.rows[0].curstock) || 0;
+            const currentAvgCost = Number(itemResult.rows[0].avgcost) || 0;
+            
+            // Calculate new weighted average cost
+            const totalValue = (currentStock * currentAvgCost) + (item.qty * item.rate);
+            const totalStock = currentStock + item.qty;
+            const newAvgCost = totalStock > 0 ? totalValue / totalStock : item.rate;
+
+            // Update item master
+            await client.query(
+              `UPDATE tblmasitem 
+               SET cost = $1, avgcost = $2, curstock = $3 
+               WHERE itemcode = $4`,
+              [item.rate, newAvgCost, totalStock, item.itemcode]
+            );
+
+            // Create stock ledger entry
+            await client.query(
+              `INSERT INTO trn_stock_ledger 
+               (fyear_id, inv_master_id, itemcode, tran_type, tran_date, qty)
+               VALUES ($1, $2, $3, $4, $5, $6)`,
+              [fyearid, tranId, item.itemcode, 'PUR', trdate, item.qty]
+            );
+          }
+        }
+      }
+    }
+
+    await client.query('COMMIT');
+
+    res.json({ 
+      success: true, 
+      tranid: tranId,
+      trno: nextTrNo,
+      message: 'Purchase created successfully'
+    });
+
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('Error creating complete purchase:', err);
+    res.status(500).json({ 
+      error: "Failed to create purchase",
+      details: err.message 
+    });
+  } finally {
+    client.release();
+  }
+});
+
+/**
  * Create Purchase Invoice (Header Only)
  */
 router.post("/", authenticateToken, checkPermission('INVENTORY_PURCHASE_ADD'), async (req, res) => {

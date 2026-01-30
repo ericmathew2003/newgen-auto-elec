@@ -11,7 +11,8 @@ import {
   FiChevronDown,
   FiChevronRight,
   FiLock,
-  FiUnlock
+  FiUnlock,
+  FiSearch
 } from 'react-icons/fi';
 import API_BASE_URL from './config/api';
 
@@ -21,12 +22,55 @@ const SecurityPermissionAssignment = () => {
   const [selectedRole, setSelectedRole] = useState(null);
   const [permissions, setPermissions] = useState([]);
   const [groupedPermissions, setGroupedPermissions] = useState({});
+  const [filteredGroupedPermissions, setFilteredGroupedPermissions] = useState({});
   const [assignedPermissions, setAssignedPermissions] = useState(new Set());
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [expandedModules, setExpandedModules] = useState(new Set());
+  const [searchTerm, setSearchTerm] = useState('');
+
+  // Filter permissions based on search term
+  useEffect(() => {
+    if (!searchTerm.trim()) {
+      setFilteredGroupedPermissions(groupedPermissions);
+      return;
+    }
+
+    const filtered = {};
+    const searchLower = searchTerm.toLowerCase();
+
+    Object.entries(groupedPermissions).forEach(([moduleName, forms]) => {
+      const filteredForms = {};
+      let hasMatchingPermissions = false;
+
+      Object.entries(forms).forEach(([formName, formPermissions]) => {
+        const matchingPermissions = formPermissions.filter(permission => 
+          permission.action_name.toLowerCase().includes(searchLower) ||
+          permission.permission_code.toLowerCase().includes(searchLower) ||
+          moduleName.toLowerCase().includes(searchLower) ||
+          formName.toLowerCase().includes(searchLower)
+        );
+
+        if (matchingPermissions.length > 0) {
+          filteredForms[formName] = matchingPermissions;
+          hasMatchingPermissions = true;
+        }
+      });
+
+      if (hasMatchingPermissions) {
+        filtered[moduleName] = filteredForms;
+      }
+    });
+
+    setFilteredGroupedPermissions(filtered);
+    
+    // Auto-expand modules that have matching permissions
+    if (searchTerm.trim()) {
+      setExpandedModules(new Set(Object.keys(filtered)));
+    }
+  }, [searchTerm, groupedPermissions]);
 
   // Fetch roles and permissions on component mount
   useEffect(() => {
@@ -243,14 +287,14 @@ const SecurityPermissionAssignment = () => {
 
   // Get module permission stats
   const getModuleStats = (moduleName) => {
-    const modulePermissions = Object.values(groupedPermissions[moduleName] || {}).flat();
+    const modulePermissions = Object.values(filteredGroupedPermissions[moduleName] || {}).flat();
     const assignedCount = modulePermissions.filter(p => assignedPermissions.has(p.permission_id)).length;
     return { total: modulePermissions.length, assigned: assignedCount };
   };
 
   // Get form permission stats
   const getFormStats = (moduleName, formName) => {
-    const formPermissions = groupedPermissions[moduleName]?.[formName] || [];
+    const formPermissions = filteredGroupedPermissions[moduleName]?.[formName] || [];
     const assignedCount = formPermissions.filter(p => assignedPermissions.has(p.permission_id)).length;
     return { total: formPermissions.length, assigned: assignedCount };
   };
@@ -387,8 +431,42 @@ const SecurityPermissionAssignment = () => {
                 <p className="text-sm">Choose a role from the list to assign or revoke permissions</p>
               </div>
             ) : (
-              <div className="max-h-96 overflow-y-auto">
-                {Object.entries(groupedPermissions).map(([moduleName, forms]) => {
+              <div>
+                {/* Search Box */}
+                <div className="p-4 border-b bg-gray-50">
+                  <div className="relative">
+                    <input
+                      type="text"
+                      placeholder="Search permissions by name, code, module, or form..."
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                      className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500"
+                    />
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                      <FiSearch className="h-5 w-5 text-gray-400" />
+                    </div>
+                    {searchTerm && (
+                      <button
+                        onClick={() => setSearchTerm('')}
+                        className="absolute inset-y-0 right-0 pr-3 flex items-center"
+                      >
+                        <FiX className="h-5 w-5 text-gray-400 hover:text-gray-600" />
+                      </button>
+                    )}
+                  </div>
+                  {searchTerm && (
+                    <div className="mt-2 text-sm text-gray-600">
+                      Showing permissions matching "{searchTerm}"
+                      {Object.keys(filteredGroupedPermissions).length === 0 && (
+                        <span className="text-red-600 ml-2">- No matches found</span>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                {/* Permissions List */}
+                <div className="max-h-96 overflow-y-auto">
+                {Object.entries(filteredGroupedPermissions).map(([moduleName, forms]) => {
                   const moduleStats = getModuleStats(moduleName);
                   const isExpanded = expandedModules.has(moduleName);
                   
@@ -480,6 +558,7 @@ const SecurityPermissionAssignment = () => {
                     </div>
                   );
                 })}
+                </div>
               </div>
             )}
           </div>

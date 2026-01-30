@@ -23,11 +23,22 @@ const DynamicTransactionMappingPage = () => {
   const [accountNatures, setAccountNatures] = useState([]);
   const [valueSources, setValueSources] = useState([]);
 
+  // Helper function to get auth headers
+  const getAuthHeaders = () => {
+    const token = localStorage.getItem('token');
+    return {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json'
+    };
+  };
+
   // Fetch mappings from API
   const fetchMappings = async () => {
     try {
       setLoading(true);
-      const response = await fetch(`${API_BASE_URL}/api/transaction-mapping`);
+      const response = await fetch(`${API_BASE_URL}/api/transaction-mapping`, {
+        headers: getAuthHeaders()
+      });
       if (response.ok) {
         const data = await response.json();
         setMappings(data);
@@ -44,7 +55,9 @@ const DynamicTransactionMappingPage = () => {
   // Fetch account natures from API
   const fetchAccountNatures = async () => {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/account-natures`);
+      const response = await fetch(`${API_BASE_URL}/api/account-natures`, {
+        headers: getAuthHeaders()
+      });
       if (response.ok) {
         const data = await response.json();
         setAccountNatures(data);
@@ -61,9 +74,13 @@ const DynamicTransactionMappingPage = () => {
   // Fetch value sources from API
   const fetchValueSources = async () => {
     try {
+      console.log('Fetching value sources...');
       const response = await fetch(`${API_BASE_URL}/api/value-sources?is_active=true`);
+      console.log('Response status:', response.status);
+      
       if (response.ok) {
         const data = await response.json();
+        console.log('Value sources data:', data);
         setValueSources(data);
       } else {
         console.error('Failed to fetch value sources, status:', response.status);
@@ -132,9 +149,7 @@ const DynamicTransactionMappingPage = () => {
       
       const response = await fetch(url, {
         method,
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: getAuthHeaders(),
         body: JSON.stringify(formData),
       });
 
@@ -171,6 +186,7 @@ const DynamicTransactionMappingPage = () => {
     try {
       const response = await fetch(`${API_BASE_URL}/api/transaction-mapping/${mappingId}`, {
         method: 'DELETE',
+        headers: getAuthHeaders(),
       });
 
       if (response.ok) {
@@ -416,9 +432,10 @@ const DynamicTransactionMappingPage = () => {
               onClick={() => {
                 fetchAccountNatures();
                 fetchValueSources();
+                fetchMappings();
               }}
               className="flex items-center space-x-2 px-4 py-2 bg-gray-600 text-white font-semibold rounded-lg shadow-lg hover:bg-gray-700 transition duration-200"
-              title="Refresh Dropdowns"
+              title="Refresh Data"
             >
               <RefreshCw size={16} />
               <span>Refresh</span>

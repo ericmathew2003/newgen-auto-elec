@@ -25,6 +25,7 @@ import {
   FiMinusCircle,
   FiPlusCircle,
   FiSettings,
+  FiUser,
 } from "react-icons/fi";
 
 import logo2 from "./assets/logo2.png";
@@ -33,7 +34,7 @@ import { useAuth } from "./contexts/AuthContext";
 import { usePermissions } from "./hooks/usePermissions";
 
 export default function Navbar() {
-  const { canView } = usePermissions();
+  const { canView, canCreate } = usePermissions();
   
   // Main dropdown states
   const [dashboardOpen, setDashboardOpen] = useState(false);
@@ -155,8 +156,46 @@ export default function Navbar() {
         {/* Center - Empty space (search bar removed) */}
         <div className="flex-1"></div>
 
-        {/* Right side - Notifications and Logout */}
+        {/* Right side - Username, Notifications and Logout */}
         <div className="flex items-center space-x-4">
+          {/* Username Display */}
+          {user && (
+            <div className="hidden sm:flex items-center space-x-3 px-4 py-2 bg-gradient-to-r from-gray-50 to-gray-100 rounded-xl border border-gray-200 shadow-sm">
+              <div className="w-9 h-9 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center shadow-md">
+                {user.full_name || user.username ? (
+                  <span className="text-white text-sm font-bold">
+                    {(user.full_name || user.username).charAt(0).toUpperCase()}
+                  </span>
+                ) : (
+                  <FiUser size={16} className="text-white" />
+                )}
+              </div>
+              <div className="flex flex-col">
+                <span className="text-sm font-semibold text-gray-900">
+                  {user.full_name || user.username || 'User'}
+                </span>
+                <span className="text-xs text-gray-500 font-medium">
+                  {user.role || 'Member'}
+                </span>
+              </div>
+            </div>
+          )}
+
+          {/* Mobile Username Display - Avatar Only */}
+          {user && (
+            <div className="sm:hidden flex items-center">
+              <div className="w-8 h-8 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center shadow-md" title={user.full_name || user.username || 'User'}>
+                {user.full_name || user.username ? (
+                  <span className="text-white text-xs font-bold">
+                    {(user.full_name || user.username).charAt(0).toUpperCase()}
+                  </span>
+                ) : (
+                  <FiUser size={14} className="text-white" />
+                )}
+              </div>
+            </div>
+          )}
+
           {/* Notifications */}
           <div className="relative">
             <button
@@ -288,7 +327,7 @@ export default function Navbar() {
               </div>
 
               {/* 2. INVENTORY SECTION */}
-              {canView('INVENTORY', 'ITEM_MASTER') && (
+              {(canView('INVENTORY', 'ITEM_MASTER') || canView('INVENTORY', 'REPORT_GST_INVOICE') || canView('INVENTORY', 'REPORT_SALES_PURCHASE') || canView('INVENTORY', 'PURCHASE') || canView('INVENTORY', 'PURCHASE_RETURN') || canView('INVENTORY', 'SALES')) && (
               <div className="space-y-2">
                 <button
                   onClick={() => setInventoryOpen(!inventoryOpen)}
@@ -308,49 +347,63 @@ export default function Navbar() {
                 {inventoryOpen && (
                   <div className="ml-4 space-y-2 animate-fadeIn">
                     {/* Master Data */}
-                    <div className="space-y-1">
-                      <button
-                        onClick={() => setMasterOpen(!masterOpen)}
-                        className="flex items-center justify-between w-full p-3 rounded-lg hover:bg-orange-50 hover:text-orange-700 transition-all duration-200 text-sm font-medium"
-                      >
-                        <div className="flex items-center">
-                          <FiBox size={16} className="text-orange-600 mr-3" />
-                          <span>Master Data</span>
-                        </div>
-                        <div className="p-1">
-                          {masterOpen ? <FiChevronDown size={14} /> : <FiChevronRight size={14} />}
-                        </div>
-                      </button>
+                    {(canView('INVENTORY', 'ITEM_MASTER') || canView('INVENTORY', 'GROUP_MASTER') || canView('INVENTORY', 'MAKE_MASTER') || canView('INVENTORY', 'BRAND_MASTER') || canView('INVENTORY', 'SUPPLIER_MASTER') || canView('INVENTORY', 'CUSTOMER_MASTER')) && (
+                      <div className="space-y-1">
+                        <button
+                          onClick={() => setMasterOpen(!masterOpen)}
+                          className="flex items-center justify-between w-full p-3 rounded-lg hover:bg-orange-50 hover:text-orange-700 transition-all duration-200 text-sm font-medium"
+                        >
+                          <div className="flex items-center">
+                            <FiBox size={16} className="text-orange-600 mr-3" />
+                            <span>Master Data</span>
+                          </div>
+                          <div className="p-1">
+                            {masterOpen ? <FiChevronDown size={14} /> : <FiChevronRight size={14} />}
+                          </div>
+                        </button>
 
-                      {masterOpen && (
-                        <div className="ml-6 space-y-1">
-                          <Link to="/groups" className="flex items-center p-2 rounded-lg hover:bg-orange-50 hover:text-orange-700 transition-all duration-200 text-xs font-medium">
-                            <div className="w-1.5 h-1.5 bg-orange-400 rounded-full mr-2"></div>
-                            Groups
-                          </Link>
-                          <Link to="/makes" className="flex items-center p-2 rounded-lg hover:bg-orange-50 hover:text-orange-700 transition-all duration-200 text-xs font-medium">
-                            <div className="w-1.5 h-1.5 bg-orange-400 rounded-full mr-2"></div>
-                            Makes
-                          </Link>
-                          <Link to="/brands" className="flex items-center p-2 rounded-lg hover:bg-orange-50 hover:text-orange-700 transition-all duration-200 text-xs font-medium">
-                            <div className="w-1.5 h-1.5 bg-orange-400 rounded-full mr-2"></div>
-                            Brands
-                          </Link>
-                          <Link to="/items" className="flex items-center p-2 rounded-lg hover:bg-orange-50 hover:text-orange-700 transition-all duration-200 text-xs font-medium">
-                            <div className="w-1.5 h-1.5 bg-orange-400 rounded-full mr-2"></div>
-                            Item Master
-                          </Link>
-                          <Link to="/suppliers" className="flex items-center p-2 rounded-lg hover:bg-orange-50 hover:text-orange-700 transition-all duration-200 text-xs font-medium">
-                            <div className="w-1.5 h-1.5 bg-orange-400 rounded-full mr-2"></div>
-                            Suppliers
-                          </Link>
-                          <Link to="/customers" className="flex items-center p-2 rounded-lg hover:bg-orange-50 hover:text-orange-700 transition-all duration-200 text-xs font-medium">
-                            <div className="w-1.5 h-1.5 bg-orange-400 rounded-full mr-2"></div>
-                            Customers
-                          </Link>
-                        </div>
-                      )}
-                    </div>
+                        {masterOpen && (
+                          <div className="ml-6 space-y-1">
+                            {canView('INVENTORY', 'GROUP_MASTER') && (
+                              <Link to="/groups" className="flex items-center p-2 rounded-lg hover:bg-orange-50 hover:text-orange-700 transition-all duration-200 text-xs font-medium">
+                                <div className="w-1.5 h-1.5 bg-orange-400 rounded-full mr-2"></div>
+                                Groups
+                              </Link>
+                            )}
+                            {canView('INVENTORY', 'MAKE_MASTER') && (
+                              <Link to="/makes" className="flex items-center p-2 rounded-lg hover:bg-orange-50 hover:text-orange-700 transition-all duration-200 text-xs font-medium">
+                                <div className="w-1.5 h-1.5 bg-orange-400 rounded-full mr-2"></div>
+                                Makes
+                              </Link>
+                            )}
+                            {canView('INVENTORY', 'BRAND_MASTER') && (
+                              <Link to="/brands" className="flex items-center p-2 rounded-lg hover:bg-orange-50 hover:text-orange-700 transition-all duration-200 text-xs font-medium">
+                                <div className="w-1.5 h-1.5 bg-orange-400 rounded-full mr-2"></div>
+                                Brands
+                              </Link>
+                            )}
+                            {canView('INVENTORY', 'ITEM_MASTER') && (
+                              <Link to="/items" className="flex items-center p-2 rounded-lg hover:bg-orange-50 hover:text-orange-700 transition-all duration-200 text-xs font-medium">
+                                <div className="w-1.5 h-1.5 bg-orange-400 rounded-full mr-2"></div>
+                                Item Master
+                              </Link>
+                            )}
+                            {canView('INVENTORY', 'SUPPLIER_MASTER') && (
+                              <Link to="/suppliers" className="flex items-center p-2 rounded-lg hover:bg-orange-50 hover:text-orange-700 transition-all duration-200 text-xs font-medium">
+                                <div className="w-1.5 h-1.5 bg-orange-400 rounded-full mr-2"></div>
+                                Suppliers
+                              </Link>
+                            )}
+                            {canView('INVENTORY', 'CUSTOMER_MASTER') && (
+                              <Link to="/customers" className="flex items-center p-2 rounded-lg hover:bg-orange-50 hover:text-orange-700 transition-all duration-200 text-xs font-medium">
+                                <div className="w-1.5 h-1.5 bg-orange-400 rounded-full mr-2"></div>
+                                Customers
+                              </Link>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    )}
 
                     {/* Purchase Section */}
                     {(canView('INVENTORY', 'PURCHASE') || canView('INVENTORY', 'PURCHASE_RETURN')) && (
@@ -396,37 +449,43 @@ export default function Navbar() {
                     )}
 
                     {/* Inventory Reports */}
-                    <div className="space-y-1">
-                      <button
-                        onClick={() => setReportsOpen(!reportsOpen)}
-                        className="flex items-center justify-between w-full p-3 rounded-lg hover:bg-purple-50 hover:text-purple-700 transition-all duration-200 text-sm font-medium"
-                      >
-                        <div className="flex items-center">
-                          <FiFileText size={16} className="text-purple-600 mr-3" />
-                          <span>Reports</span>
-                        </div>
-                        <div className="p-1">
-                          {reportsOpen ? <FiChevronDown size={14} /> : <FiChevronRight size={14} />}
-                        </div>
-                      </button>
+                    {(canView('INVENTORY', 'REPORT_GST_INVOICE') || canView('INVENTORY', 'REPORT_SALES_PURCHASE')) && (
+                      <div className="space-y-1">
+                        <button
+                          onClick={() => setReportsOpen(!reportsOpen)}
+                          className="flex items-center justify-between w-full p-3 rounded-lg hover:bg-purple-50 hover:text-purple-700 transition-all duration-200 text-sm font-medium"
+                        >
+                          <div className="flex items-center">
+                            <FiFileText size={16} className="text-purple-600 mr-3" />
+                            <span>Reports</span>
+                          </div>
+                          <div className="p-1">
+                            {reportsOpen ? <FiChevronDown size={14} /> : <FiChevronRight size={14} />}
+                          </div>
+                        </button>
 
-                      {reportsOpen && (
-                        <div className="ml-6 space-y-1">
-                          <Link to="/report" className="flex items-center p-2 rounded-lg hover:bg-purple-50 hover:text-purple-700 transition-all duration-200 text-xs font-medium">
-                            <div className="w-1.5 h-1.5 bg-purple-400 rounded-full mr-2"></div>
-                            GST Invoice Report
-                          </Link>
-                          <Link to="/sales-purchase-reports" className="flex items-center p-2 rounded-lg hover:bg-purple-50 hover:text-purple-700 transition-all duration-200 text-xs font-medium">
-                            <div className="w-1.5 h-1.5 bg-purple-400 rounded-full mr-2"></div>
-                            Sales Report
-                          </Link>
-                          <Link to="/ml-reports" className="flex items-center p-2 rounded-lg hover:bg-purple-50 hover:text-purple-700 transition-all duration-200 text-xs font-medium">
-                            <div className="w-1.5 h-1.5 bg-purple-400 rounded-full mr-2"></div>
-                            ML Reports & Analytics
-                          </Link>
-                        </div>
-                      )}
-                    </div>
+                        {reportsOpen && (
+                          <div className="ml-6 space-y-1">
+                            {canView('INVENTORY', 'REPORT_GST_INVOICE') && (
+                              <Link to="/report" className="flex items-center p-2 rounded-lg hover:bg-purple-50 hover:text-purple-700 transition-all duration-200 text-xs font-medium">
+                                <div className="w-1.5 h-1.5 bg-purple-400 rounded-full mr-2"></div>
+                                GST Invoice Report
+                              </Link>
+                            )}
+                            {canView('INVENTORY', 'REPORT_SALES_PURCHASE') && (
+                              <Link to="/sales-purchase-reports" className="flex items-center p-2 rounded-lg hover:bg-purple-50 hover:text-purple-700 transition-all duration-200 text-xs font-medium">
+                                <div className="w-1.5 h-1.5 bg-purple-400 rounded-full mr-2"></div>
+                                Sales Report
+                              </Link>
+                            )}
+                            <Link to="/ml-reports" className="flex items-center p-2 rounded-lg hover:bg-purple-50 hover:text-purple-700 transition-all duration-200 text-xs font-medium">
+                              <div className="w-1.5 h-1.5 bg-purple-400 rounded-full mr-2"></div>
+                              ML Reports & Analytics
+                            </Link>
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -721,7 +780,7 @@ export default function Navbar() {
       )}
 
       {/* Add custom CSS for animations and scrollbar */}
-      <style jsx>{`
+      <style jsx="true">{`
         @keyframes fadeIn {
           from { opacity: 0; transform: translateY(-10px); }
           to { opacity: 1; transform: translateY(0); }

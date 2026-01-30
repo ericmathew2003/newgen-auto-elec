@@ -19,7 +19,6 @@ import ReportsPage from './ReportsPage';
 import SalesPurchaseReportsPage from './SalesPurchaseReportsPage';
 import MLReportsPage from './MLReportsPage';
 import Layout from './components/Layout';
-import Dashboard from './components/Dashboard';
 import UserManagementPage from './UserManagementPage';
 import SecurityUserManagement from './SecurityUserManagement';
 import SecurityRoleManagement from './SecurityRoleManagement';
@@ -92,12 +91,12 @@ function App() {
             <Route path="/select-period" element={<AccountingPeriodSelector />} />
             <Route path="/home" element={
               <AuthenticatedLayout>
-                <Dashboard />
+                <HomePage />
               </AuthenticatedLayout>
             } />
             <Route path="/dashboard" element={
               <AuthenticatedLayout>
-                <Dashboard />
+                <HomePage />
               </AuthenticatedLayout>
             } />
             <Route path="/makes" element={

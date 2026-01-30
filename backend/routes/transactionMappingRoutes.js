@@ -1,9 +1,10 @@
 const express = require('express');
 const pool = require('../db');
+const { authenticateToken } = require('../middleware/auth');
 const router = express.Router();
 
 // Get all transaction mappings
-router.get('/', async (req, res) => {
+router.get('/', authenticateToken, async (req, res) => {
   try {
     const { transaction_type } = req.query;
     
@@ -39,7 +40,7 @@ router.get('/', async (req, res) => {
 });
 
 // Get transaction mapping by ID
-router.get('/:id', async (req, res) => {
+router.get('/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
     
@@ -70,7 +71,7 @@ router.get('/:id', async (req, res) => {
 });
 
 // Create new transaction mapping
-router.post('/', async (req, res) => {
+router.post('/', authenticateToken, async (req, res) => {
   try {
     const {
       transaction_type,
@@ -128,7 +129,7 @@ router.post('/', async (req, res) => {
 });
 
 // Update transaction mapping
-router.put('/:id', async (req, res) => {
+router.put('/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
     const {
@@ -196,7 +197,7 @@ router.put('/:id', async (req, res) => {
 });
 
 // Delete transaction mapping
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
     
@@ -249,7 +250,7 @@ router.get('/meta/account-natures', async (req, res) => {
 });
 
 // Get distinct value sources
-router.get('/meta/value-sources', async (req, res) => {
+router.get('/meta/value-sources', authenticateToken, async (req, res) => {
   try {
     const result = await pool.query(`
       SELECT DISTINCT value_source 
@@ -261,6 +262,77 @@ router.get('/meta/value-sources', async (req, res) => {
   } catch (err) {
     console.error('Error fetching value sources:', err);
     res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Test endpoint without authentication
+router.get('/test', async (req, res) => {
+  try {
+    console.log('Test endpoint called - no auth required');
+    res.json({ message: 'Test endpoint working', timestamp: new Date().toISOString() });
+  } catch (err) {
+    console.error('Error in test endpoint:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Get predefined value sources for dropdown
+router.get('/value-sources', async (req, res) => {
+  try {
+    console.log('Value sources endpoint called');
+    
+    // Predefined value sources that can be used in transaction mappings
+    const valueSources = [
+      // Purchase Transaction Sources
+      { value_code: 'PURCHASE_TAXABLE_AMOUNT', display_name: 'Purchase Taxable Amount', module_tag: 'PURCHASE' },
+      { value_code: 'PURCHASE_CGST_AMOUNT', display_name: 'Purchase CGST Amount', module_tag: 'PURCHASE' },
+      { value_code: 'PURCHASE_SGST_AMOUNT', display_name: 'Purchase SGST Amount', module_tag: 'PURCHASE' },
+      { value_code: 'PURCHASE_IGST_AMOUNT', display_name: 'Purchase IGST Amount', module_tag: 'PURCHASE' },
+      { value_code: 'PURCHASE_TOTAL_AMOUNT', display_name: 'Purchase Total Amount', module_tag: 'PURCHASE' },
+      { value_code: 'PURCHASE_DISCOUNT_AMOUNT', display_name: 'Purchase Discount Amount', module_tag: 'PURCHASE' },
+      { value_code: 'PURCHASE_FREIGHT_AMOUNT', display_name: 'Purchase Freight Amount', module_tag: 'PURCHASE' },
+      
+      // Sales Transaction Sources
+      { value_code: 'SALES_TAXABLE_AMOUNT', display_name: 'Sales Taxable Amount', module_tag: 'SALES' },
+      { value_code: 'SALES_CGST_AMOUNT', display_name: 'Sales CGST Amount', module_tag: 'SALES' },
+      { value_code: 'SALES_SGST_AMOUNT', display_name: 'Sales SGST Amount', module_tag: 'SALES' },
+      { value_code: 'SALES_IGST_AMOUNT', display_name: 'Sales IGST Amount', module_tag: 'SALES' },
+      { value_code: 'SALES_TOTAL_AMOUNT', display_name: 'Sales Total Amount', module_tag: 'SALES' },
+      { value_code: 'SALES_DISCOUNT_AMOUNT', display_name: 'Sales Discount Amount', module_tag: 'SALES' },
+      
+      // Journal Entry Sources
+      { value_code: 'JOURNAL_AMOUNT', display_name: 'Journal Entry Amount', module_tag: 'JOURNAL' },
+      { value_code: 'JOURNAL_DEBIT_AMOUNT', display_name: 'Journal Debit Amount', module_tag: 'JOURNAL' },
+      { value_code: 'JOURNAL_CREDIT_AMOUNT', display_name: 'Journal Credit Amount', module_tag: 'JOURNAL' },
+      
+      // Payment Sources
+      { value_code: 'PAYMENT_AMOUNT', display_name: 'Payment Amount', module_tag: 'PAYMENT' },
+      { value_code: 'RECEIPT_AMOUNT', display_name: 'Receipt Amount', module_tag: 'RECEIPT' },
+      
+      // Inventory Sources
+      { value_code: 'INVENTORY_VALUE', display_name: 'Inventory Value', module_tag: 'INVENTORY' },
+      { value_code: 'COST_OF_GOODS_SOLD', display_name: 'Cost of Goods Sold', module_tag: 'INVENTORY' },
+      
+      // Other Common Sources
+      { value_code: 'BANK_CHARGES', display_name: 'Bank Charges', module_tag: 'BANKING' },
+      { value_code: 'INTEREST_AMOUNT', display_name: 'Interest Amount', module_tag: 'BANKING' },
+      { value_code: 'ROUND_OFF_AMOUNT', display_name: 'Round Off Amount', module_tag: 'GENERAL' },
+      { value_code: 'CUSTOM_AMOUNT', display_name: 'Custom Amount', module_tag: 'GENERAL' }
+    ];
+
+    console.log(`Returning ${valueSources.length} value sources`);
+    
+    // Filter by is_active if requested
+    const { is_active } = req.query;
+    if (is_active === 'true') {
+      // All predefined sources are considered active
+      res.json(valueSources);
+    } else {
+      res.json(valueSources);
+    }
+  } catch (err) {
+    console.error('Error fetching predefined value sources:', err);
+    res.status(500).json({ error: 'Internal server error', details: err.message });
   }
 });
 

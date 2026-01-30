@@ -1,9 +1,10 @@
 const express = require('express');
 const router = express.Router();
 const pool = require('../db');
+const { authenticateToken } = require('../middleware/auth');
 
 // Dashboard metrics and charts
-router.get('/summary', async (req, res) => {
+router.get('/summary', authenticateToken, async (req, res) => {
   try {
     const [purchaseTotals, salesTotals, suppliers, customers, itemStats, purchaseMonthly, salesMonthly] = await Promise.all([
       pool.query(`
@@ -21,8 +22,25 @@ router.get('/summary', async (req, res) => {
         FROM public.trn_invoice_master
         WHERE is_deleted = false
       `),
-      pool.query(`SELECT COUNT(*)::int AS suppliers FROM tblMasParty WHERE PartyType = 2`),
-      pool.query(`SELECT COUNT(*)::int AS customers FROM tblMasParty WHERE PartyType = 1`),
+      // Use the same query as CustomerPage to ensure consistency
+      pool.query(`
+        SELECT COUNT(*) as suppliers 
+        FROM (
+          SELECT p.partyid, p.partytype
+          FROM tblmasparty p
+          LEFT JOIN acc_mas_account a ON p.accountid = a.account_id
+        ) subq 
+        WHERE CAST(COALESCE(subq.partytype, 0) AS INTEGER) = 2
+      `),
+      pool.query(`
+        SELECT COUNT(*) as customers 
+        FROM (
+          SELECT p.partyid, p.partytype
+          FROM tblmasparty p
+          LEFT JOIN acc_mas_account a ON p.accountid = a.account_id
+        ) subq 
+        WHERE CAST(COALESCE(subq.partytype, 0) AS INTEGER) = 1
+      `),
       pool.query(`
         SELECT 
           COUNT(*) as total_items,
@@ -97,7 +115,7 @@ router.get('/test', (req, res) => {
 });
 
 // Dashboard statistics endpoint
-router.get('/stats', async (req, res) => {
+router.get('/stats', authenticateToken, async (req, res) => {
   try {
     const stats = {
       totalItems: 0,
@@ -121,22 +139,34 @@ router.get('/stats', async (req, res) => {
       stats.totalItems = 0;
     }
 
-    // Get total suppliers count
+    // Get total suppliers count (using same logic as CustomerPage)
     try {
-      const suppliersResult = await pool.query(
-        'SELECT COUNT(*) as count FROM tblmasparty WHERE partytype = 1'
-      );
+      const suppliersResult = await pool.query(`
+        SELECT COUNT(*) as count 
+        FROM (
+          SELECT p.partyid, p.partytype
+          FROM tblmasparty p
+          LEFT JOIN acc_mas_account a ON p.accountid = a.account_id
+        ) subq 
+        WHERE CAST(COALESCE(subq.partytype, 0) AS INTEGER) = 2
+      `);
       stats.totalSuppliers = parseInt(suppliersResult.rows[0].count) || 0;
     } catch (error) {
       console.log('Suppliers query failed, using 0');
       stats.totalSuppliers = 0;
     }
 
-    // Get total customers count
+    // Get total customers count (using same logic as CustomerPage)
     try {
-      const customersResult = await pool.query(
-        'SELECT COUNT(*) as count FROM tblmasparty WHERE partytype = 2'
-      );
+      const customersResult = await pool.query(`
+        SELECT COUNT(*) as count 
+        FROM (
+          SELECT p.partyid, p.partytype
+          FROM tblmasparty p
+          LEFT JOIN acc_mas_account a ON p.accountid = a.account_id
+        ) subq 
+        WHERE CAST(COALESCE(subq.partytype, 0) AS INTEGER) = 1
+      `);
       stats.totalCustomers = parseInt(customersResult.rows[0].count) || 0;
     } catch (error) {
       console.log('Customers query failed, using 0');
@@ -307,7 +337,7 @@ router.get('/stats', async (req, res) => {
 });
 
 // Get monthly trends
-router.get('/trends', async (req, res) => {
+router.get('/trends', authenticateToken, async (req, res) => {
   try {
     const trends = {
       purchaseTrends: [],
@@ -405,7 +435,7 @@ router.get('/trends', async (req, res) => {
 });
 
 // Get performance metrics
-router.get('/performance', async (req, res) => {
+router.get('/performance', authenticateToken, async (req, res) => {
   try {
     const performance = {
       inventoryTurnover: '0.0',
@@ -499,6 +529,63 @@ router.get('/performance', async (req, res) => {
       error: 'Failed to fetch performance metrics',
       details: error.message
     });
+  }
+});
+
+// Get low stock items for dashboard (no permissions required)
+router.get('/low-stock-items', authenticateToken, async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT 
+        itemcode,
+        itemname,
+        curstock,
+        cost,
+        model,
+        g.groupname,
+        b.brandname
+      FROM tblmasitem i
+      LEFT JOIN tblmasgroup g ON i.groupid = g.groupid
+      LEFT JOIN tblmasbrand b ON i.brandid = b.brandid
+      WHERE COALESCE(curstock, 0) > 0 
+      AND COALESCE(curstock, 0) <= 10
+      AND (deleted = false OR deleted IS NULL)
+      ORDER BY curstock ASC
+      LIMIT 50
+    `);
+    
+    res.json(result.rows);
+  } catch (err) {
+    console.error('Error fetching low stock items for dashboard:', err);
+    res.json([]); // Return empty array instead of error to prevent UI issues
+  }
+});
+
+// Get out of stock items for dashboard (no permissions required)
+router.get('/out-of-stock-items', authenticateToken, async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT 
+        itemcode,
+        itemname,
+        curstock,
+        cost,
+        model,
+        g.groupname,
+        b.brandname
+      FROM tblmasitem i
+      LEFT JOIN tblmasgroup g ON i.groupid = g.groupid
+      LEFT JOIN tblmasbrand b ON i.brandid = b.brandid
+      WHERE COALESCE(curstock, 0) = 0
+      AND (deleted = false OR deleted IS NULL)
+      ORDER BY itemname ASC
+      LIMIT 50
+    `);
+    
+    res.json(result.rows);
+  } catch (err) {
+    console.error('Error fetching out of stock items for dashboard:', err);
+    res.json([]); // Return empty array instead of error to prevent UI issues
   }
 });
 

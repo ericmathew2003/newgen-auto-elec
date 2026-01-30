@@ -2504,9 +2504,9 @@ export default function PurchasePage() {
                           if (!editingPurchase?.tranid) return;
                           try {
                             // Ensure header charges are zero and mark not prepared
-                            await axios.put(`${API_BASE_URL}/api/purchase/${editingPurchase.tranid}/costing`, { rows: [] });
+                            await axios.put(`${API_BASE_URL}/api/purchase/${editingPurchase.tranid}/costing`, { rows: [] }, getAuthHeaders());
                             // Confirm with no items overhead
-                            await axios.post(`${API_BASE_URL}/api/purchase/${editingPurchase.tranid}/costing/confirm`, { items: [] });
+                            await axios.post(`${API_BASE_URL}/api/purchase/${editingPurchase.tranid}/costing/confirm`, { items: [] }, getAuthHeaders());
                             setHeader(h => ({ ...h, TptCharge: 0, LabCharge: 0, MiscCharge: 0, CostSheetPrepared: false, Costconfirmed: true }));
                             setNotice({ open: true, type: 'success', message: 'Costing confirmed with no overhead' });
                             await fetchPurchases();

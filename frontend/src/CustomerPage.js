@@ -7,7 +7,7 @@ import { usePermissions } from "./hooks/usePermissions";
 export default function CustomerPage() {
   const { id, isNewMode, isEditMode, showForm, navigateToList, navigateToNew, navigateToEdit } = usePageNavigation('/customers');
   const { canCreate, canEdit, canDelete, canView } = usePermissions();
-  
+
   // Data and UI state
   const [parties, setParties] = useState([]);
   const [editingParty, setEditingParty] = useState(null);
@@ -47,11 +47,11 @@ export default function CustomerPage() {
     if (party.account_name) {
       return party.account_name;
     }
-    
+
     // Fallback to lookup in accounts array
     if (!party.accountid) return '-';
     if (!accounts.length) return 'Loading...';
-    
+
     const account = accounts.find(acc => acc.account_id === parseInt(party.accountid));
     return account ? account.account_name : `ID: ${party.accountid}`;
   };
@@ -175,7 +175,7 @@ export default function CustomerPage() {
     } else {
       const exists = parties.find(
         (p) =>
-          typeof p.partyname === "string" && 
+          typeof p.partyname === "string" &&
           p.partyname.toLowerCase() === formData.PartyName.toLowerCase() &&
           p.partyid !== editingParty.partyid
       );
@@ -325,11 +325,10 @@ export default function CustomerPage() {
     <div className="min-h-screen bg-gray-50">
       {/* Toast Notification */}
       {toast.show && (
-        <div className={`fixed top-4 right-4 z-50 px-6 py-3 rounded-lg shadow-lg text-white font-medium transition-all duration-300 ${
-          toast.type === 'success' ? 'bg-green-500' : 
-          toast.type === 'error' ? 'bg-red-500' : 
-          'bg-blue-500'
-        }`}>
+        <div className={`fixed top-4 right-4 z-50 px-6 py-3 rounded-lg shadow-lg text-white font-medium transition-all duration-300 ${toast.type === 'success' ? 'bg-green-500' :
+            toast.type === 'error' ? 'bg-red-500' :
+              'bg-blue-500'
+          }`}>
           <div className="flex items-center gap-2">
             {toast.type === 'success' && (
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -345,15 +344,15 @@ export default function CustomerPage() {
           </div>
         </div>
       )}
-      
+
       <div className="p-2">
         {/* Breadcrumb */}
-        <Breadcrumb 
-          basePath="/customers" 
-          currentPage="Customers" 
+        <Breadcrumb
+          basePath="/customers"
+          currentPage="Customers"
           itemName={showForm ? (isNewMode ? "New Customer" : `Edit Customer: ${formData.PartyName}`) : null}
         />
-        
+
         {/* Header with New, Search and Form Actions */}
         <div className="flex flex-col items-start mb-2">
           <div className="flex items-center justify-between w-full mb-2">
@@ -365,9 +364,8 @@ export default function CustomerPage() {
                     navigateToNew();
                   }}
                   disabled={showForm}
-                  className={`px-4 py-2 rounded-lg shadow text-white ${
-                    showForm ? "bg-purple-400 cursor-not-allowed opacity-60" : "bg-purple-600 hover:bg-purple-700"
-                  }`}
+                  className={`px-4 py-2 rounded-lg shadow text-white ${showForm ? "bg-purple-400 cursor-not-allowed opacity-60" : "bg-purple-600 hover:bg-purple-700"
+                    }`}
                 >
                   New
                 </button>
@@ -390,9 +388,8 @@ export default function CustomerPage() {
                     <button
                       type="button"
                       disabled={!canSave}
-                      className={`px-3 py-2 text-sm border rounded ${
-                        canSave ? "" : "opacity-50 cursor-not-allowed"
-                      }`}
+                      className={`px-3 py-2 text-sm border rounded ${canSave ? "" : "opacity-50 cursor-not-allowed"
+                        }`}
                       onClick={(e) => {
                         e.preventDefault();
                         handleSubmit(e, { addAnother: true });
@@ -420,11 +417,10 @@ export default function CustomerPage() {
                         e.preventDefault();
                         handleSubmit(e);
                       }}
-                      className={`px-4 py-2 text-sm rounded text-white ${
-                        canSave
+                      className={`px-4 py-2 text-sm rounded text-white ${canSave
                           ? "bg-purple-600 hover:bg-purple-700"
                           : "bg-purple-400 cursor-not-allowed opacity-60"
-                      }`}
+                        }`}
                     >
                       Save
                     </button>
@@ -439,11 +435,10 @@ export default function CustomerPage() {
                 <button
                   onClick={goToPreviousPage}
                   disabled={currentPage === 1}
-                  className={`p-1 rounded ${
-                    currentPage === 1
+                  className={`p-1 rounded ${currentPage === 1
                       ? "text-gray-300 cursor-not-allowed"
                       : "text-gray-600 hover:bg-gray-100"
-                  }`}
+                    }`}
                 >
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
                     <path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z" />
@@ -455,11 +450,10 @@ export default function CustomerPage() {
                 <button
                   onClick={goToNextPage}
                   disabled={currentPage === totalPages}
-                  className={`p-1 rounded ${
-                    currentPage === totalPages
+                  className={`p-1 rounded ${currentPage === totalPages
                       ? "text-gray-300 cursor-not-allowed"
                       : "text-gray-600 hover:bg-gray-100"
-                  }`}
+                    }`}
                 >
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
                     <path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z" />
@@ -475,11 +469,10 @@ export default function CustomerPage() {
                   type="button"
                   onClick={goToPreviousRecord}
                   disabled={getCurrentRecordIndex() === 0}
-                  className={`p-1 rounded ${
-                    getCurrentRecordIndex() === 0
+                  className={`p-1 rounded ${getCurrentRecordIndex() === 0
                       ? "text-gray-300 cursor-not-allowed"
                       : "text-gray-600 hover:bg-gray-100"
-                  }`}
+                    }`}
                 >
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
                     <path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z" />
@@ -492,11 +485,10 @@ export default function CustomerPage() {
                   type="button"
                   onClick={goToNextRecord}
                   disabled={getCurrentRecordIndex() === filteredParties.length - 1}
-                  className={`p-1 rounded ${
-                    getCurrentRecordIndex() === filteredParties.length - 1
+                  className={`p-1 rounded ${getCurrentRecordIndex() === filteredParties.length - 1
                       ? "text-gray-300 cursor-not-allowed"
                       : "text-gray-600 hover:bg-gray-100"
-                  }`}
+                    }`}
                 >
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
                     <path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z" />
@@ -539,11 +531,11 @@ export default function CustomerPage() {
                     <td className="px-3 py-1 border-b">{p.gstnum || "-"}</td>
                     <td className="px-3 py-1 border-b text-right">
                       {canDelete('INVENTORY', 'CUSTOMER_MASTER') && (
-                        <button 
+                        <button
                           onClick={(e) => {
                             e.stopPropagation(); // Prevent row click event
                             handleDelete(p.partyid);
-                          }} 
+                          }}
                           className="text-red-600 hover:underline"
                         >
                           Delete
@@ -571,7 +563,7 @@ export default function CustomerPage() {
                   ref={idInputRef}
                   type="text"
                   value={editingParty ? formData.PartyID : "Auto-generated"}
-                  onChange={() => {}} // No-op since it's always read-only
+                  onChange={() => { }} // No-op since it's always read-only
                   readOnly={true}
                   className="mt-1 w-full px-3 py-2 border rounded bg-gray-100 text-gray-600"
                   title={editingParty ? "Party ID cannot be changed" : "Party ID will be auto-generated when saving"}
@@ -663,11 +655,10 @@ export default function CustomerPage() {
                     type="button"
                     onClick={goToPreviousRecord}
                     disabled={getCurrentRecordIndex() === 0}
-                    className={`p-1 rounded ${
-                      getCurrentRecordIndex() === 0
+                    className={`p-1 rounded ${getCurrentRecordIndex() === 0
                         ? "text-gray-300 cursor-not-allowed"
                         : "text-gray-600 hover:bg-gray-100"
-                    }`}
+                      }`}
                   >
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
                       <path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z" />
@@ -680,11 +671,10 @@ export default function CustomerPage() {
                     type="button"
                     onClick={goToNextRecord}
                     disabled={getCurrentRecordIndex() === filteredParties.length - 1}
-                    className={`p-1 rounded ${
-                      getCurrentRecordIndex() === filteredParties.length - 1
+                    className={`p-1 rounded ${getCurrentRecordIndex() === filteredParties.length - 1
                         ? "text-gray-300 cursor-not-allowed"
                         : "text-gray-600 hover:bg-gray-100"
-                    }`}
+                      }`}
                   >
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
                       <path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z" />

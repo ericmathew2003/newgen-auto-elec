@@ -281,12 +281,10 @@ export default function AccountGroupListPage() {
           <table className="w-full">
             <thead className="bg-gray-50">
               <tr>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ID</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Group Name</th>
                 <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
                 <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Balance</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Parent Group</th>
-                <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Created</th>
                 <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
               </tr>
             </thead>
@@ -298,9 +296,6 @@ export default function AccountGroupListPage() {
                   className={canEdit('ACCOUNTS', 'GROUP_MASTER') ? "cursor-pointer hover:bg-indigo-50 transition-colors" : ""}
                   title={canEdit('ACCOUNTS', 'GROUP_MASTER') ? "Click to edit account group" : ""}
                 >
-                  <td className="px-4 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                    {group.group_id}
-                  </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 font-medium">
                     {group.group_name}
                   </td>
@@ -331,9 +326,6 @@ export default function AccountGroupListPage() {
                       ? `${parentGroupMap[group.parent_group_id] || 'Unknown'} (${group.parent_group_id})`
                       : 'Top Level'
                     }
-                  </td>
-                  <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500 text-center">
-                    {group.created_date ? new Date(group.created_date).toLocaleDateString() : 'N/A'}
                   </td>
                   <td className="px-4 py-4 whitespace-nowrap text-right text-sm font-medium">
                     {canDelete('ACCOUNTS', 'GROUP_MASTER') && (
