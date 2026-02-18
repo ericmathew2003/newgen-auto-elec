@@ -17,6 +17,8 @@ router.get('/', authenticateToken, async (req, res) => {
         debit_credit,
         value_source,
         description_template,
+        is_dynamic_dc,
+        event_code,
         created_date,
         edited_date
       FROM con_transaction_mapping
@@ -29,7 +31,7 @@ router.get('/', authenticateToken, async (req, res) => {
       params.push(transaction_type);
     }
     
-    query += ` ORDER BY transaction_type, entry_sequence`;
+    query += ` ORDER BY TRIM(transaction_type), TRIM(event_code), CAST(entry_sequence AS INTEGER)`;
     
     const result = await pool.query(query, params);
     res.json(result.rows);
@@ -53,6 +55,8 @@ router.get('/:id', authenticateToken, async (req, res) => {
         debit_credit,
         value_source,
         description_template,
+        is_dynamic_dc,
+        event_code,
         created_date,
         edited_date
       FROM con_transaction_mapping
@@ -79,13 +83,15 @@ router.post('/', authenticateToken, async (req, res) => {
       account_nature,
       debit_credit,
       value_source,
-      description_template
+      description_template,
+      is_dynamic_dc,
+      event_code
     } = req.body;
     
     // Validation
-    if (!transaction_type || !entry_sequence || !account_nature || !debit_credit || !value_source) {
+    if (!transaction_type || !entry_sequence || !account_nature || !debit_credit || !value_source || !event_code) {
       return res.status(400).json({ 
-        error: 'Transaction type, entry sequence, account nature, debit/credit flag, and value source are required' 
+        error: 'Transaction type, entry sequence, account nature, debit/credit flag, value source, and event code are required' 
       });
     }
     
@@ -93,28 +99,28 @@ router.post('/', authenticateToken, async (req, res) => {
       return res.status(400).json({ error: 'Debit/Credit flag must be D or C' });
     }
     
-    // Check for duplicate sequence within same transaction type
+    // Check for duplicate sequence within same transaction type and event code
     const duplicateCheck = await pool.query(
-      'SELECT mapping_id FROM con_transaction_mapping WHERE transaction_type = $1 AND entry_sequence = $2',
-      [transaction_type, entry_sequence]
+      'SELECT mapping_id FROM con_transaction_mapping WHERE transaction_type = $1 AND entry_sequence = $2 AND event_code = $3',
+      [transaction_type, entry_sequence, event_code]
     );
     
     if (duplicateCheck.rows.length > 0) {
       return res.status(400).json({ 
-        error: `Entry sequence ${entry_sequence} already exists for transaction type ${transaction_type}` 
+        error: `Entry sequence ${entry_sequence} already exists for transaction type ${transaction_type} and event code ${event_code}` 
       });
     }
     
     const result = await pool.query(`
       INSERT INTO con_transaction_mapping (
         transaction_type, entry_sequence, account_nature, debit_credit, 
-        value_source, description_template
+        value_source, description_template, is_dynamic_dc, event_code
       )
-      VALUES ($1, $2, $3, $4, $5, $6)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
       RETURNING *
     `, [
       transaction_type, entry_sequence, account_nature, debit_credit,
-      value_source, description_template
+      value_source, description_template, is_dynamic_dc || false, event_code
     ]);
     
     res.status(201).json(result.rows[0]);
@@ -138,13 +144,15 @@ router.put('/:id', authenticateToken, async (req, res) => {
       account_nature,
       debit_credit,
       value_source,
-      description_template
+      description_template,
+      is_dynamic_dc,
+      event_code
     } = req.body;
     
     // Validation
-    if (!transaction_type || !entry_sequence || !account_nature || !debit_credit || !value_source) {
+    if (!transaction_type || !entry_sequence || !account_nature || !debit_credit || !value_source || !event_code) {
       return res.status(400).json({ 
-        error: 'Transaction type, entry sequence, account nature, debit/credit flag, and value source are required' 
+        error: 'Transaction type, entry sequence, account nature, debit/credit flag, value source, and event code are required' 
       });
     }
     
@@ -152,15 +160,15 @@ router.put('/:id', authenticateToken, async (req, res) => {
       return res.status(400).json({ error: 'Debit/Credit flag must be D or C' });
     }
     
-    // Check for duplicate sequence within same transaction type (excluding current record)
+    // Check for duplicate sequence within same transaction type and event code (excluding current record)
     const duplicateCheck = await pool.query(
-      'SELECT mapping_id FROM con_transaction_mapping WHERE transaction_type = $1 AND entry_sequence = $2 AND mapping_id != $3',
-      [transaction_type, entry_sequence, id]
+      'SELECT mapping_id FROM con_transaction_mapping WHERE transaction_type = $1 AND entry_sequence = $2 AND event_code = $3 AND mapping_id != $4',
+      [transaction_type, entry_sequence, event_code, id]
     );
     
     if (duplicateCheck.rows.length > 0) {
       return res.status(400).json({ 
-        error: `Entry sequence ${entry_sequence} already exists for transaction type ${transaction_type}` 
+        error: `Entry sequence ${entry_sequence} already exists for transaction type ${transaction_type} and event code ${event_code}` 
       });
     }
     
@@ -173,12 +181,14 @@ router.put('/:id', authenticateToken, async (req, res) => {
         debit_credit = $4,
         value_source = $5,
         description_template = $6,
+        is_dynamic_dc = $7,
+        event_code = $8,
         edited_date = now()
-      WHERE mapping_id = $7
+      WHERE mapping_id = $9
       RETURNING *
     `, [
       transaction_type, entry_sequence, account_nature, debit_credit,
-      value_source, description_template, id
+      value_source, description_template, is_dynamic_dc || false, event_code, id
     ]);
     
     if (result.rows.length === 0) {
@@ -348,15 +358,47 @@ router.get('/preview/:transactionType', async (req, res) => {
         account_nature,
         debit_credit,
         value_source,
-        description_template
+        description_template,
+        is_dynamic_dc,
+        event_code
       FROM con_transaction_mapping
       WHERE transaction_type = $1
-      ORDER BY entry_sequence
+      ORDER BY TRIM(event_code), CAST(entry_sequence AS INTEGER)
     `, [transactionType]);
     
     res.json(result.rows);
   } catch (err) {
     console.error('Error fetching transaction mapping preview:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Get mappings by event code - useful for dynamic journal generation
+router.get('/by-event/:eventCode', authenticateToken, async (req, res) => {
+  try {
+    const { eventCode } = req.params;
+    
+    const result = await pool.query(`
+      SELECT 
+        mapping_id,
+        transaction_type,
+        entry_sequence,
+        account_nature,
+        debit_credit,
+        value_source,
+        description_template,
+        is_dynamic_dc,
+        event_code,
+        created_date,
+        edited_date
+      FROM con_transaction_mapping
+      WHERE event_code = $1
+      ORDER BY TRIM(transaction_type), TRIM(event_code), CAST(entry_sequence AS INTEGER)
+    `, [eventCode]);
+    
+    res.json(result.rows);
+  } catch (err) {
+    console.error('Error fetching mappings by event code:', err);
     res.status(500).json({ error: 'Internal server error' });
   }
 });

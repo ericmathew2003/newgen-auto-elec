@@ -21,7 +21,7 @@ router.get("/", async (req, res) => {
       `SELECT m.pret_id, m.pret_id as purch_ret_id, m.purch_ret_no, m.tran_date,
               p.partyname,
               m.taxable_total, m.cgst_amount, m.sgst_amount, m.igst_amount, m.rounded_off, m.total_amount,
-              m.is_posted
+              m.is_posted, m.is_confirmed
        FROM trn_purchase_return_master m
        LEFT JOIN tblmasparty p ON p.partyid = m.party_id
        ${filter}
@@ -109,6 +109,7 @@ router.post("/", async (req, res) => {
     rounded_off = 0,
     total_amount = 0,
     is_posted = false,
+    is_confirmed = false,
     deleted = false,
   } = header;
 
@@ -142,8 +143,8 @@ router.post("/", async (req, res) => {
     const result = await client.query(
       `INSERT INTO trn_purchase_return_master
        (fyear_id, purch_ret_no, tran_date, party_id, remark,
-        taxable_total, cgst_amount, sgst_amount, igst_amount, rounded_off, total_amount, is_posted, deleted)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
+        taxable_total, cgst_amount, sgst_amount, igst_amount, rounded_off, total_amount, is_posted, is_confirmed, deleted)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
        RETURNING pret_id, purch_ret_no`,
       [
         nn(fyear_id),
@@ -158,6 +159,7 @@ router.post("/", async (req, res) => {
         nn(rounded_off),
         nn(total_amount),
         !!is_posted,
+        !!is_confirmed,
         !!deleted,
       ]
     );
@@ -238,6 +240,7 @@ router.put("/:purchRetId", async (req, res) => {
     rounded_off = 0,
     total_amount = 0,
     is_posted = false,
+    is_confirmed = false,
     deleted = false,
   } = req.body || {};
 
@@ -246,7 +249,7 @@ router.put("/:purchRetId", async (req, res) => {
     await client.query("BEGIN");
 
     const existing = await client.query(
-      `SELECT is_posted FROM trn_purchase_return_master WHERE pret_id=$1 FOR UPDATE`,
+      `SELECT is_posted, is_confirmed FROM trn_purchase_return_master WHERE pret_id=$1 FOR UPDATE`,
       [purchRetId]
     );
 
@@ -260,8 +263,8 @@ router.put("/:purchRetId", async (req, res) => {
     await client.query(
       `UPDATE trn_purchase_return_master
        SET fyear_id=$1, tran_date=$2, party_id=$3, remark=$4,
-           taxable_total=$5, cgst_amount=$6, sgst_amount=$7, igst_amount=$8, rounded_off=$9, total_amount=$10, is_posted=$11, deleted=$12
-       WHERE pret_id=$13`,
+           taxable_total=$5, cgst_amount=$6, sgst_amount=$7, igst_amount=$8, rounded_off=$9, total_amount=$10, is_posted=$11, is_confirmed=$12, deleted=$13
+       WHERE pret_id=$14`,
       [
         nn(fyear_id),
         nn(tran_date),
@@ -274,58 +277,16 @@ router.put("/:purchRetId", async (req, res) => {
         nn(rounded_off),
         nn(total_amount),
         !!is_posted,
+        !!is_confirmed,
         !!deleted,
         purchRetId,
       ]
     );
 
-    const nowPosted = !!is_posted;
-
-    if (!wasPosted && nowPosted) {
-      // Create stock ledger entries for purchase return (OUT transactions)
-      const returnHeader = await client.query(
-        `SELECT fyear_id, tran_date FROM trn_purchase_return_master WHERE pret_id = $1`,
-        [purchRetId]
-      );
-      
-      if (returnHeader.rows.length > 0) {
-        const { fyear_id, tran_date } = returnHeader.rows[0];
-        
-        // Get return details with item info for stock ledger
-        const detailsForLedger = await client.query(
-          `SELECT d.itemcode, d.qty, i.unit 
-           FROM trn_purchase_return_detail d
-           LEFT JOIN tblMasItem i ON d.itemcode = i.itemcode
-           WHERE d.pret_id = $1`,
-          [purchRetId]
-        );
-
-        for (const row of detailsForLedger.rows || []) {
-          const { itemcode, qty, unit } = row;
-          if (!itemcode || !qty || qty <= 0) continue;
-
-          // Insert stock ledger entry for purchase return (OUT transaction - negative qty)
-          // Note: stock_ledger_id is auto-generated (identity column)
-          await client.query(
-            `INSERT INTO trn_stock_ledger 
-             (fyear_id, inv_master_id, itemcode, tran_type, tran_date, unit, qty)
-             VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-            [fyear_id, purchRetId, itemcode, 'PRET', tran_date, unit || '', -qty]
-          );
-
-          // Update item master stock (reduce stock for return)
-          await client.query(
-            `UPDATE tblMasItem 
-             SET CurStock = GREATEST(0, CurStock - $1)
-             WHERE ItemCode = $2`,
-            [qty, itemcode]
-          );
-        }
-      }
-    }
+    // NOTE: Stock updates are handled in /confirm endpoint, not here
 
     await client.query("COMMIT");
-    res.json({ success: true, posted: nowPosted });
+    res.json({ success: true });
   } catch (err) {
     await client.query("ROLLBACK");
     console.error(err);
@@ -386,6 +347,378 @@ router.post("/:purchRetId/items/replace", async (req, res) => {
     await client.query("ROLLBACK");
     console.error(err);
     res.status(500).json({ error: "Failed to replace purchase return items" });
+  } finally {
+    client.release();
+  }
+});
+
+// Confirm purchase return - Updates inventory and creates stock ledger entries
+router.post("/:purchRetId/confirm", async (req, res) => {
+  const { purchRetId } = req.params;
+  if (!/^\d+$/.test(String(purchRetId))) {
+    return res.status(400).json({ error: "Invalid purchase return id" });
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+
+    // Check if purchase return exists and is not already confirmed or posted
+    const existing = await client.query(
+      `SELECT is_confirmed, is_posted, fyear_id, tran_date FROM trn_purchase_return_master WHERE pret_id = $1 FOR UPDATE`,
+      [purchRetId]
+    );
+
+    if (existing.rowCount === 0) {
+      await client.query("ROLLBACK");
+      return res.status(404).json({ error: "Purchase return not found" });
+    }
+
+    const { is_confirmed, is_posted, fyear_id, tran_date } = existing.rows[0];
+
+    if (is_confirmed) {
+      await client.query("ROLLBACK");
+      return res.status(400).json({ error: "Purchase return is already confirmed" });
+    }
+
+    if (is_posted) {
+      await client.query("ROLLBACK");
+      return res.status(400).json({ error: "Purchase return is already posted" });
+    }
+
+    // Get return details with item info for stock ledger
+    const detailsForLedger = await client.query(
+      `SELECT d.item_code, d.qty, i.unit 
+       FROM trn_purchase_return_detail d
+       LEFT JOIN tblmasitem i ON d.item_code = i.itemcode
+       WHERE d.pret_mas_id = $1`,
+      [purchRetId]
+    );
+
+    // Create stock ledger entries and update inventory
+    for (const row of detailsForLedger.rows || []) {
+      const { item_code, qty, unit } = row;
+      if (!item_code || !qty || qty <= 0) continue;
+
+      // Insert stock ledger entry for purchase return (OUT transaction - negative qty)
+      await client.query(
+        `INSERT INTO trn_stock_ledger 
+         (fyear_id, inv_master_id, itemcode, tran_type, tran_date, unit, qty)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+        [fyear_id, purchRetId, item_code, 'PRET', tran_date, unit || '', -qty]
+      );
+
+      // Update item master stock (reduce stock for return)
+      await client.query(
+        `UPDATE tblmasitem 
+         SET curstock = GREATEST(0, curstock - $1)
+         WHERE itemcode = $2`,
+        [qty, item_code]
+      );
+    }
+
+    // Update to confirmed status
+    await client.query(
+      `UPDATE trn_purchase_return_master SET is_confirmed = true WHERE pret_id = $1`,
+      [purchRetId]
+    );
+
+    await client.query("COMMIT");
+    res.json({ success: true, message: "Purchase return confirmed and inventory updated successfully" });
+  } catch (err) {
+    await client.query("ROLLBACK");
+    console.error(err);
+    res.status(500).json({ error: "Failed to confirm purchase return" });
+  } finally {
+    client.release();
+  }
+});
+
+// Post purchase return (create accounting entries only - stock already updated in confirm)
+router.post("/:purchRetId/post", async (req, res) => {
+  const { purchRetId } = req.params;
+  if (!/^\d+$/.test(String(purchRetId))) {
+    return res.status(400).json({ error: "Invalid purchase return id" });
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+
+    // Check if purchase return exists and is confirmed but not posted
+    const existing = await client.query(
+      `SELECT is_confirmed, is_posted, fyear_id, tran_date FROM trn_purchase_return_master WHERE pret_id = $1 FOR UPDATE`,
+      [purchRetId]
+    );
+
+    if (existing.rowCount === 0) {
+      await client.query("ROLLBACK");
+      return res.status(404).json({ error: "Purchase return not found" });
+    }
+
+    const { is_confirmed, is_posted, fyear_id, tran_date } = existing.rows[0];
+
+    if (!is_confirmed) {
+      await client.query("ROLLBACK");
+      return res.status(400).json({ error: "Purchase return must be confirmed before posting" });
+    }
+
+    if (is_posted) {
+      await client.query("ROLLBACK");
+      return res.status(400).json({ error: "Purchase return is already posted" });
+    }
+
+    // NOTE: Stock updates and ledger entries are handled in /confirm endpoint
+    // This endpoint only handles accounting entries
+
+    // ========================================
+    // DYNAMIC JOURNAL GENERATION FOR PURCHASE RETURN
+    // ========================================
+    
+    // Get purchase return master data for journal generation
+    const returnMasterRes = await client.query(
+      `SELECT pret_id, fyear_id, purch_ret_no, tran_date, party_id,
+              taxable_total, cgst_amount, sgst_amount, igst_amount, rounded_off, total_amount
+       FROM trn_purchase_return_master WHERE pret_id = $1`,
+      [purchRetId]
+    );
+    
+    const returnMaster = returnMasterRes.rows[0];
+    if (!returnMaster) {
+      throw new Error('Purchase return master not found for journal generation');
+    }
+    
+    const num = (v) => parseFloat(v ?? 0) || 0;
+    
+    const totalAmount = num(returnMaster.total_amount);
+    const taxableTotal = num(returnMaster.taxable_total);
+    const cgstAmount = num(returnMaster.cgst_amount);
+    const sgstAmount = num(returnMaster.sgst_amount);
+    const igstAmount = num(returnMaster.igst_amount);
+    const roundedOff = num(returnMaster.rounded_off);
+    
+    // Get all mappings for Purchase Return
+    const mappingsRes = await client.query(`
+      SELECT 
+        mapping_id, transaction_type, event_code, entry_sequence,
+        account_nature, debit_credit, value_source, description_template, is_dynamic_dc
+      FROM con_transaction_mapping 
+      WHERE UPPER(TRIM(transaction_type)) = 'PURCHASE RETURN'
+         AND TRIM(event_code) = 'PUR_RET'
+      ORDER BY event_code, entry_sequence
+    `);
+    
+    console.log(`Query found ${mappingsRes.rows.length} mappings for Purchase Return`);
+    
+    if (mappingsRes.rows.length > 0) {
+      console.log(`Found ${mappingsRes.rows.length} journal mappings for Purchase Return`);
+      
+      // Prepare transaction data for value source mapping
+      const transactionData = {
+        PURCHASE_RETURN_TOTAL_AMOUNT: totalAmount,
+        PURCHASE_RETURN_TAXABLE_AMOUNT: taxableTotal,
+        PURCHASE_RETURN_CGST_AMOUNT: cgstAmount,
+          PURCHASE_RETURN_SGST_AMOUNT: sgstAmount,
+          PURCHASE_RETURN_IGST_AMOUNT: igstAmount,
+          ROUND_OFF_AMOUNT: roundedOff
+        };
+        
+        console.log('Transaction data for journal generation:', transactionData);
+        
+        try {
+          // Group mappings by event_code
+          const eventGroups = {};
+          mappingsRes.rows.forEach(mapping => {
+            if (!eventGroups[mapping.event_code]) {
+              eventGroups[mapping.event_code] = [];
+            }
+            eventGroups[mapping.event_code].push(mapping);
+          });
+          
+          console.log(`Found ${Object.keys(eventGroups).length} event codes:`, Object.keys(eventGroups));
+          
+          // Create journal entries for each event code
+          for (const [eventCode, mappings] of Object.entries(eventGroups)) {
+            console.log(`\n=== Creating journal for event: ${eventCode} ===`);
+            console.log(`Event has ${mappings.length} mappings`);
+            
+            // Create journal master entry
+            const journalMasterRes = await client.query(`
+              INSERT INTO public.acc_journal_master 
+              (journal_date, finyearid, journal_serial, source_document_type, source_document_ref, 
+               source_document_id, total_debit, total_credit, narration, created_date)
+              VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW())
+              RETURNING journal_mas_id
+            `, [
+              returnMaster.tran_date,
+              returnMaster.fyear_id || 1,
+              `PRET-${returnMaster.purch_ret_no}-${eventCode}`,
+              'PURCHASE_RETURN',
+              `PRET-${returnMaster.purch_ret_no}-${eventCode}`,
+              purchRetId,
+              0, // Will be updated after calculating totals
+              0,
+              `Purchase Return ${returnMaster.purch_ret_no} - ${eventCode}`
+            ]);
+            
+            const journalMasId = journalMasterRes.rows[0].journal_mas_id;
+            console.log(`Created journal master with ID: ${journalMasId} for event: ${eventCode}`);
+            
+            let eventDebits = 0, eventCredits = 0;
+            
+            // Generate journal detail entries
+            console.log(`\nProcessing ${mappings.length} mappings for event ${eventCode}:`);
+            for (const mapping of mappings) {
+              const amount = transactionData[mapping.value_source] || 0;
+              
+              console.log(`\n--- Processing mapping ${mapping.entry_sequence} ---`);
+              console.log(`Account Nature: ${mapping.account_nature}`);
+              console.log(`Debit/Credit: ${mapping.debit_credit}`);
+              console.log(`Value Source: ${mapping.value_source}`);
+              console.log(`Amount from transaction data: ${amount}`);
+              
+              if (amount > 0) {
+                // Get account ID from account nature
+                let accountRes = await client.query(`
+                  SELECT account_id, account_code, account_name, account_nature 
+                  FROM public.acc_mas_coa 
+                  WHERE TRIM(UPPER(account_nature)) = TRIM(UPPER($1)) AND is_active = true
+                  LIMIT 1
+                `, [mapping.account_nature]);
+                
+                // If exact match fails, try pattern matching
+                if (accountRes.rows.length === 0) {
+                  accountRes = await client.query(`
+                    SELECT account_id, account_code, account_name, account_nature 
+                    FROM public.acc_mas_coa 
+                    WHERE account_nature ILIKE '%' || $1 || '%' AND is_active = true
+                    LIMIT 1
+                  `, [mapping.account_nature]);
+                }
+                
+                let accountId = null;
+                if (accountRes.rows.length > 0) {
+                  accountId = accountRes.rows[0].account_id;
+                  console.log(`Found account ID ${accountId} (${accountRes.rows[0].account_code} - ${accountRes.rows[0].account_name})`);
+                } else {
+                  console.log(`❌ WARNING: No account found for nature: ${mapping.account_nature}`);
+                  console.log(`   Skipping this entry`);
+                  continue;
+                }
+                
+                // Generate description from template
+                let description = mapping.description_template || `${mapping.account_nature} - Return ${returnMaster.purch_ret_no}`;
+                description = description
+                  .replace('{{purch_ret_no}}', returnMaster.purch_ret_no || '')
+                  .replace('{{tran_date}}', returnMaster.tran_date || '');
+                
+                console.log(`✅ Creating journal detail entry:`);
+                console.log(`   Account: ${accountRes.rows[0].account_name} (${accountRes.rows[0].account_code})`);
+                console.log(`   ${mapping.debit_credit === 'D' ? 'Debit' : 'Credit'}: ${amount}`);
+                console.log(`   Description: ${description}`);
+                
+                // Insert journal detail entry
+                await client.query(`
+                  INSERT INTO public.acc_journal_detail 
+                  (journal_mas_id, account_id, party_id, debit_amount, credit_amount, description, created_date)
+                  VALUES ($1, $2, $3, $4, $5, $6, NOW())
+                `, [
+                  journalMasId,
+                  accountId,
+                  returnMaster.party_id,
+                  mapping.debit_credit === 'D' ? amount : 0,
+                  mapping.debit_credit === 'C' ? amount : 0,
+                  description
+                ]);
+                
+                // Track totals
+                if (mapping.debit_credit === 'D') {
+                  eventDebits += amount;
+                } else {
+                  eventCredits += amount;
+                }
+              } else {
+                console.log(`❌ SKIPPING mapping ${mapping.account_nature} (${mapping.debit_credit})`);
+                console.log(`   Reason: Amount is ${amount}`);
+              }
+            }
+            
+            // Update journal master with totals
+            await client.query(`
+              UPDATE public.acc_journal_master 
+              SET total_debit = $1, total_credit = $2
+              WHERE journal_mas_id = $3
+            `, [eventDebits, eventCredits, journalMasId]);
+            
+            console.log(`Journal entries created for event ${eventCode}. Debits: ${eventDebits}, Credits: ${eventCredits}`);
+          }
+          
+          console.log(`\n=== All journal entries created successfully ===`);
+          console.log(`Total events processed: ${Object.keys(eventGroups).length}`);
+          
+        } catch (journalError) {
+          console.error('Error creating journal entries:', journalError);
+          throw journalError; // Re-throw to trigger rollback
+        }
+      } else {
+        console.log('No journal mappings found for Purchase Return - skipping journal creation');
+      }
+
+    // Populate acc_trn_invoice table for purchase return tracking
+    console.log(`Populating acc_trn_invoice table for purchase return ${purchRetId}...`);
+    try {
+      // Get the full purchase return data
+      const returnData = await client.query(
+        `SELECT fyear_id, party_id, purch_ret_no, tran_date, total_amount 
+         FROM trn_purchase_return_master WHERE pret_id = $1`,
+        [purchRetId]
+      );
+      
+      if (returnData.rows.length > 0) {
+        const returnInfo = returnData.rows[0];
+        
+        // For purchase returns, use positive amounts (the tran_type indicates it's a return)
+        // The constraint requires tran_amount >= 0 and paid_amount >= 0
+        await client.query(`
+          INSERT INTO public.acc_trn_invoice (
+            fyear_id, party_id, tran_type, inv_master_id, tran_date, 
+            party_inv_no, party_inv_date, tran_amount, paid_amount, 
+            balance_amount, status, inv_reference, is_posted
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+        `, [
+          returnInfo.fyear_id || 1,      // fyear_id
+          returnInfo.party_id,           // party_id (supplier)
+          'PUR_RET',                     // tran_type (Purchase Return)
+          purchRetId,                    // inv_master_id (using return ID)
+          returnInfo.tran_date,          // tran_date
+          returnInfo.purch_ret_no,       // party_inv_no (return number)
+          returnInfo.tran_date,          // party_inv_date
+          Math.abs(returnInfo.total_amount || 0), // tran_amount (positive - constraint requires >= 0)
+          0,                             // paid_amount (initially 0)
+          Math.abs(returnInfo.total_amount || 0), // balance_amount (positive - calculated as tran - paid)
+          0,                             // status (0 = Open)
+          `PRET-${returnInfo.purch_ret_no}`, // inv_reference
+          true                           // is_posted
+        ]);
+        console.log(`Successfully added purchase return ${returnInfo.purch_ret_no} to acc_trn_invoice table`);
+      }
+    } catch (accTrnError) {
+      console.error('Error populating acc_trn_invoice table for purchase return:', accTrnError);
+      // Don't throw error - this shouldn't stop the posting process
+    }
+
+    // Update to posted status (after all journal and accounting entries are created)
+    await client.query(
+      `UPDATE trn_purchase_return_master SET is_posted = true WHERE pret_id = $1`,
+      [purchRetId]
+    );
+
+    await client.query("COMMIT");
+    res.json({ success: true, message: "Purchase return posted successfully" });
+  } catch (err) {
+    await client.query("ROLLBACK");
+    console.error(err);
+    res.status(500).json({ error: "Failed to post purchase return" });
   } finally {
     client.release();
   }

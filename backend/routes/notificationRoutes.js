@@ -80,13 +80,15 @@ router.get("/", async (req, res) => {
       console.log("Recent sales query failed:", err.message);
     }
 
-    // 4. Recent Purchases (if table exists)
+    // 4. Recent Purchases (using correct table name)
     try {
       const recentPurchasesResult = await pool.query(`
-        SELECT h.tranid, h.trdate, h.invamount, p.partyname
-        FROM tbltrnhdr h
-        LEFT JOIN tblmasparty p ON p.partyid = h.partyid
-        ORDER BY h.trdate DESC, h.tranid DESC
+        SELECT h.inv_master_id as tranid, h.inv_date as trdate, h.tot_amount as invamount, 
+               COALESCE(p.partyname, 'Unknown') as partyname
+        FROM public.trn_invoice_master h
+        LEFT JOIN public.tblmasparty p ON p.partyid = h.party_id
+        WHERE h.is_deleted = false
+        ORDER BY h.inv_date DESC, h.inv_master_id DESC
         LIMIT 2
       `);
 

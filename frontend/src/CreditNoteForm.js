@@ -35,6 +35,7 @@ const CreditNoteForm = () => {
   const [nextTempId, setNextTempId] = useState(2);
   const [accounts, setAccounts] = useState([]);
   const [parties, setParties] = useState([]);
+  const [isSaved, setIsSaved] = useState(false); // Track if credit note has been saved
 
   useEffect(() => {
     fetchAccounts();
@@ -232,6 +233,7 @@ const CreditNoteForm = () => {
       const result = response.data;
       const action = isEditMode ? 'updated' : 'created';
       showMessage(`Credit note ${action} successfully! (Serial: ${result.creditNoteSerial || masterData.creditNoteSerial})`, 'success');
+      setIsSaved(true); // Mark as saved
 
       if (isEditMode) {
         fetchCreditNoteData();
@@ -547,7 +549,8 @@ const CreditNoteForm = () => {
                     ...initialMasterState,
                     creditNoteSerial: masterData.creditNoteSerial,
                   }); 
-                  setCreditNoteDetails([initialLineItem]); 
+                  setCreditNoteDetails([initialLineItem]);
+                  setIsSaved(false);
                 }}
                 className="flex items-center space-x-2 px-6 py-3 border border-gray-300 text-gray-700 font-semibold rounded-lg shadow-sm hover:bg-gray-100 transition duration-200"
                 disabled={isLoading}
@@ -567,25 +570,45 @@ const CreditNoteForm = () => {
               </button>
             </div>
 
-            {((isEditMode && canEdit('ACCOUNTS', 'CREDIT_NOTE')) || (!isEditMode && canCreate('ACCOUNTS', 'CREDIT_NOTE'))) && (
-              <button
-                type="submit"
-                disabled={isLoading || !isBalanced || totalDebit === 0}
-                className={`flex items-center space-x-2 px-6 py-3 font-semibold rounded-lg shadow-lg transition duration-200 ${
-                  isLoading || !isBalanced || totalDebit === 0
-                    ? 'bg-gray-400 text-white cursor-not-allowed' 
-                    : 'bg-green-600 text-white hover:bg-green-700'
-                }`}
-              >
-                <Save className="w-4 h-4" />
-                <span>
-                  {isLoading 
-                    ? (isEditMode ? 'Updating...' : 'Creating...') 
-                    : (isEditMode ? 'Update Credit Note' : 'Create Credit Note')
-                  }
-                </span>
-              </button>
-            )}
+            <div className="flex space-x-3">
+              {isSaved && !isEditMode && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMasterData(initialMasterState);
+                    setCreditNoteDetails([initialLineItem]);
+                    setNextTempId(2);
+                    setIsSaved(false);
+                    fetchCreditNoteSerial();
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                  }}
+                  className="flex items-center space-x-2 px-6 py-3 border border-transparent text-white font-semibold rounded-lg shadow-lg bg-indigo-600 hover:bg-indigo-700 transition duration-200"
+                >
+                  <PlusCircle className="w-4 h-4" />
+                  <span>Add New</span>
+                </button>
+              )}
+
+              {((isEditMode && canEdit('ACCOUNTS', 'CREDIT_NOTE')) || (!isEditMode && canCreate('ACCOUNTS', 'CREDIT_NOTE'))) && (
+                <button
+                  type="submit"
+                  disabled={isLoading || !isBalanced || totalDebit === 0}
+                  className={`flex items-center space-x-2 px-6 py-3 font-semibold rounded-lg shadow-lg transition duration-200 ${
+                    isLoading || !isBalanced || totalDebit === 0
+                      ? 'bg-gray-400 text-white cursor-not-allowed' 
+                      : 'bg-green-600 text-white hover:bg-green-700'
+                  }`}
+                >
+                  <Save className="w-4 h-4" />
+                  <span>
+                    {isLoading 
+                      ? (isEditMode ? 'Updating...' : 'Creating...') 
+                      : (isEditMode ? 'Update Credit Note' : 'Create Credit Note')
+                    }
+                  </span>
+                </button>
+              )}
+            </div>
           </div>
         </form>
       </div>

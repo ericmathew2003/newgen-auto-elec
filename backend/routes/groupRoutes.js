@@ -12,7 +12,7 @@ router.post("/add", async (req, res) => {
     // Get the next available GroupID
     const maxIdResult = await pool.query("SELECT COALESCE(MAX(GroupID), 0) + 1 as nextid FROM tblMasGroup");
     const nextGroupID = maxIdResult.rows[0].nextid;
-    
+
     await pool.query(
       `INSERT INTO tblMasGroup (GroupID, GroupName, created_date, edited_date) 
        VALUES ($1, $2, NOW(), NOW())`,
@@ -49,9 +49,9 @@ router.delete("/delete/:id", async (req, res) => {
       "SELECT COUNT(*) as count FROM tblmasitem WHERE groupid = $1",
       [id]
     );
-    
+
     const itemCount = parseInt(itemCheck.rows[0].count);
-    
+
     if (itemCount > 0) {
       return res.status(400).json({
         error: "Cannot delete group",
@@ -61,7 +61,7 @@ router.delete("/delete/:id", async (req, res) => {
 
     // If no references found, proceed with deletion
     const deleteResult = await pool.query("DELETE FROM tblMasGroup WHERE GroupID = $1", [id]);
-    
+
     if (deleteResult.rowCount === 0) {
       return res.status(404).json({ error: "Group not found" });
     }

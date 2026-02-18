@@ -34,6 +34,7 @@ router.post("/", async (req, res) => {
     igst_amount = 0,
     description = "",
     is_posted = false,
+    is_confirmed = false,
     is_deleted = false,
   } = req.body || {};
 
@@ -58,8 +59,8 @@ router.post("/", async (req, res) => {
       `INSERT INTO public.trn_invoice_master
        (fyear_id, inv_no, inv_date, ref_no, party_id, customer_name, account_id,
         taxable_tot, dis_perc, dis_amount, misc_per_add, misc_amount_add, tot_avg_cost, tot_amount, rounded_off,
-        cgst_amount, sgst_amount, igst_amount, description, is_posted, is_deleted)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21)
+        cgst_amount, sgst_amount, igst_amount, description, is_posted, is_confirmed, is_deleted)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22)
        RETURNING inv_master_id, inv_no`,
       [
         nn(fyear_id),
@@ -82,6 +83,7 @@ router.post("/", async (req, res) => {
         nn(igst_amount),
         description ?? "",
         !!is_posted,
+        !!is_confirmed,
         !!is_deleted,
       ]
     );
@@ -123,6 +125,7 @@ router.put("/:invMasterId", async (req, res) => {
     igst_amount = 0,
     description = "",
     is_posted = false,
+    is_confirmed = false,
     is_deleted = false,
   } = req.body || {};
 
@@ -132,8 +135,8 @@ router.put("/:invMasterId", async (req, res) => {
        SET fyear_id=$1, inv_no=$2, inv_date=$3, ref_no=$4, party_id=$5, customer_name=$6,
            account_id=$7, taxable_tot=$8, dis_perc=$9, dis_amount=$10, misc_per_add=$11, misc_amount_add=$12,
            tot_avg_cost=$13, tot_amount=$14, rounded_off=$15, cgst_amount=$16, sgst_amount=$17, igst_amount=$18,
-           description=$19, is_posted=$20, is_deleted=$21
-       WHERE inv_master_id=$22`,
+           description=$19, is_posted=$20, is_confirmed=$21, is_deleted=$22
+       WHERE inv_master_id=$23`,
       [
         nn(fyear_id),
         nn(inv_no),
@@ -155,6 +158,7 @@ router.put("/:invMasterId", async (req, res) => {
         nn(igst_amount),
         description ?? "",
         !!is_posted,
+        !!is_confirmed,
         !!is_deleted,
         invMasterId,
       ]
@@ -227,7 +231,8 @@ router.get("/summary", async (req, res) => {
         m.igst_amount,
         m.rounded_off,
         m.tot_amount,
-        m.is_posted
+        m.is_posted,
+        m.is_confirmed
       FROM public.trn_invoice_master m
       LEFT JOIN public.tblmasparty p ON p.partyid = m.party_id
       WHERE m.inv_date >= $1 AND m.inv_date <= $2
@@ -344,7 +349,7 @@ router.get("/", async (req, res) => {
       `SELECT m.inv_master_id, m.inv_no, m.inv_date,
               COALESCE(p.partyname, m.customer_name) AS customer_name,
               m.taxable_tot, m.cgst_amount, m.sgst_amount, m.igst_amount, m.tot_amount, m.rounded_off,
-              m.is_posted
+              m.is_posted, m.is_confirmed
        FROM public.trn_invoice_master m
        LEFT JOIN public.tblmasparty p ON p.partyid = m.party_id
        ${filter}
@@ -474,6 +479,88 @@ router.delete("/:invMasterId", async (req, res) => {
   }
 });
 
+// Confirm sales invoice (set is_confirmed = true)
+// Confirm sales invoice - Updates inventory and creates stock ledger entries
+router.post("/:invMasterId/confirm", async (req, res) => {
+  const { invMasterId } = req.params;
+  
+  if (!/^\d+$/.test(String(invMasterId))) {
+    return res.status(400).json({ error: "Invalid invoice id" });
+  }
+
+  const client = await pool.connect();
+  const num = (v) => parseFloat(v ?? 0) || 0;
+  
+  try {
+    await client.query("BEGIN");
+
+    // Check if invoice exists and is not already confirmed or posted
+    const checkResult = await client.query(
+      `SELECT inv_master_id, fyear_id, inv_date, is_confirmed, is_posted 
+       FROM public.trn_invoice_master WHERE inv_master_id = $1`,
+      [invMasterId]
+    );
+
+    if (checkResult.rows.length === 0) {
+      await client.query("ROLLBACK");
+      return res.status(404).json({ error: "Invoice not found" });
+    }
+
+    const invoice = checkResult.rows[0];
+    if (invoice.is_confirmed) {
+      await client.query("ROLLBACK");
+      return res.status(409).json({ error: "Invoice already confirmed" });
+    }
+
+    if (invoice.is_posted) {
+      await client.query("ROLLBACK");
+      return res.status(409).json({ error: "Invoice already posted" });
+    }
+
+    // Stock ledger (per item detail; negative quantity for sales)
+    const detRes = await client.query(
+      `SELECT inv_detail_id, itemcode, unit, qty, fyear_id FROM public.trn_invoice_detail WHERE inv_master_id=$1 ORDER BY srno`,
+      [invMasterId]
+    );
+    
+    for (const d of detRes.rows) {
+      const qty = num(d.qty);
+      const qtyNeg = -1 * qty;
+      
+      // Insert stock ledger with negative quantity for sale
+      await client.query(
+        `INSERT INTO public.trn_stock_ledger
+           (fyear_id, inv_master_id, inv_detail_id, itemcode, tran_type, tran_date, unit, qty)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+        [invoice.fyear_id ?? d.fyear_id ?? null, invMasterId, d.inv_detail_id, d.itemcode, 'Sale', invoice.inv_date, d.unit, qtyNeg]
+      );
+      
+      // Decrease current stock in item master
+      await client.query(
+        `UPDATE public.tblmasitem
+           SET curstock = COALESCE(curstock, 0) - $1
+         WHERE itemcode = $2`,
+        [qty, d.itemcode]
+      );
+    }
+
+    // Mark as confirmed
+    await client.query(
+      `UPDATE public.trn_invoice_master SET is_confirmed = TRUE WHERE inv_master_id = $1`,
+      [invMasterId]
+    );
+
+    await client.query("COMMIT");
+    res.json({ success: true, message: "Invoice confirmed and inventory updated successfully" });
+  } catch (err) {
+    await client.query("ROLLBACK");
+    console.error("Error confirming invoice:", err);
+    res.status(500).json({ error: "Failed to confirm invoice" });
+  } finally {
+    client.release();
+  }
+});
+
 // Mark sales invoice as posted (locked) + create accounting and stock ledger entries atomically
 router.post("/:invMasterId/post", async (req, res) => {
   const { invMasterId } = req.params;
@@ -485,7 +572,7 @@ router.post("/:invMasterId/post", async (req, res) => {
     // Fetch invoice master
     const hdrRes = await client.query(
       `SELECT inv_master_id, fyear_id, inv_no, inv_date, party_id, customer_name, account_id,
-              taxable_tot, cgst_amount, sgst_amount, igst_amount, tot_amount, rounded_off, is_posted
+              taxable_tot, cgst_amount, sgst_amount, igst_amount, tot_amount, rounded_off, is_posted, is_confirmed
          FROM public.trn_invoice_master WHERE inv_master_id=$1`,
       [invMasterId]
     );
@@ -501,6 +588,12 @@ router.post("/:invMasterId/post", async (req, res) => {
       return res.status(409).json({ error: "Invoice already posted" });
     }
 
+    // Check if invoice is confirmed before posting
+    if (!m.is_confirmed) {
+      await client.query("ROLLBACK");
+      return res.status(400).json({ error: "Invoice must be confirmed before posting" });
+    }
+
     const totAmount = num(m.tot_amount);
     const roundOff = num(m.rounded_off);
     const taxableTot = num(m.taxable_tot);
@@ -509,43 +602,304 @@ router.post("/:invMasterId/post", async (req, res) => {
     const igstAmt = num(m.igst_amount);
     const finalTotal = totAmount + roundOff; // final invoice amount
 
-    // Note: acc_trn_invoice and journal table updates removed as requested
+    // ========================================
+    // DYNAMIC JOURNAL GENERATION USING EVENT-BASED APPROACH
+    // ========================================
+    
+    // Get all mappings for Sales-related events (SALES_REV and COGS)
+    const mappingsRes = await client.query(`
+      SELECT 
+        mapping_id, transaction_type, event_code, entry_sequence,
+        account_nature, debit_credit, value_source, description_template, is_dynamic_dc
+      FROM con_transaction_mapping 
+      WHERE (UPPER(TRIM(transaction_type)) = 'SALES' OR UPPER(TRIM(transaction_type)) = 'SALES INVOICE')
+         AND (TRIM(event_code) IN ('SALES_REV', 'COGS') 
+              OR UPPER(TRIM(event_code)) = 'SALES' 
+              OR UPPER(TRIM(event_code)) = 'SALE')
+      ORDER BY event_code, entry_sequence
+    `);
 
-    // Note: Journal entries and ledger entries removed as requested
-
-    // Stock ledger (per item detail; negative quantity for sales)
-    const detRes = await client.query(
-      `SELECT inv_detail_id, itemcode, unit, qty, fyear_id FROM public.trn_invoice_detail WHERE inv_master_id=$1 ORDER BY srno`,
-      [invMasterId]
-    );
-    for (const d of detRes.rows) {
-      const qty = num(d.qty);
-      const qtyNeg = -1 * qty;
-      // Insert stock ledger with negative quantity for sale
-      await client.query(
-        `INSERT INTO public.trn_stock_ledger
-           (fyear_id, inv_master_id, inv_detail_id, itemcode, tran_type, tran_date, unit, qty)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
-        [m.fyear_id ?? d.fyear_id ?? null, invMasterId, d.inv_detail_id, d.itemcode, 'Sale', m.inv_date, d.unit, qtyNeg]
-      );
-      // Decrease current stock in item master
-      await client.query(
-        `UPDATE public.tblmasitem
-           SET curstock = COALESCE(curstock, 0) - $1
-         WHERE itemcode = $2`,
-        [qty, d.itemcode]
-      );
+    console.log(`Query found ${mappingsRes.rows.length} mappings for sales-related events`);
+    if (mappingsRes.rows.length > 0) {
+      console.log('Found mappings by event code:');
+      const groupedMappings = {};
+      mappingsRes.rows.forEach(m => {
+        if (!groupedMappings[m.event_code]) groupedMappings[m.event_code] = [];
+        groupedMappings[m.event_code].push(`${m.account_nature} (${m.debit_credit})`);
+      });
+      Object.keys(groupedMappings).forEach(eventCode => {
+        console.log(`  ${eventCode}: ${groupedMappings[eventCode].join(', ')}`);
+      });
+      
+      // Check specifically for COGS mappings
+      const cogsMappings = mappingsRes.rows.filter(m => m.event_code === 'COGS');
+      console.log(`COGS mappings found: ${cogsMappings.length}`);
+      if (cogsMappings.length === 0) {
+        console.log('❌ WARNING: No COGS mappings found! COGS journal entries will be skipped.');
+        console.log('Check that COGS mappings exist with event_code = "COGS"');
+      }
     }
 
+    if (mappingsRes.rows.length > 0) {
+      console.log(`Found ${mappingsRes.rows.length} journal mappings for Sales event`);
+      console.log('All mappings found:');
+      mappingsRes.rows.forEach((mapping, index) => {
+        console.log(`  ${index + 1}. Event: ${mapping.event_code}, Nature: ${mapping.account_nature}, Dr/Cr: ${mapping.debit_credit}, Source: ${mapping.value_source}`);
+      });
+      
+      // Prepare transaction data for value source mapping
+      // First, calculate COGS from invoice details
+      let cogsAmount = 0;
+      try {
+        const cogsRes = await client.query(`
+          SELECT COALESCE(SUM(d.avg_cost * d.qty), 0) as total_cogs
+          FROM public.trn_invoice_detail d
+          WHERE d.inv_master_id = $1
+        `, [invMasterId]);
+        
+        cogsAmount = parseFloat(cogsRes.rows[0]?.total_cogs || 0);
+        console.log(`Calculated COGS amount: ${cogsAmount}`);
+      } catch (cogsError) {
+        console.log('Error calculating COGS:', cogsError.message);
+        cogsAmount = 0;
+      }
+
+      const transactionData = {
+        SALES_TOTAL_AMOUNT: finalTotal,
+        SALES_TAXABLE_AMOUNT: taxableTot,
+        SALES_CGST_AMOUNT: cgstAmt,
+        SALES_SGST_AMOUNT: sgstAmt,
+        SALES_IGST_AMOUNT: igstAmt,
+        SALES_DISCOUNT_AMOUNT: 0, // Add if needed
+        ROUND_OFF_AMOUNT: roundOff,
+        COST_OF_GOODS_SOLD: cogsAmount
+      };
+
+      console.log('Transaction data for journal generation:', transactionData);
+
+      try {
+        // Group mappings by event_code to create separate journal entries
+        const eventGroups = {};
+        mappingsRes.rows.forEach(mapping => {
+          if (!eventGroups[mapping.event_code]) {
+            eventGroups[mapping.event_code] = [];
+          }
+          eventGroups[mapping.event_code].push(mapping);
+        });
+
+        console.log(`Found ${Object.keys(eventGroups).length} event codes:`, Object.keys(eventGroups));
+
+        // Create separate journal entries for each event code
+        for (const [eventCode, mappings] of Object.entries(eventGroups)) {
+          console.log(`\n=== Creating journal for event: ${eventCode} ===`);
+        console.log(`Event has ${mappings.length} mappings`);
+        
+        // Debug: Log transaction data for this event
+        console.log('Available transaction data:');
+        Object.entries(transactionData).forEach(([key, value]) => {
+          console.log(`  ${key}: ${value}`);
+        });
+          
+          // Create journal master entry for this event
+          const journalMasterRes = await client.query(`
+            INSERT INTO public.acc_journal_master 
+            (journal_date, finyearid, journal_serial, source_document_type, source_document_ref, 
+             source_document_id, total_debit, total_credit, narration, created_date)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW())
+            RETURNING journal_mas_id
+          `, [
+            m.inv_date,
+            m.fyear_id || 1,
+            `SALES-${m.inv_no}-${eventCode}`, // Include event code in serial
+            'SALES_INVOICE',
+            `INV-${m.inv_no}-${eventCode}`,
+            invMasterId,
+            0, // Will be updated after calculating totals
+            0,
+            `Sales Invoice ${m.inv_no} - ${eventCode} - ${m.customer_name || 'Unknown Customer'}`
+          ]);
+
+          const journalMasId = journalMasterRes.rows[0].journal_mas_id;
+          console.log(`Created journal master with ID: ${journalMasId} for event: ${eventCode}`);
+          
+          let eventDebits = 0, eventCredits = 0;
+
+          // Generate journal detail entries for this event
+          console.log(`\nProcessing ${mappings.length} mappings for event ${eventCode}:`);
+          for (const mapping of mappings) {
+            const amount = transactionData[mapping.value_source] || 0;
+            
+            console.log(`\n--- Processing mapping ${mapping.entry_sequence} ---`);
+            console.log(`Account Nature: ${mapping.account_nature}`);
+            console.log(`Debit/Credit: ${mapping.debit_credit}`);
+            console.log(`Value Source: ${mapping.value_source}`);
+            console.log(`Amount from transaction data: ${amount}`);
+            
+            if (amount > 0) {
+              
+              // Get account ID from account nature (flexible matching)
+              // First try exact match, then try pattern matching for transaction-specific natures
+              let accountRes = await client.query(`
+                SELECT account_id, account_code, account_name, account_nature 
+                FROM public.acc_mas_coa 
+                WHERE TRIM(UPPER(account_nature)) = TRIM(UPPER($1)) AND is_active = true
+                LIMIT 1
+              `, [mapping.account_nature]);
+
+              // If exact match fails, try pattern matching (e.g., 'Sales Invoice ("STOCK_ON_HAND")')
+              if (accountRes.rows.length === 0) {
+                accountRes = await client.query(`
+                  SELECT account_id, account_code, account_name, account_nature 
+                  FROM public.acc_mas_coa 
+                  WHERE account_nature ILIKE '%' || $1 || '%' AND is_active = true
+                  LIMIT 1
+                `, [mapping.account_nature]);
+              }
+
+              let accountId = null;
+              if (accountRes.rows.length > 0) {
+                accountId = accountRes.rows[0].account_id;
+                console.log(`Found account ID ${accountId} (${accountRes.rows[0].account_code} - ${accountRes.rows[0].account_name}) for nature: ${mapping.account_nature}`);
+              } else {
+                console.log(`❌ WARNING: No account found for nature: ${mapping.account_nature}`);
+                console.log(`   Skipping this entry - please ensure an account exists in Chart of Accounts`);
+                console.log(`   with account_nature = "${mapping.account_nature}" and is_active = true`);
+                continue;
+              }
+
+              // Generate description from template
+              let description = mapping.description_template || `${mapping.account_nature} - Invoice ${m.inv_no}`;
+              description = description
+                .replace('{{customer_name}}', m.customer_name || 'Unknown Customer')
+                .replace('{{invoice_no}}', m.inv_no || '')
+                .replace('{{invoice_date}}', m.inv_date || '');
+
+              console.log(`✅ Creating journal detail entry:`);
+              console.log(`   Account: ${accountRes.rows[0].account_name} (${accountRes.rows[0].account_code})`);
+              console.log(`   ${mapping.debit_credit === 'D' ? 'Debit' : 'Credit'}: ${amount}`);
+              console.log(`   Description: ${description}`);
+
+              // Insert journal detail entry
+              await client.query(`
+                INSERT INTO public.acc_journal_detail 
+                (journal_mas_id, account_id, party_id, debit_amount, credit_amount, description, created_date)
+                VALUES ($1, $2, $3, $4, $5, $6, NOW())
+              `, [
+                journalMasId,
+                accountId,
+                m.party_id,
+                mapping.debit_credit === 'D' ? amount : 0,
+                mapping.debit_credit === 'C' ? amount : 0,
+                description
+              ]);
+
+              // Track totals for this event
+              if (mapping.debit_credit === 'D') {
+                eventDebits += amount;
+              } else {
+                eventCredits += amount;
+              }
+            } else {
+              console.log(`❌ SKIPPING mapping ${mapping.account_nature} (${mapping.debit_credit})`);
+              console.log(`   Reason: Amount is ${amount} (value_source: ${mapping.value_source})`);
+              console.log(`   This is why the journal entry is not being created!`);
+              
+              // Additional debugging for zero amounts
+              if (amount === 0) {
+                console.log(`   🔍 Debug: ${mapping.value_source} = 0 in transaction data`);
+                if (mapping.value_source === 'COST_OF_GOODS_SOLD') {
+                  console.log(`   💡 COGS is 0 - check if invoice items have avg_cost values`);
+                }
+              }
+            }
+          }
+
+          // Update journal master with correct totals for this event
+          await client.query(`
+            UPDATE public.acc_journal_master 
+            SET total_debit = $1, total_credit = $2
+            WHERE journal_mas_id = $3
+          `, [eventDebits, eventCredits, journalMasId]);
+          
+          console.log(`Journal entries created for event ${eventCode}. Debits: ${eventDebits}, Credits: ${eventCredits}`);
+        }
+        
+        console.log(`\n=== All journal entries created successfully ===`);
+        console.log(`Total events processed: ${Object.keys(eventGroups).length}`);
+        
+      } catch (journalError) {
+        console.error('Error creating journal entries:', journalError);
+        throw journalError; // Re-throw to trigger rollback
+      }
+    } else {
+      console.log('No journal mappings found for sales-related events - skipping journal creation');
+      console.log('Available event codes in database:');
+      
+      // Show what event codes actually exist
+      const allEventsRes = await client.query(`
+        SELECT DISTINCT event_code, COUNT(*) as count 
+        FROM con_transaction_mapping 
+        GROUP BY event_code 
+        ORDER BY event_code
+      `);
+      
+      allEventsRes.rows.forEach(row => {
+        console.log(`  "${row.event_code}" (${row.count} mappings)`);
+      });
+    }
+
+    // NOTE: Stock ledger and inventory updates are handled in /confirm endpoint
+    // This endpoint only handles accounting entries
+
     // Mark as posted
+    console.log(`Marking invoice ${invMasterId} as posted...`);
     await client.query(`UPDATE public.trn_invoice_master SET is_posted = TRUE WHERE inv_master_id = $1`, [invMasterId]);
+    
+    // Populate acc_trn_invoice table for accounts receivable tracking
+    console.log(`Populating acc_trn_invoice table for invoice ${invMasterId}...`);
+    try {
+      await client.query(`
+        INSERT INTO public.acc_trn_invoice (
+          fyear_id, party_id, tran_type, inv_master_id, tran_date, 
+          party_inv_no, party_inv_date, tran_amount, paid_amount, 
+          balance_amount, status, inv_reference, is_posted
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+      `, [
+        m.fyear_id || 1,           // fyear_id
+        m.party_id,                // party_id (customer)
+        'SAL',                     // tran_type (Sales)
+        invMasterId,               // inv_master_id
+        m.inv_date,                // tran_date
+        m.inv_no,                  // party_inv_no (our invoice number)
+        m.inv_date,                // party_inv_date (same as invoice date)
+        finalTotal,                // tran_amount (total invoice amount)
+        0,                         // paid_amount (initially 0)
+        finalTotal,                // balance_amount (initially full amount)
+        0,                         // status (0 = Open, 1 = Partial, 2 = Paid)
+        `INV-${m.inv_no}`,         // inv_reference
+        true                       // is_posted
+      ]);
+      console.log(`Successfully added invoice ${m.inv_no} to acc_trn_invoice table`);
+    } catch (accTrnError) {
+      console.error('Error populating acc_trn_invoice table:', accTrnError);
+      // Don't throw error - this shouldn't stop the posting process
+    }
+    
+    // Verify the update worked
+    const verifyResult = await client.query(`SELECT is_posted, is_confirmed FROM public.trn_invoice_master WHERE inv_master_id = $1`, [invMasterId]);
+    console.log(`After update - Invoice ${invMasterId} status:`, verifyResult.rows[0]);
 
     await client.query("COMMIT");
-    res.json({ success: true });
+    res.json({ 
+      success: true, 
+      message: "Sales invoice posted successfully with dynamic journal entries",
+      journal_entries_created: mappingsRes.rows.length,
+      invoice_status: verifyResult.rows[0]
+    });
   } catch (err) {
     await client.query("ROLLBACK");
-    console.error(err);
-    res.status(500).json({ error: "Failed to post sales invoice" });
+    console.error("Error posting sales invoice:", err);
+    res.status(500).json({ error: "Failed to post sales invoice", details: err.message });
   } finally {
     client.release();
   }

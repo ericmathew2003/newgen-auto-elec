@@ -1,0 +1,151 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Checkbox Display Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        table { border-collapse: collapse; width: 100%; }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+        th { background-color: #f2f2f2; }
+        .text-center { text-align: center; }
+        .text-right { text-align: right; }
+    </style>
+</head>
+<body>
+    <h1>Sales Posted Column Checkbox Test</h1>
+    
+    <h2>Test Data (Simulating your sales records)</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>Invoice No</th>
+                <th>Customer</th>
+                <th>Amount</th>
+                <th>is_posted (raw)</th>
+                <th>!!is_posted</th>
+                <th>Posted Checkbox</th>
+            </tr>
+        </thead>
+        <tbody id="testData">
+            <!-- Data will be inserted here -->
+        </tbody>
+    </table>
+    
+    <h2>Debug Information</h2>
+    <div id="debugInfo"></div>
+    
+    <script>
+        // Simulate the exact data structure from your API
+        const testSalesData = [
+            {
+                tranid: 48,
+                invno: 39,
+                customername: 'ANUNGRAHA PRESS',
+                totamount: 880,
+                is_posted: true,
+                is_confirmed: true
+            },
+            {
+                tranid: 47,
+                invno: 38,
+                customername: 'A.M.THOMAS',
+                totamount: 130,
+                is_posted: true,
+                is_confirmed: true
+            },
+            {
+                tranid: 45,
+                invno: 36,
+                customername: 'ABS Garage',
+                totamount: 3140,
+                is_posted: false, // Test with false value
+                is_confirmed: false
+            },
+            {
+                tranid: 44,
+                invno: 35,
+                customername: 'Test Customer',
+                totamount: 2400,
+                is_posted: null, // Test with null value
+                is_confirmed: true
+            },
+            {
+                tranid: 43,
+                invno: 34,
+                customername: 'Another Customer',
+                totamount: 1500,
+                is_posted: undefined, // Test with undefined value
+                is_confirmed: false
+            }
+        ];
+        
+        // Populate the table
+        const tbody = document.getElementById('testData');
+        testSalesData.forEach(record => {
+            const row = document.createElement('tr');
+            
+            // Apply the same logic as your frontend
+            const isPostedValue = !!record.is_posted;
+            
+            row.innerHTML = `
+                <td>${record.invno}</td>
+                <td>${record.customername}</td>
+                <td class="text-right">${record.totamount.toFixed(2)}</td>
+                <td class="text-center">${record.is_posted} (${typeof record.is_posted})</td>
+                <td class="text-center">${isPostedValue}</td>
+                <td class="text-center">
+                    <input type="checkbox" 
+                           checked="${isPostedValue}" 
+                           readonly 
+                           onclick="event.stopPropagation()" />
+                </td>
+            `;
+            
+            tbody.appendChild(row);
+        });
+        
+        // Debug information
+        const debugDiv = document.getElementById('debugInfo');
+        debugDiv.innerHTML = `
+            <h3>Checkbox States:</h3>
+            <ul>
+                ${testSalesData.map((record, index) => `
+                    <li>
+                        Record ${index + 1}: is_posted = ${record.is_posted} 
+                        → !!is_posted = ${!!record.is_posted}
+                        → Checkbox should be: ${!!record.is_posted ? 'CHECKED' : 'UNCHECKED'}
+                    </li>
+                `).join('')}
+            </ul>
+            
+            <h3>Troubleshooting Steps:</h3>
+            <ol>
+                <li><strong>Check Browser Console:</strong> Open DevTools (F12) and look for JavaScript errors</li>
+                <li><strong>Check Network Tab:</strong> Verify the API call to /api/sales returns data</li>
+                <li><strong>Check API Response:</strong> Ensure is_posted field is present in the response</li>
+                <li><strong>Hard Refresh:</strong> Press Ctrl+F5 to clear browser cache</li>
+                <li><strong>Check CSS:</strong> Ensure checkboxes aren't hidden by CSS styles</li>
+            </ol>
+            
+            <h3>Expected vs Actual:</h3>
+            <p>If the checkboxes above show correctly but your sales page doesn't:</p>
+            <ul>
+                <li>The issue is likely in data fetching or mapping</li>
+                <li>Check if the API is returning the expected data structure</li>
+                <li>Verify the financial year filter is working correctly</li>
+            </ul>
+        `;
+        
+        // Log to console for additional debugging
+        console.log('Test Sales Data:', testSalesData);
+        console.log('Mapped is_posted values:', testSalesData.map(r => ({
+            invoice: r.invno,
+            original: r.is_posted,
+            mapped: !!r.is_posted
+        })));
+    </script>
+</body>
+</html>

@@ -441,7 +441,10 @@ CREATE TABLE public.acc_mas_coa (
     normal_balance VARCHAR(6) NOT NULL,
 
 	-- Tag: CITEXT for case-insensitive, for grouping accounts like cash for all type of petty cash and cash account, Bank for all bank accounts
-    account_tag CITEXT ,
+    account_tag CITEXT,
+    
+    -- Account Nature: Links to transaction mapping system
+    account_nature VARCHAR(50),
     
     -- Control Flag: TRUE if journal entries can be posted directly to this account
     is_posting_allowed BOOLEAN NOT NULL DEFAULT TRUE,
@@ -703,6 +706,18 @@ VALUES
 
 ('PURCHASE_NET_PAYABLE', 'Net payable to supplier', 'PURCHASE',
  'Total invoice amount including tax and charges');
+
+CREATE TABLE sec_users (
+    user_id SMALLSERIAL PRIMARY KEY,
+    username VARCHAR(50) NOT NULL UNIQUE,
+    full_name VARCHAR(100),
+    email VARCHAR(100) UNIQUE,
+    user_password TEXT NOT NULL,
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    created_date TIMESTAMP DEFAULT now(),
+    edited_dateTIMESTAMP DEFAULT now()
+);
+
 
 
  CREATE TABLE sec_roles (

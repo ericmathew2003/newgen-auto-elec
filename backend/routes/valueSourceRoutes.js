@@ -1,64 +1,33 @@
 const express = require('express');
 const router = express.Router();
+const pool = require('../db');
 
-// Get all predefined value sources (no authentication required, like account natures)
+// Get all value sources from database (no authentication required, like account natures)
 router.get('/', async (req, res) => {
   try {
-    console.log('Value sources endpoint called - no auth required');
+    console.log('Value sources endpoint called - fetching from database');
     
     const { module_tag, is_active } = req.query;
     
-    // Predefined value sources that can be used in transaction mappings
-    let valueSources = [
-      // Purchase Transaction Sources
-      { value_code: 'PURCHASE_TAXABLE_AMOUNT', display_name: 'Purchase Taxable Amount', module_tag: 'PURCHASE' },
-      { value_code: 'PURCHASE_CGST_AMOUNT', display_name: 'Purchase CGST Amount', module_tag: 'PURCHASE' },
-      { value_code: 'PURCHASE_SGST_AMOUNT', display_name: 'Purchase SGST Amount', module_tag: 'PURCHASE' },
-      { value_code: 'PURCHASE_IGST_AMOUNT', display_name: 'Purchase IGST Amount', module_tag: 'PURCHASE' },
-      { value_code: 'PURCHASE_TOTAL_AMOUNT', display_name: 'Purchase Total Amount', module_tag: 'PURCHASE' },
-      { value_code: 'PURCHASE_DISCOUNT_AMOUNT', display_name: 'Purchase Discount Amount', module_tag: 'PURCHASE' },
-      { value_code: 'PURCHASE_FREIGHT_AMOUNT', display_name: 'Purchase Freight Amount', module_tag: 'PURCHASE' },
-      
-      // Sales Transaction Sources
-      { value_code: 'SALES_TAXABLE_AMOUNT', display_name: 'Sales Taxable Amount', module_tag: 'SALES' },
-      { value_code: 'SALES_CGST_AMOUNT', display_name: 'Sales CGST Amount', module_tag: 'SALES' },
-      { value_code: 'SALES_SGST_AMOUNT', display_name: 'Sales SGST Amount', module_tag: 'SALES' },
-      { value_code: 'SALES_IGST_AMOUNT', display_name: 'Sales IGST Amount', module_tag: 'SALES' },
-      { value_code: 'SALES_TOTAL_AMOUNT', display_name: 'Sales Total Amount', module_tag: 'SALES' },
-      { value_code: 'SALES_DISCOUNT_AMOUNT', display_name: 'Sales Discount Amount', module_tag: 'SALES' },
-      
-      // Journal Entry Sources
-      { value_code: 'JOURNAL_AMOUNT', display_name: 'Journal Entry Amount', module_tag: 'JOURNAL' },
-      { value_code: 'JOURNAL_DEBIT_AMOUNT', display_name: 'Journal Debit Amount', module_tag: 'JOURNAL' },
-      { value_code: 'JOURNAL_CREDIT_AMOUNT', display_name: 'Journal Credit Amount', module_tag: 'JOURNAL' },
-      
-      // Payment Sources
-      { value_code: 'PAYMENT_AMOUNT', display_name: 'Payment Amount', module_tag: 'PAYMENT' },
-      { value_code: 'RECEIPT_AMOUNT', display_name: 'Receipt Amount', module_tag: 'RECEIPT' },
-      
-      // Inventory Sources
-      { value_code: 'INVENTORY_VALUE', display_name: 'Inventory Value', module_tag: 'INVENTORY' },
-      { value_code: 'COST_OF_GOODS_SOLD', display_name: 'Cost of Goods Sold', module_tag: 'INVENTORY' },
-      
-      // Other Common Sources
-      { value_code: 'BANK_CHARGES', display_name: 'Bank Charges', module_tag: 'BANKING' },
-      { value_code: 'INTEREST_AMOUNT', display_name: 'Interest Amount', module_tag: 'BANKING' },
-      { value_code: 'ROUND_OFF_AMOUNT', display_name: 'Round Off Amount', module_tag: 'GENERAL' },
-      { value_code: 'CUSTOM_AMOUNT', display_name: 'Custom Amount', module_tag: 'GENERAL' }
-    ];
-
-    // Apply filters if provided
+    // Build query with filters
+    let query = 'SELECT value_code, display_name, module_tag, description, is_active FROM con_acc_value_source WHERE 1=1';
+    const params = [];
+    
     if (module_tag) {
-      valueSources = valueSources.filter(source => source.module_tag === module_tag);
+      params.push(module_tag);
+      query += ' AND module_tag = $' + params.length;
     }
     
     if (is_active === 'true') {
-      // All predefined sources are considered active
-      // No filtering needed as all are active
+      query += ' AND is_active = true';
     }
     
-    console.log(`Returning ${valueSources.length} value sources`);
-    res.json(valueSources);
+    query += ' ORDER BY module_tag, display_name';
+    
+    const result = await pool.query(query, params);
+    
+    console.log(`Returning ${result.rows.length} value sources from database`);
+    res.json(result.rows);
   } catch (err) {
     console.error('Error fetching value sources:', err);
     res.status(500).json({ error: 'Internal server error', details: err.message });
@@ -70,55 +39,34 @@ router.get('/code/:code', async (req, res) => {
   try {
     const { code } = req.params;
     
-    // Find the value source by code
-    const valueSources = [
-      { value_code: 'PURCHASE_TAXABLE_AMOUNT', display_name: 'Purchase Taxable Amount', module_tag: 'PURCHASE' },
-      { value_code: 'PURCHASE_CGST_AMOUNT', display_name: 'Purchase CGST Amount', module_tag: 'PURCHASE' },
-      { value_code: 'PURCHASE_SGST_AMOUNT', display_name: 'Purchase SGST Amount', module_tag: 'PURCHASE' },
-      { value_code: 'PURCHASE_IGST_AMOUNT', display_name: 'Purchase IGST Amount', module_tag: 'PURCHASE' },
-      { value_code: 'PURCHASE_TOTAL_AMOUNT', display_name: 'Purchase Total Amount', module_tag: 'PURCHASE' },
-      { value_code: 'PURCHASE_DISCOUNT_AMOUNT', display_name: 'Purchase Discount Amount', module_tag: 'PURCHASE' },
-      { value_code: 'PURCHASE_FREIGHT_AMOUNT', display_name: 'Purchase Freight Amount', module_tag: 'PURCHASE' },
-      { value_code: 'SALES_TAXABLE_AMOUNT', display_name: 'Sales Taxable Amount', module_tag: 'SALES' },
-      { value_code: 'SALES_CGST_AMOUNT', display_name: 'Sales CGST Amount', module_tag: 'SALES' },
-      { value_code: 'SALES_SGST_AMOUNT', display_name: 'Sales SGST Amount', module_tag: 'SALES' },
-      { value_code: 'SALES_IGST_AMOUNT', display_name: 'Sales IGST Amount', module_tag: 'SALES' },
-      { value_code: 'SALES_TOTAL_AMOUNT', display_name: 'Sales Total Amount', module_tag: 'SALES' },
-      { value_code: 'SALES_DISCOUNT_AMOUNT', display_name: 'Sales Discount Amount', module_tag: 'SALES' },
-      { value_code: 'JOURNAL_AMOUNT', display_name: 'Journal Entry Amount', module_tag: 'JOURNAL' },
-      { value_code: 'JOURNAL_DEBIT_AMOUNT', display_name: 'Journal Debit Amount', module_tag: 'JOURNAL' },
-      { value_code: 'JOURNAL_CREDIT_AMOUNT', display_name: 'Journal Credit Amount', module_tag: 'JOURNAL' },
-      { value_code: 'PAYMENT_AMOUNT', display_name: 'Payment Amount', module_tag: 'PAYMENT' },
-      { value_code: 'RECEIPT_AMOUNT', display_name: 'Receipt Amount', module_tag: 'RECEIPT' },
-      { value_code: 'INVENTORY_VALUE', display_name: 'Inventory Value', module_tag: 'INVENTORY' },
-      { value_code: 'COST_OF_GOODS_SOLD', display_name: 'Cost of Goods Sold', module_tag: 'INVENTORY' },
-      { value_code: 'BANK_CHARGES', display_name: 'Bank Charges', module_tag: 'BANKING' },
-      { value_code: 'INTEREST_AMOUNT', display_name: 'Interest Amount', module_tag: 'BANKING' },
-      { value_code: 'ROUND_OFF_AMOUNT', display_name: 'Round Off Amount', module_tag: 'GENERAL' },
-      { value_code: 'CUSTOM_AMOUNT', display_name: 'Custom Amount', module_tag: 'GENERAL' }
-    ];
+    const result = await pool.query(
+      'SELECT value_code, display_name, module_tag, description, is_active FROM con_acc_value_source WHERE value_code = $1',
+      [code]
+    );
     
-    const valueSource = valueSources.find(source => source.value_code === code);
-    
-    if (!valueSource) {
+    if (result.rows.length === 0) {
       return res.status(404).json({ error: 'Value source not found' });
     }
     
-    res.json(valueSource);
+    res.json(result.rows[0]);
   } catch (err) {
     console.error('Error fetching value source:', err);
-    res.status(500).json({ error: 'Internal server error' });
+    res.status(500).json({ error: 'Internal server error', details: err.message });
   }
 });
 
 // Get distinct module tags
 router.get('/meta/module-tags', async (req, res) => {
   try {
-    const moduleTags = ['PURCHASE', 'SALES', 'JOURNAL', 'PAYMENT', 'RECEIPT', 'INVENTORY', 'BANKING', 'GENERAL'];
+    const result = await pool.query(
+      'SELECT DISTINCT module_tag FROM con_acc_value_source WHERE is_active = true ORDER BY module_tag'
+    );
+    
+    const moduleTags = result.rows.map(row => row.module_tag);
     res.json(moduleTags);
   } catch (err) {
     console.error('Error fetching module tags:', err);
-    res.status(500).json({ error: 'Internal server error' });
+    res.status(500).json({ error: 'Internal server error', details: err.message });
   }
 });
 

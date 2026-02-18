@@ -1660,9 +1660,6 @@ export default function SalesPage() {
                     <td className="p-2 text-right">{n(r.igst).toFixed(2)}</td>
                     <td className="p-2 text-right">{n(r.totamount).toFixed(2)}</td>
                     <td className="p-2 text-center">
-                      <input type="checkbox" checked={!!r.is_confirmed} readOnly onClick={(e) => e.stopPropagation()} />
-                    </td>
-                    <td className="p-2 text-center">
                       <input type="checkbox" checked={!!r.is_posted} readOnly onClick={(e) => e.stopPropagation()} />
                     </td>
                   </tr>
@@ -1675,10 +1672,9 @@ export default function SalesPage() {
                   <td className="p-2 text-right">{currentRecords.reduce((a, x) => a + n(x.igst || 0), 0).toFixed(2)}</td>
                   <td className="p-2 text-right">{currentRecords.reduce((a, x) => a + n(x.totamount || 0), 0).toFixed(2)}</td>
                   <td className="p-2"></td>
-                  <td className="p-2"></td>
                 </tr>
                 {currentRecords.length === 0 && (
-                  <tr><td colSpan={11} className="p-4 text-center text-gray-500">No records</td></tr>
+                  <tr><td colSpan={10} className="p-4 text-center text-gray-500">No records</td></tr>
                 )}
               </tbody>
             </table>

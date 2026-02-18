@@ -187,6 +187,7 @@ router.post("/credit-notes", authenticateToken, async (req, res) => {
     const journalMasId = masterResult.rows[0].journal_mas_id;
 
     // Insert into journal detail
+    let partyIdForInvoice = null;
     for (const detail of credit_note_details) {
       await client.query(`
         INSERT INTO acc_journal_detail (
@@ -208,6 +209,48 @@ router.post("/credit-notes", authenticateToken, async (req, res) => {
         detail.description || '',
         detail.allocation_ref_id || null
       ]);
+      
+      // Capture party_id from first detail line that has one
+      if (detail.party_id && !partyIdForInvoice) {
+        partyIdForInvoice = detail.party_id;
+      }
+    }
+
+    // Insert into acc_trn_invoice for tracking and allocation
+    if (partyIdForInvoice) {
+      console.log('Creating acc_trn_invoice entry for credit note with party_id:', partyIdForInvoice);
+      await client.query(`
+        INSERT INTO acc_trn_invoice (
+          fyear_id,
+          tran_type,
+          tran_date,
+          party_id,
+          party_inv_no,
+          tran_amount,
+          paid_amount,
+          balance_amount,
+          inv_reference,
+          is_posted,
+          inv_master_id,
+          created_date,
+          edited_date
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW(), NOW())
+      `, [
+        finyearid,
+        'CR_NOTE',
+        credit_note_date,
+        partyIdForInvoice,
+        creditNoteSerial,
+        total_credit,
+        0,
+        total_credit,
+        source_document_ref || '',
+        true,
+        journalMasId
+      ]);
+      console.log('✓ acc_trn_invoice entry created successfully');
+    } else {
+      console.log('⚠️ No party_id found in credit note details - skipping acc_trn_invoice entry');
     }
 
     await client.query('COMMIT');
@@ -352,6 +395,7 @@ router.put("/credit-notes/:id", authenticateToken, async (req, res) => {
     await client.query('DELETE FROM acc_journal_detail WHERE journal_mas_id = $1', [id]);
 
     // Insert new details into journal_detail
+    let partyIdForInvoice = null;
     for (const detail of credit_note_details) {
       await client.query(`
         INSERT INTO acc_journal_detail (
@@ -373,6 +417,76 @@ router.put("/credit-notes/:id", authenticateToken, async (req, res) => {
         detail.description || '',
         detail.allocation_ref_id || null
       ]);
+      
+      // Capture party_id from first detail line that has one
+      if (detail.party_id && !partyIdForInvoice) {
+        partyIdForInvoice = detail.party_id;
+      }
+    }
+
+    // Update or insert acc_trn_invoice entry
+    if (partyIdForInvoice) {
+      const existingInvoice = await client.query(`
+        SELECT tran_id FROM acc_trn_invoice 
+        WHERE inv_master_id = $1
+      `, [id]);
+
+      if (existingInvoice.rows.length > 0) {
+        // Update existing invoice entry
+        await client.query(`
+          UPDATE acc_trn_invoice 
+          SET tran_date = $1,
+              party_id = $2,
+              party_inv_no = $3,
+              tran_amount = $4,
+              balance_amount = tran_amount - paid_amount,
+              inv_reference = $5,
+              edited_date = NOW()
+          WHERE tran_id = $6
+        `, [
+          credit_note_date,
+          partyIdForInvoice,
+          masterResult.rows[0].journal_serial,
+          total_credit,
+          source_document_ref || '',
+          existingInvoice.rows[0].tran_id
+        ]);
+      } else {
+        // Insert new invoice entry
+        const fyearResult = await client.query(`
+          SELECT finyearid FROM acc_journal_master WHERE journal_mas_id = $1
+        `, [id]);
+        
+        await client.query(`
+          INSERT INTO acc_trn_invoice (
+            fyear_id,
+            tran_type,
+            tran_date,
+            party_id,
+            party_inv_no,
+            tran_amount,
+            paid_amount,
+            balance_amount,
+            inv_reference,
+            is_posted,
+            inv_master_id,
+            created_date,
+            edited_date
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW(), NOW())
+        `, [
+          fyearResult.rows[0].finyearid,
+          'CR_NOTE',
+          credit_note_date,
+          partyIdForInvoice,
+          masterResult.rows[0].journal_serial,
+          total_credit,
+          0,
+          total_credit,
+          source_document_ref || '',
+          true,
+          id
+        ]);
+      }
     }
 
     await client.query('COMMIT');
@@ -664,6 +778,7 @@ router.post("/debit-notes", authenticateToken, checkPermission('ACCOUNTS_DEBIT_N
     const journalMasId = masterResult.rows[0].journal_mas_id;
 
     // Insert into journal detail
+    let partyIdForInvoice = null;
     for (const detail of debit_note_details) {
       await client.query(`
         INSERT INTO acc_journal_detail (
@@ -685,6 +800,48 @@ router.post("/debit-notes", authenticateToken, checkPermission('ACCOUNTS_DEBIT_N
         detail.description || '',
         detail.allocation_ref_id || null
       ]);
+      
+      // Capture party_id from first detail line that has one
+      if (detail.party_id && !partyIdForInvoice) {
+        partyIdForInvoice = detail.party_id;
+      }
+    }
+
+    // Insert into acc_trn_invoice for tracking and allocation
+    if (partyIdForInvoice) {
+      console.log('Creating acc_trn_invoice entry for debit note with party_id:', partyIdForInvoice);
+      await client.query(`
+        INSERT INTO acc_trn_invoice (
+          fyear_id,
+          tran_type,
+          tran_date,
+          party_id,
+          party_inv_no,
+          tran_amount,
+          paid_amount,
+          balance_amount,
+          inv_reference,
+          is_posted,
+          inv_master_id,
+          created_date,
+          edited_date
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW(), NOW())
+      `, [
+        finyearid,
+        'DB_NOTE',
+        debit_note_date,
+        partyIdForInvoice,
+        debitNoteSerial,
+        total_debit,
+        0, // paid_amount starts at 0
+        total_debit, // balance_amount equals total initially
+        source_document_ref || '',
+        true, // Debit notes are posted immediately
+        journalMasId
+      ]);
+      console.log('✓ acc_trn_invoice entry created successfully');
+    } else {
+      console.log('⚠️ No party_id found in debit note details - skipping acc_trn_invoice entry');
     }
 
     await client.query('COMMIT');
@@ -827,6 +984,7 @@ router.put("/debit-notes/:id", authenticateToken, checkPermission('ACCOUNTS_DEBI
     await client.query('DELETE FROM acc_journal_detail WHERE journal_mas_id = $1', [id]);
 
     // Insert new details into journal_detail
+    let partyIdForInvoice = null;
     for (const detail of debit_note_details) {
       await client.query(`
         INSERT INTO acc_journal_detail (
@@ -848,6 +1006,77 @@ router.put("/debit-notes/:id", authenticateToken, checkPermission('ACCOUNTS_DEBI
         detail.description || '',
         detail.allocation_ref_id || null
       ]);
+      
+      // Capture party_id from first detail line that has one
+      if (detail.party_id && !partyIdForInvoice) {
+        partyIdForInvoice = detail.party_id;
+      }
+    }
+
+    // Update or insert acc_trn_invoice entry
+    if (partyIdForInvoice) {
+      // Check if invoice entry exists
+      const existingInvoice = await client.query(`
+        SELECT tran_id FROM acc_trn_invoice 
+        WHERE inv_master_id = $1
+      `, [id]);
+
+      if (existingInvoice.rows.length > 0) {
+        // Update existing invoice entry
+        await client.query(`
+          UPDATE acc_trn_invoice 
+          SET tran_date = $1,
+              party_id = $2,
+              party_inv_no = $3,
+              tran_amount = $4,
+              balance_amount = tran_amount - paid_amount,
+              inv_reference = $5,
+              edited_date = NOW()
+          WHERE tran_id = $6
+        `, [
+          debit_note_date,
+          partyIdForInvoice,
+          masterResult.rows[0].journal_serial,
+          total_debit,
+          source_document_ref || '',
+          existingInvoice.rows[0].tran_id
+        ]);
+      } else {
+        // Insert new invoice entry
+        const fyearResult = await client.query(`
+          SELECT finyearid FROM acc_journal_master WHERE journal_mas_id = $1
+        `, [id]);
+        
+        await client.query(`
+          INSERT INTO acc_trn_invoice (
+            fyear_id,
+            tran_type,
+            tran_date,
+            party_id,
+            party_inv_no,
+            tran_amount,
+            paid_amount,
+            balance_amount,
+            inv_reference,
+            is_posted,
+            inv_master_id,
+            created_date,
+            edited_date
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW(), NOW())
+        `, [
+          fyearResult.rows[0].finyearid,
+          'DB_NOTE',
+          debit_note_date,
+          partyIdForInvoice,
+          masterResult.rows[0].journal_serial,
+          total_debit,
+          0,
+          total_debit,
+          source_document_ref || '',
+          true,
+          id
+        ]);
+      }
     }
 
     await client.query('COMMIT');
@@ -884,6 +1113,9 @@ router.delete("/debit-notes/:id", authenticateToken, checkPermission('ACCOUNTS_D
 
     // Delete details first (due to foreign key) from journal_detail
     await client.query('DELETE FROM acc_journal_detail WHERE journal_mas_id = $1', [id]);
+    
+    // Delete from acc_trn_invoice if exists
+    await client.query('DELETE FROM acc_trn_invoice WHERE inv_master_id = $1', [id]);
     
     // Delete master from journal_master
     await client.query('DELETE FROM acc_journal_master WHERE journal_mas_id = $1 AND source_document_type = $2', [id, 'DEBIT_NOTE']);

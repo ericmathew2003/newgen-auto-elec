@@ -59,13 +59,13 @@ export default function PurchasePage() {
       window.location.href = '/';
     }
   }, [isNewMode, isEditMode, canCreate, canEdit, canView, navigateToList]);
-  
+
   // List state
   const [purchases, setPurchases] = useState([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const [recordsPerPage] = useState(50);
-  
+
   // Sorting state
   const [sortField, setSortField] = useState('trdate');
   const [sortDirection, setSortDirection] = useState('desc');
@@ -80,7 +80,6 @@ export default function PurchasePage() {
 
   // UI mode
   const [saving, setSaving] = useState(false);
-  const [grnStatus, setGrnStatus] = useState("draft");
   const [editingPurchase, setEditingPurchase] = useState(null);
   const [exportingPdf, setExportingPdf] = useState(false);
 
@@ -96,7 +95,7 @@ export default function PurchasePage() {
     }, 3000);
     return () => clearTimeout(timer);
   }, [notice.open]);
-  
+
   // Item selection modal
   const [showItemModal, setShowItemModal] = useState(false);
   const [allItems, setAllItems] = useState([]);
@@ -353,10 +352,24 @@ export default function PurchasePage() {
     SGSTPer: n(it.SGSTPer),
     IGSTPer: n(it.IGSTPer),
   }));
-  const deepEqual = (a, b) => JSON.stringify(a) === JSON.stringify(b);
-  const isPosted = grnStatus === 'posted' || !!header.GRNPosted;
+  // Status management - simplified to 3 statuses
+  const getPurchaseStatus = () => {
+    if (!editingPurchase) return 'DRAFT';
+    if (header.accounts_posted) return 'POSTED';
+    if (header.GRNPosted) return 'CONFIRMED';
+    return 'DRAFT';
+  };
+
+  const purchaseStatus = getPurchaseStatus();
+  const isPosted = purchaseStatus === 'POSTED';
+  const isConfirmed = purchaseStatus === 'CONFIRMED';
+  const isDraft = purchaseStatus === 'DRAFT';
   const isCancelled = !!header.is_cancelled;
   const isLocked = isPosted || isCancelled;
+
+  // Helper function for deep comparison
+  const deepEqual = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+
   const isDirty = useMemo(() => {
     if (isLocked) return false; // lock when posted or cancelled
     if (!editingPurchase) return true; // in create mode, allow save
@@ -393,7 +406,7 @@ export default function PurchasePage() {
       return "1";
     }
   };
-  
+
   // Fetch all items for the modal
   const fetchAllItems = async () => {
     try {
@@ -410,13 +423,13 @@ export default function PurchasePage() {
       const params = {};
       if (fromDate) params.fromDate = fromDate;
       if (toDate) params.toDate = toDate;
-      
+
       // Add financial year filter - critical for data isolation
       const selectedFYearID = localStorage.getItem("selectedFYearID");
       if (selectedFYearID) {
         params.fyearid = selectedFYearID;
       }
-      
+
       const res = await axios.get(`${API_BASE_URL}/api/purchase`, { params, ...getAuthHeaders() });
       setPurchases(res.data || []);
     } catch (e) {
@@ -443,7 +456,7 @@ export default function PurchasePage() {
           console.error("Error getting default date:", error);
           defaultDate = new Date().toISOString().split('T')[0];
         }
-        
+
         setEditingPurchase(null);
         setHeader({
           FYearID: "",
@@ -481,7 +494,6 @@ export default function PurchasePage() {
             IGST: 0,
           }
         ]);
-        setGrnStatus("draft");
         setSelectedItem(null);
         setShowItemModal(false);
         setItemSearchTerm('');
@@ -502,7 +514,7 @@ export default function PurchasePage() {
         });
         setNoOverhead(false);
       };
-      
+
       initializeNewPurchase();
     }
   }, [isNewMode]);
@@ -550,7 +562,7 @@ export default function PurchasePage() {
     // Apply sorting
     result.sort((a, b) => {
       let aVal, bVal;
-      
+
       switch (sortField) {
         case 'trno':
           // Extract numeric part from transaction number for proper numeric sorting
@@ -589,9 +601,9 @@ export default function PurchasePage() {
           aVal = Number(a.igst || 0);
           bVal = Number(b.igst || 0);
           break;
-        case 'grn_posted':
-          aVal = a.grnposted ? 1 : 0;
-          bVal = b.grnposted ? 1 : 0;
+        case 'accounts_posted':
+          aVal = a.accounts_posted ? 1 : 0;
+          bVal = b.accounts_posted ? 1 : 0;
           break;
         case 'cost_sheet_prepared':
           aVal = a.costsheetprepared ? 1 : 0;
@@ -605,12 +617,12 @@ export default function PurchasePage() {
           aVal = a[sortField];
           bVal = b[sortField];
       }
-      
+
       if (aVal < bVal) return sortDirection === 'asc' ? -1 : 1;
       if (aVal > bVal) return sortDirection === 'asc' ? 1 : -1;
       return 0;
     });
-    
+
     return result;
   }, [purchases, searchTerm, sortField, sortDirection]);
 
@@ -754,7 +766,7 @@ export default function PurchasePage() {
   const addRow = async () => {
     // Refresh item data to get updated stock levels
     await fetchAllItems();
-    
+
     // Reuse first blank row if present; otherwise prepare to append
     const emptyIndex = items.findIndex(r => !r.ItemCode && !r.ItemName);
     const targetIndex = emptyIndex >= 0 ? emptyIndex : items.length;
@@ -809,7 +821,7 @@ export default function PurchasePage() {
     const cgstPercent = n(cgstPer);
     const sgstPercent = n(sgstPer);
     const igstPercent = n(igstPer);
-    
+
     const invAmount = quantity * itemRate;
     const cgstAmt = invAmount * cgstPercent / 100;
     const sgstAmt = invAmount * sgstPercent / 100;
@@ -835,7 +847,7 @@ export default function PurchasePage() {
   // Add item to form and close modal
   const addItemToForm = () => {
     if (!selectedItem) return;
-    
+
     const payload = {
       ItemCode: selectedItem.itemcode,
       ItemName: selectedItem.itemname || "",
@@ -881,7 +893,7 @@ export default function PurchasePage() {
   // Add item and keep modal open for next item
   const addItemAndContinue = () => {
     if (!selectedItem) return;
-    
+
     const newItem = {
       Srno: items.length + 1,
       ItemCode: selectedItem.itemcode,
@@ -902,11 +914,11 @@ export default function PurchasePage() {
       IGSTPer: modalItemData.IGSTPer,
       FYearID: header.FYearID,
     };
-    
+
     const next = [...items, newItem];
     setItems(next);
     applyHeaderTotals(next);
-    
+
     // Reset for next item
     setSelectedItem(null);
     setModalItemData({
@@ -954,7 +966,7 @@ export default function PurchasePage() {
     try {
       const res = await axios.get(`${API_BASE_URL}/api/purchase/${purchase.tranid}`, getAuthHeaders());
       const { header: purchaseHeader, details: purchaseDetails } = res.data;
-      
+
       // Set header data (ensure date inputs get YYYY-MM-DD)
       setHeader({
         FYearID: purchaseHeader.fyearid || "",
@@ -976,6 +988,7 @@ export default function PurchasePage() {
         CostSheetPrepared: purchaseHeader.costsheetprepared || false,
         GRNPosted: purchaseHeader.grnposted || false,
         Costconfirmed: purchaseHeader.costconfirmed || false,
+        accounts_posted: purchaseHeader.accounts_posted || false,
         is_cancelled: purchaseHeader.is_cancelled || false,
       });
 
@@ -1026,11 +1039,11 @@ export default function PurchasePage() {
         CostSheetPrepared: purchaseHeader.costsheetprepared || false,
         GRNPosted: purchaseHeader.grnposted || false,
         Costconfirmed: purchaseHeader.costconfirmed || false,
+        accounts_posted: purchaseHeader.accounts_posted || false,
       });
       setOriginalItems(formattedItems.map(it => ({ ...it })));
 
       setEditingPurchase(purchase);
-      setGrnStatus(purchaseHeader.grnposted ? "posted" : "draft");
       setCurrentTranId(purchase.tranid);
     } catch (error) {
       console.error("Error loading purchase for edit:", error);
@@ -1038,8 +1051,53 @@ export default function PurchasePage() {
     }
   };
 
-  // Validate and save invoice
-  const handleSave = async ({ post = false } = {}) => {
+  // New workflow API functions
+  const handleConfirmPurchase = async () => {
+    if (!editingPurchase?.tranid) {
+      setNotice({ open: true, type: 'error', message: 'No purchase to confirm' });
+      return;
+    }
+
+    try {
+      await axios.post(`${API_BASE_URL}/api/purchase/${editingPurchase.tranid}/confirm`, {}, getAuthHeaders());
+
+      // Update local state
+      setHeader(h => ({ ...h, GRNPosted: true }));
+      setNotice({ open: true, type: 'success', message: 'Purchase confirmed and inventory updated' });
+
+      // Refresh purchase list
+      await fetchPurchases();
+
+    } catch (error) {
+      console.error('Error confirming purchase:', error);
+      setNotice({ open: true, type: 'error', message: error.response?.data?.error || 'Failed to confirm purchase' });
+    }
+  };
+
+  const handlePostToAccounts = async () => {
+    if (!editingPurchase?.tranid) {
+      setNotice({ open: true, type: 'error', message: 'No purchase to post' });
+      return;
+    }
+
+    try {
+      await axios.post(`${API_BASE_URL}/api/purchase/${editingPurchase.tranid}/post`, {}, getAuthHeaders());
+
+      // Update local state
+      setHeader(h => ({ ...h, accounts_posted: true }));
+      setNotice({ open: true, type: 'success', message: 'Purchase posted to accounts successfully' });
+
+      // Refresh purchase list
+      await fetchPurchases();
+
+    } catch (error) {
+      console.error('Error posting purchase:', error);
+      setNotice({ open: true, type: 'error', message: error.response?.data?.error || 'Failed to post purchase' });
+    }
+  };
+
+  // Save purchase (draft mode)
+  const handleSave = async () => {
     const selectedFYearID = localStorage.getItem("selectedFYearID");
     if (!selectedFYearID) {
       setNotice({ open: true, type: 'warning', message: 'Please select an accounting period first' });
@@ -1118,9 +1176,9 @@ export default function PurchasePage() {
         CGST: n(header.CGST),
         SGST: n(header.SGST),
         IGST: n(header.IGST),
-        // booleans
+        // booleans - always save as draft
         CostSheetPrepared: !!header.CostSheetPrepared,
-        GRNPosted: post ? true : !!header.GRNPosted,
+        GRNPosted: !!header.GRNPosted,
         Costconfirmed: !!header.Costconfirmed,
       };
 
@@ -1133,11 +1191,11 @@ export default function PurchasePage() {
         // Create new purchase - generate TrNo at save time to prevent number clashes
         const nextTrNo = await generateNextTrNo();
         const payloadWithTrNo = { ...payloadHeader, TrNo: nextTrNo };
-        
+
         const headerRes = await axios.post(`${API_BASE_URL}/api/purchase`, payloadWithTrNo, getAuthHeaders());
         tranId = headerRes.data?.TranID;
         if (!tranId) throw new Error("TranID not returned");
-        
+
         // Update the form with the generated TrNo
         setHeader(prev => ({ ...prev, TrNo: nextTrNo }));
       }
@@ -1165,25 +1223,17 @@ export default function PurchasePage() {
         }, getAuthHeaders());
       }
 
-      if (!post) {
-        setNotice({ open: true, type: 'success', message: 'Purchase saved successfully' });
-      }
+      // Always show success message for save
+      setNotice({ open: true, type: 'success', message: 'Purchase saved successfully' });
 
-      if (post) {
-        // After posting: keep form open, set to posted and lock further edits
-        setGrnStatus('posted');
-        setHeader((h) => ({ ...h, GRNPosted: true }));
-        setOriginalHeader({ ...header, GRNPosted: true });
-        setOriginalItems(items.map(it => ({ ...it })));
-        await fetchPurchases();
-      } else if (!editingPurchase) {
-        // New record saved (not posted): keep form open and freeze current state as baseline
+      if (!editingPurchase) {
+        // New record saved: keep form open and freeze current state as baseline
         setEditingPurchase({ tranid: tranId });
         setOriginalHeader({ ...header });
         setOriginalItems(items.map(it => ({ ...it })));
         await fetchPurchases();
       } else {
-        // Existing record saved (not posted): keep form open and freeze current state as baseline
+        // Existing record saved: keep form open and freeze current state as baseline
         setOriginalHeader({ ...header });
         setOriginalItems(items.map(it => ({ ...it })));
         await fetchPurchases();
@@ -1217,6 +1267,7 @@ export default function PurchasePage() {
     CostSheetPrepared: false,
     GRNPosted: false,
     Costconfirmed: false,
+    accounts_posted: false,
     is_cancelled: false,
   };
   const initialItems = [];
@@ -1265,11 +1316,10 @@ export default function PurchasePage() {
       console.error("Error getting default date:", error);
       defaultDate = new Date().toISOString().split('T')[0];
     }
-    
+
     setHeader({ ...initialHeader, TrDate: defaultDate });
     setItems([...initialItems]);
     setEditingPurchase(null);
-    setGrnStatus('draft');
     setSelectedItem(null);
     setShowItemModal(false);
     setItemSearchTerm('');
@@ -1512,17 +1562,31 @@ export default function PurchasePage() {
         }}
       >
         {/* Breadcrumb */}
-        <Breadcrumb 
-          basePath="/purchase" 
-          currentPage="Purchase" 
+        <Breadcrumb
+          basePath="/purchase"
+          currentPage="Purchase"
           itemName={showForm ? (isNewMode ? "New Purchase" : `Edit Purchase: ${header.TrNo || 'Draft'}`) : null}
         />
-        
+
         {/* Header actions */}
         <div className="flex flex-col items-start mb-4">
           <div className="flex items-center justify-between w-full mb-3">
-            <h1 className="text-2xl font-bold text-gray-900">Purchase Invoices</h1>
-            
+            <div className="flex items-center gap-4">
+              <h1 className="text-2xl font-bold text-gray-900">Purchase Invoices</h1>
+
+              {/* Status Pill - Show only when editing a purchase */}
+              {showForm && editingPurchase && (
+                <div className={`px-3 py-1 rounded-full text-sm font-medium ${purchaseStatus === 'POSTED'
+                  ? 'bg-green-100 text-green-800'
+                  : purchaseStatus === 'CONFIRMED'
+                    ? 'bg-blue-100 text-blue-800'
+                    : 'bg-yellow-100 text-yellow-800'
+                  }`}>
+                  {purchaseStatus}
+                </div>
+              )}
+            </div>
+
             {/* Record navigation in edit form mode */}
             {showForm && editingPurchase && filtered.length > 1 && (
               <div className="flex items-center gap-2 text-sm text-gray-600">
@@ -1530,14 +1594,13 @@ export default function PurchasePage() {
                   type="button"
                   onClick={goToPreviousRecord}
                   disabled={getCurrentRecordIndex() === 0}
-                  className={`p-1 rounded ${
-                    getCurrentRecordIndex() === 0
-                      ? "text-gray-300 cursor-not-allowed"
-                      : "text-gray-600 hover:bg-gray-100"
-                  }`}
+                  className={`p-1 rounded ${getCurrentRecordIndex() === 0
+                    ? "text-gray-300 cursor-not-allowed"
+                    : "text-gray-600 hover:bg-gray-100"
+                    }`}
                 >
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z"/>
+                    <path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z" />
                   </svg>
                 </button>
                 <span className="font-medium">
@@ -1547,14 +1610,13 @@ export default function PurchasePage() {
                   type="button"
                   onClick={goToNextRecord}
                   disabled={getCurrentRecordIndex() === filtered.length - 1}
-                  className={`p-1 rounded ${
-                    getCurrentRecordIndex() === filtered.length - 1
-                      ? "text-gray-300 cursor-not-allowed"
-                      : "text-gray-600 hover:bg-gray-100"
-                  }`}
+                  className={`p-1 rounded ${getCurrentRecordIndex() === filtered.length - 1
+                    ? "text-gray-300 cursor-not-allowed"
+                    : "text-gray-600 hover:bg-gray-100"
+                    }`}
                 >
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"/>
+                    <path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z" />
                   </svg>
                 </button>
               </div>
@@ -1568,29 +1630,27 @@ export default function PurchasePage() {
                     // Allow new purchase if form is not open OR if current purchase is saved OR confirmed
                     const isSaved = editingPurchase?.tranid;
                     const isConfirmed = header.Costconfirmed;
-                    
+
                     if (showForm && !isSaved && !isConfirmed) {
                       return;
                     }
-                    
+
                     // Reset form state before navigating
                     setEditingPurchase(null);
                     setHeader(initialHeader);
                     setItems([]);
                     setCurrentTranId(null);
-                    setGrnStatus('draft');
                     setNoOverhead(false);
-                    
+
                     // Navigate to new purchase
                     navigateToNew();
                   }}
 
                   disabled={showForm && !editingPurchase?.tranid && !header.Costconfirmed}
-                  className={`px-4 py-2 rounded-lg shadow text-white ${
-                    (showForm && !editingPurchase?.tranid && !header.Costconfirmed) 
-                      ? "bg-gray-400 cursor-not-allowed opacity-50" 
-                      : "bg-purple-600 hover:bg-purple-700"
-                  }`}
+                  className={`px-4 py-2 rounded-lg shadow text-white ${(showForm && !editingPurchase?.tranid && !header.Costconfirmed)
+                    ? "bg-gray-400 cursor-not-allowed opacity-50"
+                    : "bg-purple-600 hover:bg-purple-700"
+                    }`}
                 >
                   New
                 </button>
@@ -1652,43 +1712,52 @@ export default function PurchasePage() {
 
               {showForm && (
                 <>
-                  {((isNewMode && canCreate('INVENTORY', 'PURCHASE')) || (isEditMode && canEdit('INVENTORY', 'PURCHASE'))) && (
+                  {/* Save Button - Always available for draft purchases */}
+                  {!isLocked && ((isNewMode && canCreate('INVENTORY', 'PURCHASE')) || (isEditMode && canEdit('INVENTORY', 'PURCHASE'))) && (
                     <button
                       type="button"
                       disabled={saving || !isDirty}
-                      onClick={() => handleSave({ post: false })}
-                      className={`px-4 py-2 text-sm rounded text-white ${
-                        !saving && isDirty ? "bg-purple-600 hover:bg-purple-700" : "bg-purple-400 cursor-not-allowed opacity-60"
-                      }`}
+                      onClick={handleSave}
+                      className={`px-4 py-2 text-sm rounded text-white ${!saving && isDirty ? "bg-purple-600 hover:bg-purple-700" : "bg-purple-400 cursor-not-allowed opacity-60"
+                        }`}
                     >
                       {saving ? "Saving..." : "Save"}
                     </button>
                   )}
 
-                  {!isCancelled && !isPosted && ((isNewMode && canCreate('INVENTORY', 'PURCHASE')) || (isEditMode && canEdit('INVENTORY', 'PURCHASE'))) && (
+                  {/* Costing Button - Show after save, before confirmation */}
+                  {editingPurchase && isDraft && !header.Costconfirmed && (
                     <button
                       type="button"
-                      className="px-3 py-2 text-sm border rounded"
-                      onClick={() => {
-                        if (isCancelled) return;
-                        handleSave({ post: true });
-                      }}
-                    >
-                      Post
-                    </button>
-                  )}
-
-                  {!isCancelled && isPosted && !header.Costconfirmed && (
-                    <button
-                      type="button"
-                      className="px-3 py-2 text-sm border rounded"
+                      className="px-3 py-2 text-sm border rounded bg-blue-600 text-white hover:bg-blue-700"
                       onClick={async () => {
-                        if (!editingPurchase?.tranid) return;
                         setCostingPreview([]);
                         setShowCostingModal(true);
                       }}
                     >
-                      Costing
+                      Add Costing
+                    </button>
+                  )}
+
+                  {/* Confirm Purchase Button - Show after costing is done */}
+                  {editingPurchase && isDraft && header.Costconfirmed && (
+                    <button
+                      type="button"
+                      className="px-3 py-2 text-sm border rounded bg-orange-600 text-white hover:bg-orange-700"
+                      onClick={handleConfirmPurchase}
+                    >
+                      Confirm Purchase
+                    </button>
+                  )}
+
+                  {/* Post to Accounts Button - Show after confirmation */}
+                  {editingPurchase && isConfirmed && (
+                    <button
+                      type="button"
+                      className="px-3 py-2 text-sm border rounded bg-red-600 text-white hover:bg-red-700"
+                      onClick={handlePostToAccounts}
+                    >
+                      Post to Accounts
                     </button>
                   )}
 
@@ -1747,7 +1816,6 @@ export default function PurchasePage() {
                         try {
                           await axios.post(`${API_BASE_URL}/api/purchase/${editingPurchase.tranid}/set-draft`);
                           setHeader(h => ({ ...h, GRNPosted: false, CostSheetPrepared: false, Costconfirmed: false, is_cancelled: false }));
-                          setGrnStatus('draft');
                           setNotice({ open: true, type: 'success', message: 'Purchase set to Draft' });
                           await fetchPurchases();
                         } catch (e) {
@@ -1768,32 +1836,29 @@ export default function PurchasePage() {
             {showForm && (
               <div className="flex items-stretch gap-0 select-none">
                 {(() => {
-                  const labels = isCancelled ? ['Cancelled'] : ['Draft', 'Posted', 'Cost Sheet', 'Confirmed'];
+                  const labels = isCancelled ? ['Cancelled'] : ['Draft', 'Confirmed', 'Posted'];
                   const stageIndex = isCancelled
                     ? 0
-                    : !!header.Costconfirmed
-                    ? 3
-                    : !!header.CostSheetPrepared
-                    ? 2
-                    : (!!header.GRNPosted || grnStatus === 'posted')
-                    ? 1
-                    : 0;
+                    : header.accounts_posted
+                      ? 2  // Posted
+                      : !!header.GRNPosted
+                        ? 1  // Confirmed
+                        : 0; // Draft
                   return labels.map((label, idx, arr) => {
                     const state = idx < stageIndex ? 'done' : idx === stageIndex ? 'active' : 'todo';
                     const base =
                       state === 'active'
                         ? 'bg-indigo-600 text-white border-indigo-600'
                         : state === 'done'
-                        ? 'bg-indigo-100 text-indigo-800 border-indigo-200'
-                        : 'bg-gray-100 text-gray-600 border-gray-300';
+                          ? 'bg-indigo-100 text-indigo-800 border-indigo-200'
+                          : 'bg-gray-100 text-gray-600 border-gray-300';
                     const arrowColor =
                       state === 'active' ? '#4f46e5' : state === 'done' ? '#e0e7ff' : '#f3f4f6';
                     return (
                       <div key={label} className="relative">
                         <div
-                          className={`px-4 py-1 text-xs font-semibold uppercase border ${base} ${idx === 0 ? 'rounded-l-md' : ''} ${
-                            idx === arr.length - 1 ? 'rounded-r-md' : 'pr-6'
-                          }`}
+                          className={`px-4 py-1 text-xs font-semibold uppercase border ${base} ${idx === 0 ? 'rounded-l-md' : ''} ${idx === arr.length - 1 ? 'rounded-r-md' : 'pr-6'
+                            }`}
                         >
                           {label}
                         </div>
@@ -1820,9 +1885,8 @@ export default function PurchasePage() {
                 <button
                   onClick={goToPreviousPage}
                   disabled={currentPage === 1}
-                  className={`p-1 rounded ${
-                    currentPage === 1 ? "text-gray-300 cursor-not-allowed" : "text-gray-600 hover:bg-gray-100"
-                  }`}
+                  className={`p-1 rounded ${currentPage === 1 ? "text-gray-300 cursor-not-allowed" : "text-gray-600 hover:bg-gray-100"
+                    }`}
                 >
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
                     <path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z" />
@@ -1834,9 +1898,8 @@ export default function PurchasePage() {
                 <button
                   onClick={goToNextPage}
                   disabled={currentPage === totalPages}
-                  className={`p-1 rounded ${
-                    currentPage === totalPages ? "text-gray-300 cursor-not-allowed" : "text-gray-600 hover:bg-gray-100"
-                  }`}
+                  className={`p-1 rounded ${currentPage === totalPages ? "text-gray-300 cursor-not-allowed" : "text-gray-600 hover:bg-gray-100"
+                    }`}
                 >
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
                     <path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z" />
@@ -1862,7 +1925,7 @@ export default function PurchasePage() {
                       title="Select/Deselect all rows on this page"
                     />
                   </th>
-                  <th 
+                  <th
                     className="p-2 border-b cursor-pointer hover:bg-gray-200 select-none"
                     onClick={() => handleSort('trno')}
                     title="Click to sort by Transaction Number"
@@ -1874,7 +1937,7 @@ export default function PurchasePage() {
                       </span>
                     </div>
                   </th>
-                  <th 
+                  <th
                     className="p-2 border-b cursor-pointer hover:bg-gray-200 select-none"
                     onClick={() => handleSort('trdate')}
                     title="Click to sort by Transaction Date"
@@ -1886,7 +1949,7 @@ export default function PurchasePage() {
                       </span>
                     </div>
                   </th>
-                  <th 
+                  <th
                     className="p-2 border-b w-[60ch] cursor-pointer hover:bg-gray-200 select-none"
                     onClick={() => handleSort('partyname')}
                     title="Click to sort by Supplier"
@@ -1898,7 +1961,7 @@ export default function PurchasePage() {
                       </span>
                     </div>
                   </th>
-                  <th 
+                  <th
                     className="p-2 border-b cursor-pointer hover:bg-gray-200 select-none"
                     onClick={() => handleSort('suppinvno')}
                     title="Click to sort by Supplier Invoice Number"
@@ -1910,7 +1973,7 @@ export default function PurchasePage() {
                       </span>
                     </div>
                   </th>
-                  <th 
+                  <th
                     className="p-2 border-b cursor-pointer hover:bg-gray-200 select-none"
                     onClick={() => handleSort('suppinvdt')}
                     title="Click to sort by Supplier Invoice Date"
@@ -1922,7 +1985,7 @@ export default function PurchasePage() {
                       </span>
                     </div>
                   </th>
-                  <th 
+                  <th
                     className="p-2 border-b cursor-pointer hover:bg-gray-200 select-none"
                     onClick={() => handleSort('invamt')}
                     title="Click to sort by Invoice Amount"
@@ -1934,7 +1997,7 @@ export default function PurchasePage() {
                       </span>
                     </div>
                   </th>
-                  <th 
+                  <th
                     className="p-2 border-b cursor-pointer hover:bg-gray-200 select-none"
                     onClick={() => handleSort('cgst')}
                     title="Click to sort by CGST"
@@ -1946,7 +2009,7 @@ export default function PurchasePage() {
                       </span>
                     </div>
                   </th>
-                  <th 
+                  <th
                     className="p-2 border-b cursor-pointer hover:bg-gray-200 select-none"
                     onClick={() => handleSort('sgst')}
                     title="Click to sort by SGST"
@@ -1958,7 +2021,7 @@ export default function PurchasePage() {
                       </span>
                     </div>
                   </th>
-                  <th 
+                  <th
                     className="p-2 border-b cursor-pointer hover:bg-gray-200 select-none"
                     onClick={() => handleSort('igst')}
                     title="Click to sort by IGST"
@@ -1971,32 +2034,20 @@ export default function PurchasePage() {
                     </div>
                   </th>
                   <th className="p-2 border-b">Invoice Total</th>
-                  <th 
+                  <th
                     className="p-2 border-b cursor-pointer hover:bg-gray-200 select-none"
-                    onClick={() => handleSort('grn_posted')}
+                    onClick={() => handleSort('accounts_posted')}
                     title="Click to sort by Posted Status"
                   >
                     <div className="flex items-center justify-between">
                       <span>Posted</span>
                       <span className="ml-1">
-                        {sortField === 'grn_posted' ? (sortDirection === 'asc' ? '↑' : '↓') : '↕'}
-                      </span>
-                    </div>
-                  </th>
-                  <th 
-                    className="p-2 border-b cursor-pointer hover:bg-gray-200 select-none"
-                    onClick={() => handleSort('cost_sheet_prepared')}
-                    title="Click to sort by Cost Sheet Status"
-                  >
-                    <div className="flex items-center justify-between">
-                      <span>Cost Sheet</span>
-                      <span className="ml-1">
-                        {sortField === 'cost_sheet_prepared' ? (sortDirection === 'asc' ? '↑' : '↓') : '↕'}
+                        {sortField === 'accounts_posted' ? (sortDirection === 'asc' ? '↑' : '↓') : '↕'}
                       </span>
                     </div>
                   </th>
                   <th className="p-2 border-b">Confirmed</th>
-                  <th 
+                  <th
                     className="p-2 border-b cursor-pointer hover:bg-gray-200 select-none"
                     onClick={() => handleSort('is_cancelled')}
                     title="Click to sort by Cancelled Status"
@@ -2039,15 +2090,7 @@ export default function PurchasePage() {
                     <td className="p-2 border-b text-center">
                       <input
                         type="checkbox"
-                        checked={!!r.grnposted}
-                        readOnly
-                        onClick={(e) => e.stopPropagation()}
-                      />
-                    </td>
-                    <td className="p-2 border-b text-center">
-                      <input
-                        type="checkbox"
-                        checked={!!r.costsheetprepared}
+                        checked={!!r.accounts_posted}
                         readOnly
                         onClick={(e) => e.stopPropagation()}
                       />
@@ -2143,8 +2186,8 @@ export default function PurchasePage() {
                               // Custom tab/enter flow: Transportation -> Labour -> Misc -> Save
                               ref={
                                 idx === costingTypeIndex.tpt ? tptAmtRef :
-                                idx === costingTypeIndex.lab ? labAmtRef :
-                                idx === costingTypeIndex.misc ? miscAmtRef : undefined
+                                  idx === costingTypeIndex.lab ? labAmtRef :
+                                    idx === costingTypeIndex.misc ? miscAmtRef : undefined
                               }
                               onKeyDown={(e) => {
                                 if (idx === costingTypeIndex.tpt) return handleCostingAmountKeyDown(e, 'tpt');
@@ -2182,7 +2225,7 @@ export default function PurchasePage() {
                         if (!currentTranId && !editingPurchase?.tranid) return;
                         const id = currentTranId || editingPurchase.tranid;
                         try {
-                          const resp = await axios.put(`${API_BASE_URL}/api/purchase/${id}/costing`, { rows: costingRows });
+                          const resp = await axios.put(`${API_BASE_URL}/api/purchase/${id}/costing`, { rows: costingRows }, getAuthHeaders());
                           const d = resp?.data || {};
                           setHeader(h => ({
                             ...h,
@@ -2197,21 +2240,21 @@ export default function PurchasePage() {
 
                           // Re-fetch saved rows to reflect DB state
                           try {
-                            const r = await axios.get(`${API_BASE_URL}/api/purchase/${id}/costing`);
+                            const r = await axios.get(`${API_BASE_URL}/api/purchase/${id}/costing`, getAuthHeaders());
                             const rows = Array.isArray(r.data) ? r.data : [];
                             setCostingRows(
                               (rows.length > 0)
                                 ? rows.map(rr => ({
-                                    OHType: rr.ohtype ?? rr.OHType ?? '',
-                                    Amount: Number(rr.amount ?? rr.Amount ?? 0) || 0
-                                  }))
+                                  OHType: rr.ohtype ?? rr.OHType ?? '',
+                                  Amount: Number(rr.amount ?? rr.Amount ?? 0) || 0
+                                }))
                                 : [
-                                    { OHType: 'Transportation', Amount: 0 },
-                                    { OHType: 'Labour', Amount: 0 },
-                                    { OHType: 'Misc', Amount: 0 },
-                                  ]
+                                  { OHType: 'Transportation', Amount: 0 },
+                                  { OHType: 'Labour', Amount: 0 },
+                                  { OHType: 'Misc', Amount: 0 },
+                                ]
                             );
-                          } catch {}
+                          } catch { }
                         } catch (e) {
                           console.error(e);
                           setNotice({ open: true, type: 'error', message: 'Failed to save costing' });
@@ -2270,7 +2313,7 @@ export default function PurchasePage() {
                           });
                         }
                         try {
-                          await axios.post(`${API_BASE_URL}/api/purchase/${id}/costing/confirm`, { items: preview });
+                          await axios.post(`${API_BASE_URL}/api/purchase/${id}/costing/confirm`, { items: preview }, getAuthHeaders());
                           setHeader(h => ({ ...h, Costconfirmed: true, CostSheetPrepared: true }));
                           setNotice({ open: true, type: 'success', message: 'Costing confirmed' });
                           setShowCostingModal(false);
@@ -2305,7 +2348,7 @@ export default function PurchasePage() {
                             });
                             setItems(formattedItems);
                             setItemTab('costing');
-                          } catch {}
+                          } catch { }
                         } catch (e) {
                           console.error(e);
                           setNotice({ open: true, type: 'error', message: 'Failed to confirm costing' });
@@ -2387,7 +2430,7 @@ export default function PurchasePage() {
                     if (isLocked) return;
                     const newDate = e.target.value;
                     setHeader({ ...header, TrDate: newDate });
-                    
+
                     // Real-time validation of transaction date
                     if (newDate) {
                       try {
@@ -2486,17 +2529,17 @@ export default function PurchasePage() {
                       id="NoOverheadCheckbox"
                       type="checkbox"
                       checked={noOverhead}
-                      disabled={!isPosted || header.Costconfirmed || isCancelled}
+                      disabled={!editingPurchase || header.Costconfirmed || isCancelled || isPosted}
                       onChange={(e) => {
-                        if (!isPosted || header.Costconfirmed || isCancelled) return;
+                        if (!editingPurchase || header.Costconfirmed || isCancelled || isPosted) return;
                         setNoOverhead(e.target.checked);
                       }}
-                      title={isLocked ? "Purchase is locked" : (isPosted ? "Confirm costing without any overhead" : "Post GRN to enable costing options") }
+                      title={isLocked ? "Purchase is locked" : (editingPurchase ? "Confirm costing without any overhead" : "Save purchase first to enable costing options")}
                     />
                     <label htmlFor="NoOverheadCheckbox" className="text-sm text-gray-700">
                       No Overhead
                     </label>
-                    {noOverhead && isPosted && !header.Costconfirmed && !isCancelled && (
+                    {noOverhead && editingPurchase && !header.Costconfirmed && !isCancelled && !isPosted && (
                       <button
                         type="button"
                         className="ml-2 px-3 py-2 text-sm border rounded bg-green-600 text-white hover:bg-green-700"
@@ -2505,15 +2548,19 @@ export default function PurchasePage() {
                           try {
                             // Ensure header charges are zero and mark not prepared
                             await axios.put(`${API_BASE_URL}/api/purchase/${editingPurchase.tranid}/costing`, { rows: [] }, getAuthHeaders());
-                            // Confirm with no items overhead
+                            // Confirm costing with no items overhead
                             await axios.post(`${API_BASE_URL}/api/purchase/${editingPurchase.tranid}/costing/confirm`, { items: [] }, getAuthHeaders());
+
+                            // Then confirm the purchase (new workflow)
+                            await handleConfirmPurchase();
+
                             setHeader(h => ({ ...h, TptCharge: 0, LabCharge: 0, MiscCharge: 0, CostSheetPrepared: false, Costconfirmed: true }));
-                            setNotice({ open: true, type: 'success', message: 'Costing confirmed with no overhead' });
+                            setNotice({ open: true, type: 'success', message: 'Purchase confirmed with no overhead' });
+                            setNoOverhead(false);
                             await fetchPurchases();
-                            fetchPurchases();
                           } catch (e) {
                             console.error(e);
-                            setNotice({ open: true, type: 'error', message: 'Failed to confirm no-overhead costing' });
+                            setNotice({ open: true, type: 'error', message: 'Failed to confirm no-overhead purchase' });
                           }
                         }}
                       >
@@ -2524,8 +2571,8 @@ export default function PurchasePage() {
                 </div>
               </div>
             </div>
-            
-            
+
+
 
             {/* Items grid aligned to screenshot with tabs */}
             <div className="border rounded-lg">
@@ -2585,29 +2632,29 @@ export default function PurchasePage() {
                             </div>
                           </td>
                           <td className="p-2 border-b w-20">
-                            <input type="text" value={row.Unit || ''} onChange={(e)=> !isLocked && updateItem(idx, 'Unit', e.target.value)} disabled={isLocked} className={`w-full px-2 py-1 border rounded ${isLocked ? 'bg-gray-50 cursor-not-allowed' : ''}`} />
+                            <input type="text" value={row.Unit || ''} onChange={(e) => !isLocked && updateItem(idx, 'Unit', e.target.value)} disabled={isLocked} className={`w-full px-2 py-1 border rounded ${isLocked ? 'bg-gray-50 cursor-not-allowed' : ''}`} />
                           </td>
                           <td className="p-2 border-b w-24">
-                            <input type="text" value={formatNumber(row.Rate)} onChange={(e)=> { if (!isLocked) updateItem(idx, 'Rate', parseNumber(e.target.value)) }} disabled={isLocked} className={`w-full px-2 py-1 border rounded text-right ${isLocked ? 'bg-gray-50 cursor-not-allowed' : ''}`} />
+                            <input type="text" value={formatNumber(row.Rate)} onChange={(e) => { if (!isLocked) updateItem(idx, 'Rate', parseNumber(e.target.value)) }} disabled={isLocked} className={`w-full px-2 py-1 border rounded text-right ${isLocked ? 'bg-gray-50 cursor-not-allowed' : ''}`} />
                           </td>
                           <td className="p-2 border-b w-20">
-                            <input 
+                            <input
                               type="number"
                               step="0.01"
                               inputMode="decimal"
                               value={row.Qty}
-                              onChange={(e)=> {
+                              onChange={(e) => {
                                 if (isPosted) return;
                                 const val = e.target.value;
                                 const num = val === '' ? 0 : parseFloat(val);
                                 updateItem(idx, 'Qty', isNaN(num) ? 0 : num)
-                              }} 
+                              }}
                               disabled={isLocked}
-                              className={`w-full px-2 py-1 border rounded text-right [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none ${isLocked ? 'bg-gray-50 cursor-not-allowed' : ''}`} 
+                              className={`w-full px-2 py-1 border rounded text-right [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none ${isLocked ? 'bg-gray-50 cursor-not-allowed' : ''}`}
                             />
                           </td>
                           <td className="p-2 border-b w-24">
-                            <input type="text" value={formatNumber(row.NetRate)} onChange={(e)=> { if (!isLocked) updateItem(idx, 'NetRate', parseNumber(e.target.value)) }} disabled={isLocked} className={`w-full px-2 py-1 border rounded text-right ${isLocked ? 'bg-gray-50 cursor-not-allowed' : ''}`} />
+                            <input type="text" value={formatNumber(row.NetRate)} onChange={(e) => { if (!isLocked) updateItem(idx, 'NetRate', parseNumber(e.target.value)) }} disabled={isLocked} className={`w-full px-2 py-1 border rounded text-right ${isLocked ? 'bg-gray-50 cursor-not-allowed' : ''}`} />
                           </td>
                           <td className="p-2 border-b w-28 text-right">{formatNumber(n(row.InvAmount).toFixed(2))}</td>
                           <td className="p-2 border-b w-28 text-right">{formatNumber(n(row.CGSTAmount).toFixed(2))}</td>
@@ -2709,15 +2756,15 @@ export default function PurchasePage() {
                 </div>
                 <div className="flex items-center justify-between">
                   <div className="text-sm">Total GST</div>
-                  <div className="font-semibold">{formatNumber((n(header.CGST)+n(header.SGST)+n(header.IGST)).toFixed(2))}</div>
+                  <div className="font-semibold">{formatNumber((n(header.CGST) + n(header.SGST) + n(header.IGST)).toFixed(2))}</div>
                 </div>
                 <div className="flex items-center justify-between">
                   <div className="text-sm">Total Amount (after IGST)</div>
-                  <div className="font-semibold">{formatNumber((n(header.InvAmt)+n(header.CGST)+n(header.SGST)+n(header.IGST)).toFixed(2))}</div>
+                  <div className="font-semibold">{formatNumber((n(header.InvAmt) + n(header.CGST) + n(header.SGST) + n(header.IGST)).toFixed(2))}</div>
                 </div>
                 <div className="flex items-center justify-between">
                   <div className="text-sm">Rounded Off</div>
-                  <input 
+                  <input
                     type="number"
                     step="0.01"
                     inputMode="decimal"
@@ -2726,7 +2773,7 @@ export default function PurchasePage() {
                       if (isPosted) return;
                       const val = e.target.value;
                       const num = val === '' ? 0 : parseFloat(val);
-                      setHeader({...header, Rounded: isNaN(num) ? 0 : num});
+                      setHeader({ ...header, Rounded: isNaN(num) ? 0 : num });
                     }}
                     disabled={isLocked}
                     className={`w-28 px-2 py-1 border rounded text-right font-semibold [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none ${isLocked ? 'bg-gray-50 cursor-not-allowed' : ''}`}
@@ -2734,7 +2781,7 @@ export default function PurchasePage() {
                 </div>
                 <div className="flex items-center justify-between border-t pt-2">
                   <div className="font-semibold">Grand Total</div>
-                  <div className="font-bold">{formatNumber((n(header.InvAmt)+n(header.CGST)+n(header.SGST)+n(header.IGST)+n(header.Rounded)).toFixed(2))}</div>
+                  <div className="font-bold">{formatNumber((n(header.InvAmt) + n(header.CGST) + n(header.SGST) + n(header.IGST) + n(header.Rounded)).toFixed(2))}</div>
                 </div>
               </div>
             </div>
@@ -2742,18 +2789,18 @@ export default function PurchasePage() {
           </div>
         )}
       </div>
-      
+
       {/* Enhanced Item Selection Modal */}
       {showItemModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <motion.div 
+          <motion.div
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
             className="bg-white rounded-lg shadow-lg w-full max-w-7xl max-h-[95vh] flex flex-col"
           >
             <div className="p-4 border-b flex justify-between items-center">
               <h2 className="text-lg font-semibold">Add Item to Purchase</h2>
-              <button 
+              <button
                 onClick={() => setShowItemModal(false)}
                 className="text-gray-500 hover:text-gray-700"
               >
@@ -2762,7 +2809,7 @@ export default function PurchasePage() {
                 </svg>
               </button>
             </div>
-            
+
             <div className="flex flex-1 overflow-hidden">
               {/* Left Panel - Item Selection */}
               <div className="w-1/2 border-r flex flex-col">
@@ -2778,7 +2825,7 @@ export default function PurchasePage() {
                     ref={searchInputRef}
                   />
                 </div>
-                
+
                 <div className="overflow-y-auto flex-grow" ref={listRef} tabIndex={0} onKeyDown={handleListKeyDown}>
                   <table className="w-full border-collapse">
                     <thead className="bg-gray-50 sticky top-0">
@@ -3006,7 +3053,7 @@ export default function PurchasePage() {
                 )}
               </div>
             </div>
-            
+
             <div className="p-4 border-t flex justify-end gap-2">
               <button
                 onClick={() => setShowItemModal(false)}

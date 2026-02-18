@@ -36,6 +36,7 @@ const DebitNoteForm = () => {
   const [nextTempId, setNextTempId] = useState(2);
   const [accounts, setAccounts] = useState([]);
   const [parties, setParties] = useState([]);
+  const [isSaved, setIsSaved] = useState(false); // Track if debit note has been saved
 
   useEffect(() => {
     fetchAccounts();
@@ -234,6 +235,7 @@ const DebitNoteForm = () => {
       const result = response.data;
       const action = isEditMode ? 'updated' : 'created';
       showMessage(`Debit note ${action} successfully! (Serial: ${result.debitNoteSerial || masterData.debitNoteSerial})`, 'success');
+      setIsSaved(true); // Mark as saved
 
       if (isEditMode) {
         fetchDebitNoteData();
@@ -549,7 +551,8 @@ const DebitNoteForm = () => {
                     ...initialMasterState,
                     debitNoteSerial: masterData.debitNoteSerial,
                   }); 
-                  setDebitNoteDetails([initialLineItem]); 
+                  setDebitNoteDetails([initialLineItem]);
+                  setIsSaved(false);
                 }}
                 className="flex items-center space-x-2 px-6 py-3 border border-gray-300 text-gray-700 font-semibold rounded-lg shadow-sm hover:bg-gray-100 transition duration-200"
                 disabled={isLoading}
@@ -569,25 +572,45 @@ const DebitNoteForm = () => {
               </button>
             </div>
 
-            {((isEditMode && canEdit('ACCOUNTS', 'DEBIT_NOTE')) || (!isEditMode && canCreate('ACCOUNTS', 'DEBIT_NOTE'))) && (
-              <button
-                type="submit"
-                disabled={isLoading || !isBalanced || totalDebit === 0}
-                className={`flex items-center space-x-2 px-6 py-3 font-semibold rounded-lg shadow-lg transition duration-200 ${
-                  isLoading || !isBalanced || totalDebit === 0
-                    ? 'bg-gray-400 text-white cursor-not-allowed' 
-                    : 'bg-blue-600 text-white hover:bg-blue-700'
-                }`}
-              >
-                <Save className="w-4 h-4" />
-                <span>
-                  {isLoading 
-                    ? (isEditMode ? 'Updating...' : 'Creating...') 
-                    : (isEditMode ? 'Update Debit Note' : 'Create Debit Note')
-                  }
-                </span>
-              </button>
-            )}
+            <div className="flex space-x-3">
+              {isSaved && !isEditMode && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMasterData(initialMasterState);
+                    setDebitNoteDetails([initialLineItem]);
+                    setNextTempId(2);
+                    setIsSaved(false);
+                    fetchDebitNoteSerial();
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                  }}
+                  className="flex items-center space-x-2 px-6 py-3 border border-transparent text-white font-semibold rounded-lg shadow-lg bg-indigo-600 hover:bg-indigo-700 transition duration-200"
+                >
+                  <PlusCircle className="w-4 h-4" />
+                  <span>Add New</span>
+                </button>
+              )}
+
+              {((isEditMode && canEdit('ACCOUNTS', 'DEBIT_NOTE')) || (!isEditMode && canCreate('ACCOUNTS', 'DEBIT_NOTE'))) && (
+                <button
+                  type="submit"
+                  disabled={isLoading || !isBalanced || totalDebit === 0}
+                  className={`flex items-center space-x-2 px-6 py-3 font-semibold rounded-lg shadow-lg transition duration-200 ${
+                    isLoading || !isBalanced || totalDebit === 0
+                      ? 'bg-gray-400 text-white cursor-not-allowed' 
+                      : 'bg-blue-600 text-white hover:bg-blue-700'
+                  }`}
+                >
+                  <Save className="w-4 h-4" />
+                  <span>
+                    {isLoading 
+                      ? (isEditMode ? 'Updating...' : 'Creating...') 
+                      : (isEditMode ? 'Update Debit Note' : 'Create Debit Note')
+                    }
+                  </span>
+                </button>
+              )}
+            </div>
           </div>
         </form>
       </div>

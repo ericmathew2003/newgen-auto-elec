@@ -33,10 +33,57 @@ backend/filter_*.js
 backend/download_*.ps1
 backend/restore_*.ps1
 backend/upload_*.md
+
+# Test and verification scripts
+test_*.js
+check_*.js
+debug_*.js
+verify_*.js
+fix_*.js
+cleanup_*.js
+temp_*.js
+backend/test_*.js
+backend/check_*.js
+backend/debug_*.js
+backend/verify_*.js
+backend/fix_*.js
+backend/cleanup_*.js
+backend/temp_*.js
+backend/add_*.js
+frontend/test_*.js
+frontend/check_*.js
+frontend/debug_*.js
+frontend/verify_*.js
+frontend/fix_*.js
+frontend/cleanup_*.js
+
+# Setup and migration SQL files (keep only main database files)
+setup_*.sql
+fix_*.sql
+migrate_*.sql
+cleanup_*.sql
+backend/setup_*.sql
+backend/fix_*.sql
+backend/migrate_*.sql
+backend/cleanup_*.sql
+
+# Documentation markdown files (keep only README)
+*_COMPLETE.md
+*_IMPLEMENTATION.md
+*_GUIDE.md
+*_FIX.md
+*_SUMMARY.md
+*_DEBUGGING.md
+*_RESOLVED.md
+*_UPDATE.md
+*_WORKFLOW.md
+backend/*.md
+frontend/*.md
 *.sql
 !backend/database.sql
 !backend/database_neon.sql
 !backend/sample_data.sql
+!backend/schema.sql
 
 # CSV files
 *.csv

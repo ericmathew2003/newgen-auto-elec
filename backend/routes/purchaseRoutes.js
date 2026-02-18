@@ -103,45 +103,8 @@ router.post("/complete", authenticateToken, checkPermission('INVENTORY_PURCHASE_
       }
     }
 
-    // If cost confirmed, update item costs and stock
-    if (costconfirmed) {
-      // Update item master costs and stock
-      for (const item of items) {
-        if (item.itemcode && item.qty > 0) {
-          // Get current stock and cost
-          const itemResult = await client.query(
-            `SELECT curstock, avgcost FROM tblmasitem WHERE itemcode = $1 FOR UPDATE`,
-            [item.itemcode]
-          );
-
-          if (itemResult.rows.length > 0) {
-            const currentStock = Number(itemResult.rows[0].curstock) || 0;
-            const currentAvgCost = Number(itemResult.rows[0].avgcost) || 0;
-            
-            // Calculate new weighted average cost
-            const totalValue = (currentStock * currentAvgCost) + (item.qty * item.rate);
-            const totalStock = currentStock + item.qty;
-            const newAvgCost = totalStock > 0 ? totalValue / totalStock : item.rate;
-
-            // Update item master
-            await client.query(
-              `UPDATE tblmasitem 
-               SET cost = $1, avgcost = $2, curstock = $3 
-               WHERE itemcode = $4`,
-              [item.rate, newAvgCost, totalStock, item.itemcode]
-            );
-
-            // Create stock ledger entry
-            await client.query(
-              `INSERT INTO trn_stock_ledger 
-               (fyear_id, inv_master_id, itemcode, tran_type, tran_date, qty)
-               VALUES ($1, $2, $3, $4, $5, $6)`,
-              [fyearid, tranId, item.itemcode, 'PUR', trdate, item.qty]
-            );
-          }
-        }
-      }
-    }
+    // NOTE: Stock updates are handled in the /confirm endpoint
+    // Do NOT update stock here during save
 
     await client.query('COMMIT');
 
@@ -323,7 +286,7 @@ router.get("/", authenticateToken, checkPermission('INVENTORY_PURCHASE_VIEW'), a
     const result = await pool.query(
       `SELECT p.TranID, p.TrNo, p.TrDate, p.SuppInvNo, p.SuppInvDt,
               party.PartyName, p.InvAmt, p.CGST, p.SGST, p.IGST,
-              p.CostSheetPrepared, p.GRNPosted, p.Costconfirmed, p.is_cancelled
+              p.CostSheetPrepared, p.GRNPosted, p.Costconfirmed, p.accounts_posted, p.is_cancelled
        FROM tblTrnPurchase p
        JOIN tblMasParty party ON p.PartyID = party.PartyID
        ${filter}
@@ -526,18 +489,304 @@ router.post('/:tranId/costing/confirm', authenticateToken, checkPermission('INVE
       }
     }
 
-    // 5) Mark the purchase as cost confirmed
+    // 5) Mark the purchase as cost confirmed (no status change needed)
     await client.query(
-      `UPDATE tblTrnPurchase SET Costconfirmed = true WHERE TranID = $1`,
+      `UPDATE tbltrnpurchase SET costconfirmed = true WHERE tranid = $1`,
       [tranId]
     );
 
     await client.query('COMMIT');
-    res.json({ success: true });
+    res.json({ success: true, message: 'Costing confirmed. Ready for purchase confirmation.' });
   } catch (err) {
     await client.query('ROLLBACK');
     console.error(err);
     res.status(500).json({ error: 'Failed to confirm costing' });
+  } finally {
+    client.release();
+  }
+});
+
+/**
+ * Confirm Purchase - Marks purchase as confirmed (GRN posted)
+ * Note: Stock updates happen in /costing/confirm endpoint, not here
+ */
+router.post('/:tranId/confirm', authenticateToken, checkPermission('INVENTORY_PURCHASE_EDIT'), async (req, res) => {
+  const { tranId } = req.params;
+  const client = await pool.connect();
+  
+  try {
+    await client.query('BEGIN');
+    
+    // Get purchase details - must have costing confirmed
+    const purchaseResult = await client.query(`
+      SELECT p.tranid, p.costconfirmed, p.accounts_posted, p.grnposted
+      FROM tbltrnpurchase p
+      WHERE p.tranid = $1 AND p.costconfirmed = true AND p.accounts_posted = false
+    `, [tranId]);
+    
+    if (purchaseResult.rows.length === 0) {
+      throw new Error('Purchase not found, costing not confirmed, or already posted to accounts');
+    }
+    
+    // Update purchase - mark as GRN posted (confirmed)
+    // Stock was already updated in /costing/confirm endpoint
+    await client.query(`
+      UPDATE tbltrnpurchase 
+      SET grnposted = true, edited_date = now()
+      WHERE tranid = $1
+    `, [tranId]);
+    
+    await client.query('COMMIT');
+    res.json({ success: true, message: 'Purchase confirmed. Ready for posting to accounts.' });
+    
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('Error confirming purchase:', err);
+    res.status(500).json({ error: 'Failed to confirm purchase', details: err.message });
+  } finally {
+    client.release();
+  }
+});
+
+/**
+ * Post Purchase to Accounts - Creates accounting entries using dynamic mapping
+ * This posts the purchase to accounts and marks as accounts_posted
+ */
+router.post('/:tranId/post', authenticateToken, checkPermission('INVENTORY_PURCHASE_EDIT'), async (req, res) => {
+  const { tranId } = req.params;
+  const userId = req.user?.user_id;
+  const client = await pool.connect();
+  
+  try {
+    await client.query('BEGIN');
+    
+    // Get purchase details - must be confirmed (GRN posted) and not yet posted to accounts
+    const purchaseResult = await client.query(`
+      SELECT p.*, party.partyname 
+      FROM tbltrnpurchase p
+      LEFT JOIN tblmasparty party ON p.partyid = party.partyid
+      WHERE p.tranid = $1 AND p.grnposted = true AND p.accounts_posted = false
+    `, [tranId]);
+    
+    if (purchaseResult.rows.length === 0) {
+      throw new Error('Purchase not found, not confirmed, or already posted to accounts');
+    }
+    
+    const purchase = purchaseResult.rows[0];
+    
+    // Get purchase details for item-level processing
+    const purchaseDetails = await client.query(`
+      SELECT * FROM tbltrnpurchasedet WHERE tranmasid = $1 ORDER BY srno
+    `, [tranId]);
+    
+    // Calculate totals
+    const invAmount = Number(purchase.invamt) || 0;
+    const cgstAmount = Number(purchase.cgst) || 0;
+    const sgstAmount = Number(purchase.sgst) || 0;
+    const igstAmount = Number(purchase.igst) || 0;
+    const tptCharge = Number(purchase.tptcharge) || 0;
+    const labCharge = Number(purchase.labcharge) || 0;
+    const miscCharge = Number(purchase.misccharge) || 0;
+    const roundedAmount = Number(purchase.rounded) || 0;
+    
+    // Grand total includes rounded amount for proper journal balancing
+    const totalAmount = invAmount + cgstAmount + sgstAmount + igstAmount + tptCharge + labCharge + miscCharge + roundedAmount;
+    
+    // 1. Create invoice tracking record
+    const invoiceResult = await client.query(`
+      INSERT INTO acc_trn_invoice 
+      (fyear_id, party_id, tran_type, inv_master_id, tran_date, party_inv_no, party_inv_date, 
+       tran_amount, balance_amount, inv_reference)
+      VALUES ($1, $2, 'PUR', $3, $4, $5, $6, $7, $7, $8)
+      RETURNING tran_id
+    `, [purchase.fyearid, purchase.partyid, tranId, purchase.trdate, 
+        purchase.suppinvno, purchase.suppinvdt, totalAmount, `PUR-${purchase.trno}`]);
+    
+    const invoiceTranId = invoiceResult.rows[0].tran_id;
+    
+    // 2. Generate journal serial number
+    const journalSerial = `JV-PUR-${purchase.fyearid}-${purchase.trno}`;
+    
+    // 3. Get dynamic transaction mappings for Purchase
+    const mappingResult = await client.query(`
+      SELECT * FROM con_transaction_mapping 
+      WHERE transaction_type = 'Purchase' 
+      ORDER BY entry_sequence
+    `);
+    
+    if (mappingResult.rows.length === 0) {
+      throw new Error('No transaction mappings found for Purchase');
+    }
+    
+    // 4. Create journal master entry
+    const journalResult = await client.query(`
+      INSERT INTO acc_journal_master 
+      (journal_date, finyearid, journal_serial, source_document_type, source_document_ref, 
+       source_document_id, total_debit, total_credit, narration, posted_by_user_id)
+      VALUES ($1, $2, $3, 'PURCHASE_INVOICE', $4, $5, $6, $6, $7, $8)
+      RETURNING journal_mas_id
+    `, [purchase.trdate, purchase.fyearid, journalSerial, purchase.trno, tranId, 
+        totalAmount, `Purchase Invoice ${purchase.suppinvno} from ${purchase.partyname || 'Party ID ' + purchase.partyid}`, userId]);
+    
+    const journalMasId = journalResult.rows[0].journal_mas_id;
+    
+    // 5. Process each mapping to create journal entries
+    for (const mapping of mappingResult.rows) {
+      // Get account ID based on account nature (flexible matching)
+      // First try exact match, then try pattern matching for transaction-specific natures
+      let accountResult = await client.query(`
+        SELECT account_id FROM acc_mas_coa 
+        WHERE TRIM(UPPER(account_nature)) = TRIM(UPPER($1)) AND is_active = true
+        LIMIT 1
+      `, [mapping.account_nature]);
+
+      // If exact match fails, try pattern matching (e.g., 'Purchase Invoice ("STOCK_ON_HAND")')
+      if (accountResult.rows.length === 0) {
+        accountResult = await client.query(`
+          SELECT account_id FROM acc_mas_coa 
+          WHERE account_nature ILIKE '%' || $1 || '%' AND is_active = true
+          LIMIT 1
+        `, [mapping.account_nature]);
+      }
+      
+      if (accountResult.rows.length === 0) {
+        console.warn(`No active account found for nature: ${mapping.account_nature}`);
+        continue;
+      }
+      
+      const accountId = accountResult.rows[0].account_id;
+      
+      // Calculate amount based on value source
+      let amount = 0;
+      switch (mapping.value_source) {
+        case 'PURCHASE_TAXABLE_AMOUNT':
+        case 'TAXABLE_AMOUNT':
+        case 'INVOICE_AMOUNT':
+          amount = invAmount;
+          break;
+        case 'PURCHASE_CGST_AMOUNT':
+        case 'CGST_AMOUNT':
+          amount = cgstAmount;
+          break;
+        case 'PURCHASE_SGST_AMOUNT':
+        case 'SGST_AMOUNT':
+          amount = sgstAmount;
+          break;
+        case 'PURCHASE_IGST_AMOUNT':
+        case 'IGST_AMOUNT':
+          amount = igstAmount;
+          break;
+        case 'PURCHASE_TOTAL_AMOUNT':
+        case 'INVOICE_TOTAL':
+        case 'GROSS_TOTAL':
+          amount = totalAmount;
+          break;
+        case 'ROUND_OFF_AMOUNT':
+          amount = roundedAmount;
+          break;
+        case 'TRANSPORT_CHARGE':
+          amount = tptCharge;
+          break;
+        case 'LABOUR_CHARGE':
+          amount = labCharge;
+          break;
+        case 'MISC_CHARGE':
+          amount = miscCharge;
+          break;
+        default:
+          console.warn(`Unknown value source: ${mapping.value_source}`);
+          continue;
+      }
+      
+      // Skip if amount is zero (except for rounding which has special logic)
+      if (amount === 0 && mapping.value_source !== 'ROUND_OFF_AMOUNT') continue;
+      
+      // Special handling for rounding off amounts
+      if (mapping.value_source === 'ROUND_OFF_AMOUNT') {
+        // Skip if rounding amount is zero
+        if (roundedAmount === 0) continue;
+        
+        // Use absolute amount for journal entry
+        amount = Math.abs(roundedAmount);
+      }
+      
+      // Generate description from template or use default
+      let description = mapping.description_template || 
+        `${mapping.account_nature} - Invoice ${purchase.suppinvno}`;
+      
+      // Replace placeholders in description template
+      description = description
+        .replace('{INVOICE_NO}', purchase.suppinvno || '')
+        .replace('{PARTY_NAME}', purchase.partyname || '')
+        .replace('{AMOUNT}', amount.toFixed(2));
+      
+      // Create journal detail entry
+      const journalDetailData = {
+        journal_mas_id: journalMasId,
+        account_id: accountId,
+        description: description
+      };
+      
+      // Add party_id for supplier-related accounts
+      if (mapping.account_nature === 'AP_CONTROL' || 
+          mapping.account_nature === 'ACCOUNTS_PAYABLE' || 
+          mapping.account_nature === 'SUPPLIER') {
+        journalDetailData.party_id = purchase.partyid;
+      }
+      
+      // Determine debit/credit based on mapping and special rounding logic
+      let isDebit = mapping.debit_credit === 'D';
+      
+      // Special logic for rounding off amounts
+      if (mapping.value_source === 'ROUND_OFF_AMOUNT' && roundedAmount !== 0) {
+        // Dynamic debit/credit based on rounding amount sign
+        // Positive rounding = Debit, Negative rounding = Credit
+        isDebit = roundedAmount > 0;
+        
+        // Update description to indicate rounding direction
+        if (roundedAmount > 0) {
+          description = description.replace('Rounding', 'Rounding Up');
+        } else {
+          description = description.replace('Rounding', 'Rounding Down');
+        }
+      }
+      
+      // Create the journal entry
+      if (isDebit) {
+        await client.query(`
+          INSERT INTO acc_journal_detail 
+          (journal_mas_id, account_id, party_id, debit_amount, description)
+          VALUES ($1, $2, $3, $4, $5)
+        `, [journalMasId, accountId, journalDetailData.party_id || null, amount, description]);
+      } else {
+        await client.query(`
+          INSERT INTO acc_journal_detail 
+          (journal_mas_id, account_id, party_id, credit_amount, description)
+          VALUES ($1, $2, $3, $4, $5)
+        `, [journalMasId, accountId, journalDetailData.party_id || null, amount, description]);
+      }
+    }
+    
+    // 6. Update purchase - mark as posted to accounts
+    await client.query(`
+      UPDATE tbltrnpurchase 
+      SET accounts_posted = true, edited_date = now()
+      WHERE tranid = $1
+    `, [tranId]);
+    
+    await client.query('COMMIT');
+    res.json({ 
+      success: true, 
+      message: 'Purchase posted to accounts successfully using dynamic mapping',
+      invoiceTranId,
+      journalMasId,
+      entriesCreated: mappingResult.rows.length
+    });
+    
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('Error posting purchase:', err);
+    res.status(500).json({ error: 'Failed to post purchase', details: err.message });
   } finally {
     client.release();
   }

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { BookA, PlusCircle, MinusCircle, CheckCircle, Save, RotateCcw, ArrowLeft } from 'lucide-react';
+import { BookA, PlusCircle, MinusCircle, CheckCircle, Save, RotateCcw, ArrowLeft, ChevronLeft, ChevronRight } from 'lucide-react';
 import axios from 'axios';
 import API_BASE_URL from './config/api';
 import { usePermissions } from './hooks/usePermissions';
@@ -12,6 +12,19 @@ const initialLineItem = {
   debitAmount: 0.00,
   creditAmount: 0.00,
   description: '',
+};
+
+// Helper function to format date for input field (handles timezone properly)
+const formatDateForInput = (dateString) => {
+  if (!dateString) return '';
+  
+  // Create date object and get local date components
+  const date = new Date(dateString);
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  
+  return `${year}-${month}-${day}`;
 };
 
 const initialMasterState = {
@@ -36,16 +49,65 @@ const AccJournalEntryForm = () => {
   const [nextTempId, setNextTempId] = useState(2);
   const [accounts, setAccounts] = useState([]);
   const [parties, setParties] = useState([]);
+  
+  // Navigation state
+  const [journalIds, setJournalIds] = useState([]);
+  const [currentIndex, setCurrentIndex] = useState(-1);
+  
+  // Dirty state tracking
+  const [initialData, setInitialData] = useState(null);
+  const [isDirty, setIsDirty] = useState(false);
 
   useEffect(() => {
     fetchAccounts();
     fetchParties();
     if (isEditMode) {
       fetchJournalData();
+      fetchJournalIds();
     } else {
       fetchJournalSerial();
     }
   }, [id, isEditMode]);
+  
+  // Fetch all journal IDs for navigation
+  const fetchJournalIds = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      
+      // Fetch all journals without pagination limit
+      const response = await axios.get(`${API_BASE_URL}/api/accounting/journals/all?limit=1000`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      
+      // The response has a nested structure: { journals: [...], total, page, limit }
+      const journalsData = response.data.journals || response.data;
+      const ids = journalsData.map(j => parseInt(j.journal_mas_id));
+      setJournalIds(ids);
+      
+      // Find current index
+      const currentIdInt = parseInt(id);
+      const index = ids.findIndex(jId => jId === currentIdInt);
+      setCurrentIndex(index);
+    } catch (error) {
+      console.error('Error fetching journal IDs:', error);
+    }
+  };
+  
+  // Navigate to previous journal
+  const handlePrevious = () => {
+    if (currentIndex > 0) {
+      const prevId = journalIds[currentIndex - 1];
+      navigate(`/accounts/journal-voucher/edit/${prevId}`);
+    }
+  };
+  
+  // Navigate to next journal
+  const handleNext = () => {
+    if (currentIndex < journalIds.length - 1) {
+      const nextId = journalIds[currentIndex + 1];
+      navigate(`/accounts/journal-voucher/edit/${nextId}`);
+    }
+  };
 
   const fetchAccounts = async () => {
     try {
@@ -102,7 +164,7 @@ const AccJournalEntryForm = () => {
       // Set master data
       setMasterData({
         journalSerial: master.journal_serial || '',
-        journalDate: master.journal_date ? master.journal_date.substring(0, 10) : '',
+        journalDate: formatDateForInput(master.journal_date),
         sourceDocumentType: master.source_document_type || 'Journal',
         sourceDocumentRef: master.source_document_ref || '',
         narration: master.narration || '',
@@ -121,6 +183,18 @@ const AccJournalEntryForm = () => {
         }));
         setJournalDetails(detailsWithTempId);
         setNextTempId(detailsWithTempId.length + 1);
+        
+        // Store initial data for dirty checking
+        setInitialData({
+          master: {
+            journalSerial: master.journal_serial || '',
+            journalDate: formatDateForInput(master.journal_date),
+            sourceDocumentType: master.source_document_type || 'Journal',
+            sourceDocumentRef: master.source_document_ref || '',
+            narration: master.narration || '',
+          },
+          details: detailsWithTempId
+        });
       } else {
         setJournalDetails([initialLineItem]);
         setNextTempId(2);
@@ -139,6 +213,24 @@ const AccJournalEntryForm = () => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
     setTimeout(() => setStatus({ message: '', type: '' }), 6000);
   };
+  
+  // Check if form is dirty (has unsaved changes)
+  useEffect(() => {
+    if (!isEditMode || !initialData) {
+      setIsDirty(false);
+      return;
+    }
+    
+    // Compare master data
+    const masterChanged = JSON.stringify(masterData) !== JSON.stringify(initialData.master);
+    
+    // Compare details (excluding tempId for comparison)
+    const currentDetailsForCompare = journalDetails.map(({ tempId, ...rest }) => rest);
+    const initialDetailsForCompare = initialData.details.map(({ tempId, ...rest }) => rest);
+    const detailsChanged = JSON.stringify(currentDetailsForCompare) !== JSON.stringify(initialDetailsForCompare);
+    
+    setIsDirty(masterChanged || detailsChanged);
+  }, [masterData, journalDetails, initialData, isEditMode]);
 
   const { totalDebit, totalCredit, isBalanced } = useMemo(() => {
     const totalDebit = journalDetails.reduce((sum, line) => sum + parseFloat(line.debitAmount || 0), 0);
@@ -312,13 +404,52 @@ const AccJournalEntryForm = () => {
 
       <div className="w-full max-w-4xl mx-auto">
         <header className="mb-6">
-          <h1 className="text-3xl font-bold text-gray-800 flex items-center">
-            <BookA className="w-7 h-7 mr-3 text-red-600" />
-            {isEditMode ? 'Edit' : 'Create'} Journal Entry
-          </h1>
-          <p className="text-gray-500 mt-1">
-            {isEditMode ? 'Update the journal entry details below.' : 'Record a manual double-entry transaction.'}
-          </p>
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-3xl font-bold text-gray-800 flex items-center">
+                <BookA className="w-7 h-7 mr-3 text-red-600" />
+                {isEditMode ? 'Edit' : 'Create'} Journal Entry
+              </h1>
+              <p className="text-gray-500 mt-1">
+                {isEditMode ? 'Update the journal entry details below.' : 'Record a manual double-entry transaction.'}
+              </p>
+            </div>
+            
+            {/* Navigation buttons - only show in edit mode */}
+            {isEditMode && journalIds.length > 0 && (
+              <div className="flex items-center space-x-2">
+                <button
+                  onClick={handlePrevious}
+                  disabled={currentIndex <= 0}
+                  className={`p-2 rounded-lg border transition-colors ${
+                    currentIndex <= 0
+                      ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                      : 'bg-white text-gray-700 hover:bg-gray-50 border-gray-300'
+                  }`}
+                  title="Previous Journal"
+                >
+                  <ChevronLeft className="w-5 h-5" />
+                </button>
+                
+                <span className="text-sm text-gray-600 px-2">
+                  {currentIndex + 1} / {journalIds.length}
+                </span>
+                
+                <button
+                  onClick={handleNext}
+                  disabled={currentIndex >= journalIds.length - 1}
+                  className={`p-2 rounded-lg border transition-colors ${
+                    currentIndex >= journalIds.length - 1
+                      ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                      : 'bg-white text-gray-700 hover:bg-gray-50 border-gray-300'
+                  }`}
+                  title="Next Journal"
+                >
+                  <ChevronRight className="w-5 h-5" />
+                </button>
+              </div>
+            )}
+          </div>
         </header>
 
         {/* Status Message - Moved to top for better visibility */}
@@ -584,12 +715,13 @@ const AccJournalEntryForm = () => {
             {((isEditMode && canEdit('ACCOUNTS', 'JOURNAL_VOUCHER')) || (!isEditMode && canCreate('ACCOUNTS', 'JOURNAL_VOUCHER'))) && (
               <button
                 type="submit"
-                disabled={isLoading || !isBalanced || totalDebit === 0}
+                disabled={isLoading || !isBalanced || totalDebit === 0 || (isEditMode && !isDirty)}
                 className={`flex items-center space-x-2 px-6 py-3 font-semibold rounded-lg shadow-lg transition duration-200 ${
-                  isLoading || !isBalanced || totalDebit === 0
+                  isLoading || !isBalanced || totalDebit === 0 || (isEditMode && !isDirty)
                     ? 'bg-gray-400 text-white cursor-not-allowed' 
                     : 'bg-red-600 text-white hover:bg-red-700'
                 }`}
+                title={isEditMode && !isDirty ? 'No changes to save' : ''}
               >
                 <Save className="w-4 h-4" />
                 <span>

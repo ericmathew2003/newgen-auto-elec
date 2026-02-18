@@ -56,6 +56,7 @@ const initialHeaderState = {
   TotalAmount: 0,
   Remark: "",
   IsPosted: false,
+  IsConfirmed: false,
 };
 
 const makeEmptyItem = (index = 1) => ({
@@ -183,15 +184,20 @@ function SearchableItemTable({ items, highlightIndex, onSelect, onHover, tableId
 export default function PurchaseReturnForm({ onClose, onSaved, onDataChanged, initialData, allReturns = [], onNavigate }) {
   const { canCreate, canEdit, canDelete } = usePermissions();
   const isEditMode = !!initialData;
+  
+  // Track if we've saved a new return (to show Confirm button)
+  const [savedReturnData, setSavedReturnData] = useState(null);
+  const effectiveInitialData = savedReturnData || initialData;
+  const effectiveEditMode = !!effectiveInitialData;
 
   // Check permissions and redirect if unauthorized
   useEffect(() => {
-    if (isEditMode && !canEdit('INVENTORY', 'PURCHASE_RETURN')) {
+    if (effectiveEditMode && !canEdit('INVENTORY', 'PURCHASE_RETURN')) {
       onClose();
-    } else if (!isEditMode && !canCreate('INVENTORY', 'PURCHASE_RETURN')) {
+    } else if (!effectiveEditMode && !canCreate('INVENTORY', 'PURCHASE_RETURN')) {
       onClose();
     }
-  }, [isEditMode, canEdit, canCreate, onClose]);
+  }, [effectiveEditMode, canEdit, canCreate, onClose]);
 
   const [header, setHeader] = useState({ ...initialHeaderState });
   const [items, setItems] = useState([makeEmptyItem(1)]);
@@ -313,6 +319,7 @@ export default function PurchaseReturnForm({ onClose, onSaved, onDataChanged, in
       TotalAmount: n(initialData.total_amount),
       Remark: initialData.description || initialData.remark || "",
       IsPosted: !!initialData.is_posted,
+      IsConfirmed: !!initialData.is_confirmed,
     };
 
     const mappedItems = Array.isArray(initialData.items)
@@ -810,14 +817,14 @@ export default function PurchaseReturnForm({ onClose, onSaved, onDataChanged, in
         items: mapItemsToApi(),
       };
 
-      if (initialData?.pret_id) {
+      if (effectiveInitialData?.pret_id) {
         await axios.put(
-          `${API_BASE_URL}/api/purchase-return/${initialData.pret_id}`,
+          `${API_BASE_URL}/api/purchase-return/${effectiveInitialData.pret_id}`,
           payload.header,
           getAuthHeaders()
         );
         await axios.post(
-          `${API_BASE_URL}/api/purchase-return/${initialData.pret_id}/items/replace`,
+          `${API_BASE_URL}/api/purchase-return/${effectiveInitialData.pret_id}/items/replace`,
           { items: payload.items, fyear_id: header.FYearID },
           getAuthHeaders()
         );
@@ -840,11 +847,34 @@ export default function PurchaseReturnForm({ onClose, onSaved, onDataChanged, in
         
         // Use the return number from the server response (most reliable)
         const actualSavedNumber = saveResponse.data?.purch_ret_no;
+        const savedId = saveResponse.data?.pret_id || saveResponse.data?.purch_ret_id;
         console.log("Frontend: Actual saved number from server:", actualSavedNumber);
+        console.log("Frontend: Saved ID from server:", savedId);
         
         if (actualSavedNumber) {
           finalReturnNumber = String(actualSavedNumber);
           console.log("Frontend: Using server response number:", finalReturnNumber);
+        }
+        
+        // Update initialData to enable Confirm button
+        if (savedId) {
+          const newInitialData = {
+            ...header,
+            pret_id: savedId,
+            purch_ret_id: savedId,
+            purch_ret_no: finalReturnNumber,
+            items: items
+          };
+          
+          // Set local saved data to enable Confirm button
+          setSavedReturnData(newInitialData);
+          
+          // Update the parent component's data
+          if (onSaved) {
+            onSaved(newInitialData);
+          }
+          
+          console.log("Frontend: Updating to edit mode with ID:", savedId);
         }
         
         setNoticeMessage("success", "Purchase return created successfully");
@@ -918,7 +948,7 @@ export default function PurchaseReturnForm({ onClose, onSaved, onDataChanged, in
   };
 
   const handlePrint = async () => {
-    if (!initialData?.pret_id) {
+    if (!effectiveInitialData?.pret_id) {
       setNoticeMessage("warning", "Save the purchase return before printing");
       return;
     }
@@ -1198,57 +1228,107 @@ export default function PurchaseReturnForm({ onClose, onSaved, onDataChanged, in
     }
   };
 
+  const handleConfirm = async () => {
+    if (!effectiveInitialData?.pret_id) {
+      setNoticeMessage("warning", "Save the purchase return before confirming");
+      return;
+    }
+
+    if (header.IsConfirmed) {
+      setNoticeMessage("info", "Purchase return is already confirmed");
+      return;
+    }
+
+    if (header.IsPosted) {
+      setNoticeMessage("info", "Purchase return is already posted");
+      return;
+    }
+
+    try {
+      setSaving(true);
+      await axios.post(`${API_BASE_URL}/api/purchase-return/${effectiveInitialData.pret_id}/confirm`, {}, getAuthHeaders());
+      
+      // Update header state
+      setHeader(prev => ({ ...prev, IsConfirmed: true }));
+      
+      setNoticeMessage("success", `Purchase Return ${header.PurchRetNo} confirmed successfully! It is now locked for editing and ready for posting.`);
+      
+      // Update lastSavedState to prevent "discard changes" dialog
+      setTimeout(() => {
+        console.log("Updating saved state after confirming");
+        setHeader(currentHeader => {
+          setItems(currentItems => {
+            setLastSavedState({
+              header: { ...currentHeader },
+              items: [...currentItems]
+            });
+            setJustSaved(true);
+            return currentItems;
+          });
+          return currentHeader;
+        });
+      }, 100);
+      
+      // Refresh parent data
+      if (onDataChanged) onDataChanged();
+      
+    } catch (error) {
+      console.error(error);
+      const message = error?.response?.data?.error || "Failed to confirm purchase return";
+      setNoticeMessage("error", message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const handlePost = async () => {
-    if (!initialData?.pret_id) {
+    if (!effectiveInitialData?.pret_id) {
       setNoticeMessage("warning", "Save the purchase return before posting");
       return;
     }
 
-    if (!header.PartyID) {
-      setNoticeMessage("warning", "Select a supplier before posting");
+    if (!header.IsConfirmed) {
+      setNoticeMessage("warning", "Purchase return must be confirmed before posting");
       return;
     }
 
-    if (!header.PurchRetDate) {
-      setNoticeMessage("warning", "Please select a return date before posting");
+    if (header.IsPosted) {
+      setNoticeMessage("info", "Purchase return is already posted");
       return;
     }
 
-    setSaving(true);
     try {
-      const payload = mapHeaderToApi(true);
-      const response = await axios.put(
-        `${API_BASE_URL}/api/purchase-return/${initialData.pret_id}`,
-        payload,
-        getAuthHeaders()
-      );
-
-      if (!response?.data?.success) {
-        throw new Error("Posting failed: no confirmation from server");
-      }
-
-      const nowPosted = !!response?.data?.posted;
-      if (!nowPosted) {
-        throw new Error("Posting failed: backend did not confirm posting");
-      }
-
-      setNoticeMessage("success", "Purchase return posted successfully");
-      setHeader((prev) => ({ ...prev, IsPosted: true }));
-      onDataChanged?.();
+      setSaving(true);
+      await axios.post(`${API_BASE_URL}/api/purchase-return/${effectiveInitialData.pret_id}/post`, {}, getAuthHeaders());
+      
+      // Update header state
+      setHeader(prev => ({ ...prev, IsPosted: true }));
+      
+      setNoticeMessage("success", `Purchase Return ${header.PurchRetNo} posted successfully! Stock ledger entries created and inventory updated.`);
+      
+      // Update lastSavedState to prevent "discard changes" dialog
+      setTimeout(() => {
+        console.log("Updating saved state after posting");
+        setHeader(currentHeader => {
+          setItems(currentItems => {
+            setLastSavedState({
+              header: { ...currentHeader },
+              items: [...currentItems]
+            });
+            setJustSaved(true);
+            return currentItems;
+          });
+          return currentHeader;
+        });
+      }, 100);
+      
+      // Refresh parent data
+      if (onDataChanged) onDataChanged();
+      
     } catch (error) {
       console.error(error);
-      const message = error?.response?.data?.message || error?.response?.data?.error || error?.message || "Failed to post purchase return";
-      try {
-        await axios.put(
-          `${API_BASE_URL}/api/purchase-return/${initialData.pret_id}`,
-          { ...mapHeaderToApi(false), is_posted: false },
-          getAuthHeaders()
-        );
-      } catch (rollbackErr) {
-        console.error("Rollback failed", rollbackErr);
-      }
-      setHeader((prev) => ({ ...prev, IsPosted: false }));
-      setNoticeMessage("error", `${message}. Please contact the system administrator.`);
+      const message = error?.response?.data?.error || "Failed to post purchase return";
+      setNoticeMessage("error", message);
     } finally {
       setSaving(false);
     }
@@ -1291,32 +1371,46 @@ export default function PurchaseReturnForm({ onClose, onSaved, onDataChanged, in
             >
               New
             </button>
-            {((isEditMode && canEdit('INVENTORY', 'PURCHASE_RETURN')) || (!isEditMode && canCreate('INVENTORY', 'PURCHASE_RETURN'))) && (
+            {((effectiveEditMode && canEdit('INVENTORY', 'PURCHASE_RETURN')) || (!effectiveEditMode && canCreate('INVENTORY', 'PURCHASE_RETURN'))) && (
               <button
-                disabled={saving || header.IsPosted || !isDirty}
+                disabled={saving || header.IsPosted || header.IsConfirmed || !isDirty}
                 onClick={() => handleSave(false)}
                 className="px-4 py-2 rounded-lg text-white shadow bg-gradient-to-r from-purple-400 to-purple-600 hover:from-purple-500 hover:to-purple-700 disabled:opacity-50"
               >
                 {saving ? "Saving..." : "Save"}
               </button>
             )}
+            
+            {/* Confirm Button - only show for saved, unconfirmed returns */}
+            {effectiveEditMode && canEdit('INVENTORY', 'PURCHASE_RETURN') && effectiveInitialData?.pret_id && !header.IsConfirmed && !header.IsPosted && (
+              <button
+                disabled={saving}
+                onClick={handleConfirm}
+                className="px-4 py-2 rounded-lg text-white shadow bg-gradient-to-r from-yellow-400 to-yellow-600 hover:from-yellow-500 hover:to-yellow-700 disabled:opacity-50"
+              >
+                {saving ? "Confirming..." : "Confirm"}
+              </button>
+            )}
+            
+            {/* Post Button - only show for confirmed, unposted returns */}
+            {effectiveEditMode && canEdit('INVENTORY', 'PURCHASE_RETURN') && effectiveInitialData?.pret_id && header.IsConfirmed && !header.IsPosted && (
+              <button
+                disabled={saving}
+                onClick={handlePost}
+                className="px-4 py-2 rounded-lg text-white shadow bg-gradient-to-r from-green-400 to-green-600 hover:from-green-500 hover:to-green-700 disabled:opacity-50"
+              >
+                {saving ? "Posting..." : "Post"}
+              </button>
+            )}
+            
             <button
-              disabled={!initialData?.pret_id}
+              disabled={!effectiveInitialData?.pret_id}
               onClick={handlePrint}
               className="px-4 py-2 rounded-lg border bg-white text-gray-800 hover:bg-gray-50 disabled:opacity-50"
               title="Print current return"
             >
               Print
             </button>
-            {isEditMode && canEdit('INVENTORY', 'PURCHASE_RETURN') && (
-              <button
-                disabled={saving || header.IsPosted || !initialData?.pret_id}
-                onClick={handlePost}
-                className="px-4 py-2 rounded-lg border bg-white text-gray-800 hover:bg-gray-50 disabled:opacity-50"
-              >
-                Post
-              </button>
-            )}
             <button
               onClick={handleClose}
               className="px-4 py-2 rounded-lg border bg-white text-gray-800 hover:bg-gray-50"
@@ -1357,10 +1451,23 @@ export default function PurchaseReturnForm({ onClose, onSaved, onDataChanged, in
             </button>
           </div>
           <div className="flex items-center gap-2">
-            <span className={`px-3 py-1 rounded-full text-xs font-semibold shadow ${header.IsPosted ? 'bg-gray-200 text-gray-600 line-through' : 'bg-purple-600 text-white'}`}>
+            <span className={`px-3 py-1 rounded-full text-xs font-semibold shadow ${
+              header.IsPosted ? 'bg-gray-100 text-gray-500' : 
+              header.IsConfirmed ? 'bg-gray-100 text-gray-500' : 
+              'bg-blue-500 text-white'
+            }`}>
               DRAFT
             </span>
-            <span className={`px-3 py-1 rounded-full text-xs font-semibold shadow ${header.IsPosted ? 'bg-green-500 text-white' : 'bg-gray-200 text-gray-500'}`}>
+            <span className={`px-3 py-1 rounded-full text-xs font-semibold shadow ${
+              header.IsPosted ? 'bg-gray-100 text-gray-500' : 
+              header.IsConfirmed ? 'bg-yellow-500 text-white' : 
+              'bg-gray-100 text-gray-500'
+            }`}>
+              CONFIRMED
+            </span>
+            <span className={`px-3 py-1 rounded-full text-xs font-semibold shadow ${
+              header.IsPosted ? 'bg-green-500 text-white' : 'bg-gray-100 text-gray-500'
+            }`}>
               POSTED
             </span>
           </div>
@@ -1380,8 +1487,8 @@ export default function PurchaseReturnForm({ onClose, onSaved, onDataChanged, in
                 setHeader((prev) => ({ ...prev, PurchRetNo: event.target.value }))
               }
               className="mt-1 w-full px-3 py-2 rounded border border-gray-300"
-              readOnly={!!initialData?.pret_id}
-              disabled={!!initialData?.pret_id}
+              readOnly={!!effectiveInitialData?.pret_id}
+              disabled={!!effectiveInitialData?.pret_id}
               title="Auto-generated during Save"
             />
           </div>

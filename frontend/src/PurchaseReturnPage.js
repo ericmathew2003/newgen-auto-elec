@@ -108,6 +108,7 @@ export default function PurchaseReturnPage() {
         rounded_off: x.rounded_off ?? 0,
         total_amount: x.total_amount ?? 0,
         is_posted: !!x.is_posted,
+        is_confirmed: !!x.is_confirmed,
       }));
       setPurchaseReturns(mapped);
     } catch (e) {
@@ -155,6 +156,54 @@ export default function PurchaseReturnPage() {
     setEditingReturn(null);
     if (shouldRefresh) {
       fetchPurchaseReturns();
+    }
+  };
+
+  const handleSaved = (savedData) => {
+    // Update the editing return data to enable Confirm button
+    if (savedData) {
+      setEditingReturn(savedData);
+    }
+    // Refresh the list but keep form open
+    fetchPurchaseReturns();
+  };
+
+  // Confirm purchase return
+  const handleConfirm = async (pr) => {
+    if (!pr.purch_ret_id) return;
+
+    try {
+      setSaving(true);
+      await axios.post(`${API_BASE_URL}/api/purchase-return/${pr.purch_ret_id}/confirm`, {}, getAuthHeaders());
+      await fetchPurchaseReturns();
+      alert(`Purchase Return ${pr.purch_ret_no} confirmed successfully! It is now locked for editing and ready for posting.`);
+    } catch (e) {
+      console.error(e);
+      alert(e.response?.data?.error || 'Failed to confirm purchase return');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // Post purchase return
+  const handlePost = async (pr) => {
+    if (!pr.purch_ret_id) return;
+    
+    if (!pr.is_confirmed) {
+      alert('Purchase return must be confirmed before posting');
+      return;
+    }
+
+    try {
+      setSaving(true);
+      await axios.post(`${API_BASE_URL}/api/purchase-return/${pr.purch_ret_id}/post`, {}, getAuthHeaders());
+      await fetchPurchaseReturns();
+      alert(`Purchase Return ${pr.purch_ret_no} posted successfully! Stock ledger entries created and inventory updated.`);
+    } catch (e) {
+      console.error(e);
+      alert(e.response?.data?.error || 'Failed to post purchase return');
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -217,6 +266,10 @@ export default function PurchaseReturnPage() {
         case 'is_posted':
           aVal = a.is_posted ? 1 : 0;
           bVal = b.is_posted ? 1 : 0;
+          break;
+        case 'is_confirmed':
+          aVal = a.is_confirmed ? 1 : 0;
+          bVal = b.is_confirmed ? 1 : 0;
           break;
         default:
           aVal = a[sortField];
@@ -393,6 +446,18 @@ export default function PurchaseReturnPage() {
                   </th>
                   <th
                     className="p-2 text-center cursor-pointer hover:bg-gray-200 select-none"
+                    onClick={() => handleSort('is_confirmed')}
+                    title="Click to sort by Confirmed Status"
+                  >
+                    <div className="flex items-center justify-center">
+                      <span>Confirmed</span>
+                      <span className="ml-1">
+                        {sortField === 'is_confirmed' ? (sortDirection === 'asc' ? '↑' : '↓') : '↕'}
+                      </span>
+                    </div>
+                  </th>
+                  <th
+                    className="p-2 text-center cursor-pointer hover:bg-gray-200 select-none"
                     onClick={() => handleSort('is_posted')}
                     title="Click to sort by Posted Status"
                   >
@@ -422,6 +487,9 @@ export default function PurchaseReturnPage() {
                     <td className="p-2 text-right">{n(pr.igst_amount).toFixed(2)}</td>
                     <td className="p-2 text-right">{n(pr.total_amount).toFixed(2)}</td>
                     <td className="p-2 text-center">
+                      <input type="checkbox" checked={!!pr.is_confirmed} readOnly onClick={(e) => e.stopPropagation()} />
+                    </td>
+                    <td className="p-2 text-center">
                       <input type="checkbox" checked={!!pr.is_posted} readOnly onClick={(e) => e.stopPropagation()} />
                     </td>
                   </tr>
@@ -434,9 +502,10 @@ export default function PurchaseReturnPage() {
                   <td className="p-2 text-right">{currentRecords.reduce((a, x) => a + n(x.igst_amount || 0), 0).toFixed(2)}</td>
                   <td className="p-2 text-right">{currentRecords.reduce((a, x) => a + n(x.total_amount || 0), 0).toFixed(2)}</td>
                   <td className="p-2"></td>
+                  <td className="p-2"></td>
                 </tr>
                 {currentRecords.length === 0 && (
-                  <tr><td colSpan={9} className="p-4 text-center text-gray-500">No records</td></tr>
+                  <tr><td colSpan={10} className="p-4 text-center text-gray-500">No records</td></tr>
                 )}
               </tbody>
             </table>
@@ -453,7 +522,7 @@ export default function PurchaseReturnPage() {
       {showForm && (
         <PurchaseReturnForm
           onClose={closeForm}
-          onSaved={() => closeForm(true)}
+          onSaved={handleSaved}
           onDataChanged={fetchPurchaseReturns}
           initialData={editingReturn}
           allReturns={purchaseReturns}

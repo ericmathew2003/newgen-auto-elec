@@ -15,6 +15,11 @@ import CustomerPage from './CustomerPage';
 import PurchasePage from './PurchasePage';
 import SalesPage from './SalesPage';
 import PurchaseReturnPage from './PurchaseReturnPage';
+import SalesReturnPage from './SalesReturnPage';
+import PaymentVoucherPage from './PaymentVoucherPage';
+import PaymentVoucherForm from './PaymentVoucherForm';
+import ReceiptVoucherPage from './ReceiptVoucherPage';
+import ReceiptVoucherForm from './ReceiptVoucherForm';
 import ReportsPage from './ReportsPage';
 import SalesPurchaseReportsPage from './SalesPurchaseReportsPage';
 import MLReportsPage from './MLReportsPage';
@@ -194,6 +199,41 @@ function App() {
               <AuthenticatedLayout>
                 <React.Suspense fallback={<div>Loading...</div>}>
                   <SalesPage />
+                </React.Suspense>
+              </AuthenticatedLayout>
+            } />
+            <Route path="/sales-return" element={
+              <AuthenticatedLayout>
+                <React.Suspense fallback={<div>Loading...</div>}>
+                  <SalesReturnPage />
+                </React.Suspense>
+              </AuthenticatedLayout>
+            } />
+            <Route path="/payment-voucher" element={
+              <AuthenticatedLayout>
+                <React.Suspense fallback={<div>Loading...</div>}>
+                  <PaymentVoucherPage />
+                </React.Suspense>
+              </AuthenticatedLayout>
+            } />
+            <Route path="/payment-voucher/:id" element={
+              <AuthenticatedLayout>
+                <React.Suspense fallback={<div>Loading...</div>}>
+                  <PaymentVoucherForm />
+                </React.Suspense>
+              </AuthenticatedLayout>
+            } />
+            <Route path="/receipt-voucher" element={
+              <AuthenticatedLayout>
+                <React.Suspense fallback={<div>Loading...</div>}>
+                  <ReceiptVoucherPage />
+                </React.Suspense>
+              </AuthenticatedLayout>
+            } />
+            <Route path="/receipt-voucher/:id" element={
+              <AuthenticatedLayout>
+                <React.Suspense fallback={<div>Loading...</div>}>
+                  <ReceiptVoucherForm />
                 </React.Suspense>
               </AuthenticatedLayout>
             } />

@@ -12,7 +12,7 @@ router.post("/add", async (req, res) => {
     // Get the next available BrandID
     const maxIdResult = await pool.query("SELECT COALESCE(MAX(BrandID), 0) + 1 as nextid FROM tblMasBrand");
     const nextBrandID = maxIdResult.rows[0].nextid;
-    
+
     await pool.query(
       "INSERT INTO tblMasBrand (BrandID, BrandName, created_date, edited_date) VALUES ($1, $2, NOW(), NOW())",
       [nextBrandID, BrandName]
@@ -46,9 +46,9 @@ router.delete("/delete/:id", async (req, res) => {
       "SELECT COUNT(*) as count FROM tblmasitem WHERE brandid = $1",
       [id]
     );
-    
+
     const itemCount = parseInt(itemCheck.rows[0].count);
-    
+
     if (itemCount > 0) {
       return res.status(400).json({
         error: "Cannot delete brand",
@@ -58,7 +58,7 @@ router.delete("/delete/:id", async (req, res) => {
 
     // If no references found, proceed with deletion
     const deleteResult = await pool.query("DELETE FROM tblMasBrand WHERE BrandID = $1", [id]);
-    
+
     if (deleteResult.rowCount === 0) {
       return res.status(404).json({ error: "Brand not found" });
     }

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Layers, ListChecks, Tag, Save, RotateCcw, ArrowLeft } from 'lucide-react';
 import axios from 'axios';
@@ -26,7 +26,7 @@ const CoaPage = () => {
   // Check permissions
   const hasCreatePermission = canCreate('ACCOUNTS', 'COA_MASTER');
   const hasEditPermission = canEdit('ACCOUNTS', 'COA_MASTER');
-  
+
   // Redirect if user doesn't have permission
   useEffect(() => {
     if (isEditMode && !hasEditPermission) {

@@ -10,9 +10,13 @@ const makeRoutes = require("./routes/makeRoutes");
 const itemRoutes = require("./routes/itemRoutes");
 const partyRoutes = require("./routes/partyRoutes");
 const purchaseRoutes = require("./routes/purchaseRoutes");
+const invoiceRoutes = require("./routes/invoiceRoutes");
 const accountingPeriodRoutes = require("./routes/accountingPeriodRoutes");
 const salesRoutes = require("./routes/salesRoutes");
 const purchaseReturnRoutes = require("./routes/purchaseReturnRoutes");
+const salesReturnRoutes = require("./routes/salesReturnRoutes");
+const paymentRoutes = require("./routes/paymentRoutes");
+const receiptRoutes = require("./routes/receiptRoutes");
 const companyRoutes = require("./routes/companyRoutes");
 const dashboardRoutes = require("./routes/dashboard");
 const accountRoutes = require("./routes/accountRoutes");
@@ -24,7 +28,17 @@ const natureRoutes = require("./routes/natureRoutes");
 const valueSourceRoutes = require("./routes/valueSourceRoutes");
 const notificationRoutes = require("./routes/notificationRoutes");
 const mlRoutes = require("./routes/mlRoutes");
-const mlPythonRoutes = require("./routes/mlRoutes_python");
+
+// Conditionally load ML Python routes only if axios is available
+let mlPythonRoutes = null;
+try {
+  require.resolve('axios');
+  mlPythonRoutes = require("./routes/mlRoutes_python");
+  console.log('✅ ML Python routes loaded (axios available)');
+} catch (e) {
+  console.log('⚠️  ML Python routes disabled (axios not installed)');
+}
+
 const userRoutes = require("./routes/userRoutes");
 const roleRoutes = require("./routes/roleRoutes");
 const rolePermissionRoutes = require("./routes/rolePermissionRoutes");
@@ -66,8 +80,12 @@ app.use("/api/makes", makeRoutes);
 app.use("/api/items", itemRoutes);
 app.use("/api/party", partyRoutes);
 app.use("/api/purchase", purchaseRoutes);
+app.use("/api/invoices", invoiceRoutes);
 app.use("/api/sales", salesRoutes);
 app.use("/api/purchase-return", purchaseReturnRoutes);
+app.use("/api/sales-return", salesReturnRoutes);
+app.use("/api/payments", paymentRoutes);
+app.use("/api/receipts", receiptRoutes);
 app.use("/api/accounting-periods", accountingPeriodRoutes);
 app.use("/api/company", companyRoutes);
 app.use("/api/dashboard", dashboardRoutes);
@@ -80,7 +98,12 @@ app.use("/api/account-natures", natureRoutes);
 app.use("/api/value-sources", valueSourceRoutes);
 app.use("/api/notifications", notificationRoutes);
 app.use("/api/ml", mlRoutes);
-app.use("/api/ml", mlPythonRoutes);
+
+// Only register ML Python routes if axios is available
+if (mlPythonRoutes) {
+  app.use("/api/ml", mlPythonRoutes);
+}
+
 app.use("/api/users", userRoutes);
 app.use("/api/roles", roleRoutes);
 app.use("/api/role-permissions", rolePermissionRoutes);

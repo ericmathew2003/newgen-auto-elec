@@ -44,6 +44,7 @@ export default function Navbar() {
   // Inventory sub-menu states
   const [masterOpen, setMasterOpen] = useState(false);
   const [purchaseOpen, setPurchaseOpen] = useState(false);
+  const [salesOpen, setSalesOpen] = useState(false);
   const [reportsOpen, setReportsOpen] = useState(false);
 
   // Accounts sub-menu states
@@ -441,11 +442,38 @@ export default function Navbar() {
                     )}
 
                     {/* Sales */}
-                    {canView('INVENTORY', 'SALES') && (
-                      <Link to="/sale" className="flex items-center p-3 rounded-lg hover:bg-emerald-50 hover:text-emerald-700 transition-all duration-200 text-sm font-medium">
-                        <FiDollarSign size={16} className="text-emerald-600 mr-3" />
-                        <span>Sales</span>
-                      </Link>
+                    {(canView('INVENTORY', 'SALES') || canView('INVENTORY', 'SALES_RETURN')) && (
+                      <div>
+                        <button
+                          onClick={() => setSalesOpen(!salesOpen)}
+                          className="flex items-center justify-between w-full p-3 rounded-lg hover:bg-emerald-50 hover:text-emerald-700 transition-all duration-200 text-sm font-medium"
+                        >
+                          <div className="flex items-center">
+                            <FiDollarSign size={16} className="text-emerald-600 mr-3" />
+                            <span>Sales</span>
+                          </div>
+                          <div className="text-emerald-600">
+                            {salesOpen ? <FiChevronDown size={14} /> : <FiChevronRight size={14} />}
+                          </div>
+                        </button>
+
+                        {salesOpen && (
+                          <div className="ml-6 space-y-1">
+                            {canView('INVENTORY', 'SALES') && (
+                              <Link to="/sale" className="flex items-center p-2 rounded-lg hover:bg-emerald-50 hover:text-emerald-700 transition-all duration-200 text-xs font-medium">
+                                <div className="w-1.5 h-1.5 bg-emerald-400 rounded-full mr-2"></div>
+                                Sales
+                              </Link>
+                            )}
+                            {canView('INVENTORY', 'SALES_RETURN') && (
+                              <Link to="/sales-return" className="flex items-center p-2 rounded-lg hover:bg-emerald-50 hover:text-emerald-700 transition-all duration-200 text-xs font-medium">
+                                <div className="w-1.5 h-1.5 bg-emerald-400 rounded-full mr-2"></div>
+                                Sales Return
+                              </Link>
+                            )}
+                          </div>
+                        )}
+                      </div>
                     )}
 
                     {/* Inventory Reports */}
@@ -567,15 +595,15 @@ export default function Navbar() {
                             </Link>
                           )}
                           {canView('ACCOUNTS', 'PAYMENTS') && (
-                            <Link to="/accounts/payments" className="flex items-center p-2 rounded-lg hover:bg-teal-50 hover:text-teal-700 transition-all duration-200 text-xs font-medium">
+                            <Link to="/payment-voucher" className="flex items-center p-2 rounded-lg hover:bg-teal-50 hover:text-teal-700 transition-all duration-200 text-xs font-medium">
                               <div className="w-1.5 h-1.5 bg-teal-400 rounded-full mr-2"></div>
-                              Payments
+                              Payment Voucher
                             </Link>
                           )}
                           {canView('ACCOUNTS', 'RECEIPTS') && (
-                            <Link to="/accounts/receipts" className="flex items-center p-2 rounded-lg hover:bg-teal-50 hover:text-teal-700 transition-all duration-200 text-xs font-medium">
+                            <Link to="/receipt-voucher" className="flex items-center p-2 rounded-lg hover:bg-teal-50 hover:text-teal-700 transition-all duration-200 text-xs font-medium">
                               <div className="w-1.5 h-1.5 bg-teal-400 rounded-full mr-2"></div>
-                              Receipts
+                              Receipt Voucher
                             </Link>
                           )}
                           {canView('ACCOUNTS', 'DEBIT_NOTE') && (
