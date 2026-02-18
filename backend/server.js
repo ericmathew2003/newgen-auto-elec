@@ -29,14 +29,19 @@ const valueSourceRoutes = require("./routes/valueSourceRoutes");
 const notificationRoutes = require("./routes/notificationRoutes");
 const mlRoutes = require("./routes/mlRoutes");
 
-// Conditionally load ML Python routes only if axios is available
+// Conditionally load ML Python routes only if explicitly enabled
+// Set ENABLE_ML_PYTHON=true in .env to enable Python ML routes
 let mlPythonRoutes = null;
-try {
-  require.resolve('axios');
-  mlPythonRoutes = require("./routes/mlRoutes_python");
-  console.log('✅ ML Python routes loaded (axios available)');
-} catch (e) {
-  console.log('⚠️  ML Python routes disabled (axios not installed)');
+if (process.env.ENABLE_ML_PYTHON === 'true') {
+  try {
+    mlPythonRoutes = require("./routes/mlRoutes_python");
+    console.log('✅ ML Python routes loaded');
+  } catch (e) {
+    console.log('⚠️  ML Python routes failed to load:', e.message);
+    console.log('   Make sure axios is installed: npm install axios');
+  }
+} else {
+  console.log('ℹ️  ML Python routes disabled (set ENABLE_ML_PYTHON=true to enable)');
 }
 
 const userRoutes = require("./routes/userRoutes");
