@@ -117,3 +117,59 @@ Thumbs.db
 # Logs
 logs/
 *.log
+
+# ML/AI Training Data and Test Scripts
+ML/test_*.py
+ML/check_*.py
+ML/verify_*.py
+ML/download_*.py
+ML/improve_*.py
+ML/retrain_*.py
+ML/organize_*.py
+ML/train_*.py
+ML/add_*.py
+ML/discover_*.py
+ML/analyze_*.py
+ML/simple_*.py
+ML/visualize_*.py
+ML/quick_*.py
+ML/create_*.py
+ML/*.bat
+!ML/start_service.bat
+!ML/start_vision_system.bat
+ML/*.md
+!ML/README.md
+!ML/INDEX.md
+ML/training_images/
+ML/dataset/
+ML/data/
+ML/uploads/
+ML/models/
+ML/__pycache__/
+ML/*.pyc
+ML/.ipynb_checkpoints/
+
+# Keep these essential ML service files
+!ML/cashflow_service.py
+!ML/cashflow_predictor.py
+!ML/analytics_service.py
+!ML/categorized_cashflow_service.py
+!ML/auto_parts_business_intelligence.py
+!ML/parts_vision_service.py
+!ML/requirements.txt
+!ML/requirements_vision.txt
+!ML/.env.example
+
+# Root level test files and scripts
+check-*.js
+check-*.sql
+verify-*.sql
+test-*.html
+custom-reporter.js
+run-tests.bat
+run-tests.sh
+
+# Playwright test results
+playwright-report/
+test-results/
+tests/

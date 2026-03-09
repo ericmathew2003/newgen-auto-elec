@@ -1,6 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const pool = require("../db");
+const { checkPeriodStatus, checkPeriodStatusForUpdate } = require("../middleware/checkPeriodStatus");
 
 const nn = (v) => (v === undefined || v === null || String(v).trim() === "" ? null : v);
 
@@ -120,7 +121,7 @@ router.get("/:paymentId", async (req, res) => {
 });
 
 // Create payment
-router.post("/", async (req, res) => {
+router.post("/", checkPeriodStatus, async (req, res) => {
   const { header = {}, allocations = [], cheque = null } = req.body || {};
   
   console.log('=== Payment Creation Request ===');
@@ -228,7 +229,7 @@ router.post("/", async (req, res) => {
 });
 
 // Update payment
-router.put("/:paymentId", async (req, res) => {
+router.put("/:paymentId", checkPeriodStatusForUpdate, async (req, res) => {
   const { paymentId } = req.params;
   const { header = {}, allocations = [], cheque = null } = req.body || {};
   
@@ -316,74 +317,15 @@ router.put("/:paymentId", async (req, res) => {
   }
 });
 
-// Confirm payment
-router.post("/:paymentId/confirm", async (req, res) => {
+// Confirm and Post payment (merged operation)
+router.post("/:paymentId/confirm", checkPeriodStatus, async (req, res) => {
   const { paymentId } = req.params;
   
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
 
-    const payment = await client.query(
-      `SELECT is_confirmed FROM acc_trn_payment_voucher WHERE payment_id = $1`,
-      [paymentId]
-    );
-
-    if (payment.rows.length === 0) {
-      await client.query("ROLLBACK");
-      return res.status(404).json({ error: "Payment not found" });
-    }
-
-    if (payment.rows[0].is_confirmed) {
-      await client.query("ROLLBACK");
-      return res.status(400).json({ error: "Payment already confirmed" });
-    }
-
-    const allocations = await client.query(
-      `SELECT purchase_inv_id, allocated_amount FROM acc_trn_payment_allocation WHERE payment_id = $1`,
-      [paymentId]
-    );
-
-    for (const alloc of allocations.rows) {
-      await client.query(
-        `UPDATE acc_trn_invoice
-         SET paid_amount = paid_amount + $1,
-             balance_amount = tran_amount - (paid_amount + $1),
-             status = CASE 
-               WHEN (tran_amount - (paid_amount + $1)) = 0 THEN 2
-               WHEN (paid_amount + $1) > 0 THEN 1
-               ELSE 0
-             END,
-             edited_date = NOW()
-         WHERE tran_id = $2`,
-        [alloc.allocated_amount, alloc.purchase_inv_id]
-      );
-    }
-
-    await client.query(
-      `UPDATE acc_trn_payment_voucher SET is_confirmed = TRUE, edited_date = NOW() WHERE payment_id = $1`,
-      [paymentId]
-    );
-
-    await client.query("COMMIT");
-    res.json({ success: true, message: "Payment confirmed successfully" });
-  } catch (err) {
-    await client.query("ROLLBACK");
-    console.error(err);
-    res.status(500).json({ error: "Failed to confirm payment", details: err.message });
-  } finally {
-    client.release();
-  }
-});
-
-// Post payment
-router.post("/:paymentId/post", async (req, res) => {
-  const { paymentId } = req.params;
-  
-  const client = await pool.connect();
-  try {
-    await client.query("BEGIN");
-
+    // Get payment with party details
     const payment = await client.query(
       `SELECT p.*, party.partyname
        FROM acc_trn_payment_voucher p
@@ -399,16 +341,42 @@ router.post("/:paymentId/post", async (req, res) => {
 
     const pmt = payment.rows[0];
 
-    if (!pmt.is_confirmed) {
+    if (pmt.is_confirmed) {
       await client.query("ROLLBACK");
-      return res.status(400).json({ error: "Payment must be confirmed before posting" });
+      return res.status(400).json({ error: "Payment already confirmed and posted" });
     }
 
-    if (pmt.is_posted) {
-      await client.query("ROLLBACK");
-      return res.status(400).json({ error: "Payment already posted" });
+    // Step 1: Update invoice allocations (paid_amount, balance_amount, status)
+    const allocations = await client.query(
+      `SELECT purchase_inv_id, allocated_amount FROM acc_trn_payment_allocation WHERE payment_id = $1`,
+      [paymentId]
+    );
+
+    for (const alloc of allocations.rows) {
+      const newPaidAmount = await client.query(
+        `SELECT (paid_amount + $1::numeric) as new_paid, tran_amount FROM acc_trn_invoice WHERE tran_id = $2`,
+        [alloc.allocated_amount, alloc.purchase_inv_id]
+      );
+      
+      const { new_paid, tran_amount } = newPaidAmount.rows[0];
+      const newBalance = parseFloat(tran_amount) - parseFloat(new_paid);
+      
+      await client.query(
+        `UPDATE acc_trn_invoice
+         SET paid_amount = $1::numeric,
+             balance_amount = $2::numeric,
+             status = CASE 
+               WHEN $2::numeric <= 0.01 THEN 2
+               WHEN $1::numeric > 0 THEN 1
+               ELSE 0
+             END,
+             edited_date = NOW()
+         WHERE tran_id = $3`,
+        [new_paid, newBalance, alloc.purchase_inv_id]
+      );
     }
 
+    // Step 2: Create journal entries
     const journalSerial = `PAY-${pmt.payment_no}`;
     const journalResult = await client.query(
       `INSERT INTO acc_journal_master
@@ -430,6 +398,7 @@ router.post("/:paymentId/post", async (req, res) => {
 
     const journalMasId = journalResult.rows[0].journal_mas_id;
 
+    // Debit: AP Control Account
     const apAccount = await client.query(
       `SELECT account_id FROM acc_mas_coa 
        WHERE UPPER(TRIM(account_nature)) = 'AP_CONTROL' AND is_active = TRUE LIMIT 1`
@@ -450,6 +419,7 @@ router.post("/:paymentId/post", async (req, res) => {
       );
     }
 
+    // Credit: Cash/Bank Account
     const accountId = pmt.payment_mode === 'CASH' ? pmt.cash_account_id : pmt.bank_account_id;
     
     if (accountId) {
@@ -466,13 +436,54 @@ router.post("/:paymentId/post", async (req, res) => {
       );
     }
 
+    // Step 3: Mark as confirmed and posted
     await client.query(
-      `UPDATE acc_trn_payment_voucher SET is_posted = TRUE, edited_date = NOW() WHERE payment_id = $1`,
+      `UPDATE acc_trn_payment_voucher 
+       SET is_confirmed = TRUE, is_posted = TRUE, edited_date = NOW() 
+       WHERE payment_id = $1`,
       [paymentId]
     );
 
     await client.query("COMMIT");
-    res.json({ success: true, message: "Payment posted successfully" });
+    res.json({ success: true, message: "Payment confirmed and posted successfully" });
+  } catch (err) {
+    await client.query("ROLLBACK");
+    console.error(err);
+    res.status(500).json({ error: "Failed to confirm and post payment", details: err.message });
+  } finally {
+    client.release();
+  }
+});
+
+// Post payment (kept for backward compatibility)
+router.post("/:paymentId/post", checkPeriodStatus, async (req, res) => {
+  const { paymentId } = req.params;
+  
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+
+    const payment = await client.query(
+      `SELECT is_posted FROM acc_trn_payment_voucher WHERE payment_id = $1`,
+      [paymentId]
+    );
+
+    if (payment.rows.length === 0) {
+      await client.query("ROLLBACK");
+      return res.status(404).json({ error: "Payment not found" });
+    }
+
+    if (payment.rows[0].is_posted) {
+      await client.query("ROLLBACK");
+      return res.status(400).json({ error: "Payment already posted" });
+    }
+
+    // Payment exists but not posted, this shouldn't happen with new flow
+    await client.query("ROLLBACK");
+    return res.status(400).json({ 
+      error: "Payment must be confirmed first. Confirm operation now handles both confirmation and posting." 
+    });
+
   } catch (err) {
     await client.query("ROLLBACK");
     console.error(err);

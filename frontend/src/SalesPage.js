@@ -4,6 +4,7 @@ import { motion } from "framer-motion";
 import { validateTransactionDate, getDefaultTransactionDate } from "./utils/accountingPeriodUtils";
 import API_BASE_URL from "./config/api";
 import { usePermissions } from "./hooks/usePermissions";
+import ReceivePaymentModal from "./components/ReceivePaymentModal";
 
 // Helper to get auth headers
 const getAuthHeaders = () => {
@@ -68,6 +69,11 @@ export default function SalesPage() {
   // Validation and notice (match purchase pattern)
   const [headerErrors, setHeaderErrors] = useState({});
   const [notice, setNotice] = useState({ open: false, type: 'error', message: '' });
+  
+  // Payment modal state
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [selectedInvoiceForPayment, setSelectedInvoiceForPayment] = useState(null);
+  
   useEffect(() => {
     if (!notice.open) return;
     const timer = setTimeout(() => {
@@ -102,6 +108,7 @@ export default function SalesPage() {
     Remark: "",
     Is_Posted: false,
     Is_Confirmed: false,
+    Is_Paid: false,
     Rounded: 0,       // UI-only rounded off
     GrandTotal: 0,    // UI-only computed total
   });
@@ -206,6 +213,7 @@ export default function SalesPage() {
         totamount: x.tot_amount ?? 0,
         is_posted: !!x.is_posted,
         is_confirmed: !!x.is_confirmed,
+        is_paid: !!x.is_paid,
       }));
       setSales(mapped);
     } catch (e) {
@@ -1391,6 +1399,7 @@ export default function SalesPage() {
         Remark: h.description || '',
         Is_Posted: !!h.is_posted,
         Is_Confirmed: !!h.is_confirmed,
+        Is_Paid: !!h.is_paid,
         GrandTotal: Number(h.tot_amount || 0) + Number(h.rounded_off || 0),
       });
       const formatted = (d || []).map((r, i) => ({
@@ -1455,6 +1464,7 @@ export default function SalesPage() {
       Remark: "",
       Is_Posted: false,
       Is_Confirmed: false,
+      Is_Paid: false,
       Rounded: 0,
       GrandTotal: 0,
     });
@@ -1755,6 +1765,44 @@ export default function SalesPage() {
                   >
                     Post to Accounts
                   </button>
+                )}
+
+                {/* Receive Payment Button - Show when Posted and Not Fully Paid */}
+                {editing?.tranid && isPosted && !header.Is_Paid && canEdit('INVENTORY', 'SALES') && (
+                  <button
+                    onClick={() => {
+                      // Get customer name from customers array
+                      const customer = customers.find(c => c.partyid === header.PartyID);
+                      const customerName = customer?.partyname || header.Customer_Name || '';
+                      
+                      setSelectedInvoiceForPayment({
+                        inv_master_id: editing.tranid,
+                        inv_no: header.InvNo,
+                        inv_date: header.InvDate,
+                        party_id: header.PartyID,
+                        customer_name: customerName,
+                        tot_amount: header.GrandTotal,
+                        balance_amount: header.GrandTotal // You may want to fetch actual balance from backend
+                      });
+                      setShowPaymentModal(true);
+                    }}
+                    className="px-4 py-2 rounded-lg bg-green-600 text-white hover:bg-green-700 flex items-center gap-2"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    Receive Payment
+                  </button>
+                )}
+
+                {/* Paid Badge - Show when invoice is fully paid */}
+                {editing?.tranid && isPosted && header.Is_Paid && (
+                  <div className="px-4 py-2 rounded-lg bg-green-100 text-green-800 font-semibold flex items-center gap-2">
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    Fully Paid
+                  </div>
                 )}
 
                 <button
@@ -2168,6 +2216,20 @@ export default function SalesPage() {
           )}
         </div>
       )}
+
+      {/* Receive Payment Modal */}
+      <ReceivePaymentModal
+        isOpen={showPaymentModal}
+        onClose={() => {
+          setShowPaymentModal(false);
+          setSelectedInvoiceForPayment(null);
+        }}
+        invoiceData={selectedInvoiceForPayment}
+        onSuccess={() => {
+          fetchSales();
+          setNotice({ open: true, type: 'success', message: 'Payment received successfully!' });
+        }}
+      />
     </div>
   );
 }

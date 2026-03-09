@@ -328,7 +328,7 @@ export default function Navbar() {
               </div>
 
               {/* 2. INVENTORY SECTION */}
-              {(canView('INVENTORY', 'ITEM_MASTER') || canView('INVENTORY', 'REPORT_GST_INVOICE') || canView('INVENTORY', 'REPORT_SALES_PURCHASE') || canView('INVENTORY', 'PURCHASE') || canView('INVENTORY', 'PURCHASE_RETURN') || canView('INVENTORY', 'SALES')) && (
+              {(canView('INVENTORY', 'GROUP_MASTER') || canView('INVENTORY', 'MAKE_MASTER') || canView('INVENTORY', 'BRAND_MASTER') || canView('INVENTORY', 'ITEM_MASTER') || canView('INVENTORY', 'SUPPLIER_MASTER') || canView('INVENTORY', 'CUSTOMER_MASTER') || canView('INVENTORY', 'PURCHASE') || canView('INVENTORY', 'PURCHASE_RETURN') || canView('INVENTORY', 'SALES') || canView('INVENTORY', 'SALES_RETURN') || canView('INVENTORY', 'REPORT_GST_INVOICE') || canView('INVENTORY', 'REPORT_SALES_PURCHASE') || canView('INVENTORY', 'STOCK_IN_HAND_REPORT')) && (
               <div className="space-y-2">
                 <button
                   onClick={() => setInventoryOpen(!inventoryOpen)}
@@ -506,9 +506,23 @@ export default function Navbar() {
                                 Sales Report
                               </Link>
                             )}
+                            {canView('INVENTORY', 'STOCK_IN_HAND_REPORT') && (
+                              <Link to="/inventory/stock-in-hand" className="flex items-center p-2 rounded-lg hover:bg-purple-50 hover:text-purple-700 transition-all duration-200 text-xs font-medium">
+                                <div className="w-1.5 h-1.5 bg-purple-400 rounded-full mr-2"></div>
+                                Stock In Hand
+                              </Link>
+                            )}
                             <Link to="/ml-reports" className="flex items-center p-2 rounded-lg hover:bg-purple-50 hover:text-purple-700 transition-all duration-200 text-xs font-medium">
                               <div className="w-1.5 h-1.5 bg-purple-400 rounded-full mr-2"></div>
                               ML Reports & Analytics
+                            </Link>
+                            <Link to="/cashflow-prediction" className="flex items-center p-2 rounded-lg hover:bg-blue-50 hover:text-blue-700 transition-all duration-200 text-xs font-medium">
+                              <div className="w-1.5 h-1.5 bg-blue-400 rounded-full mr-2"></div>
+                              💰 Cash Flow Prediction
+                            </Link>
+                            <Link to="/parts/identify" className="flex items-center p-2 rounded-lg hover:bg-green-50 hover:text-green-700 transition-all duration-200 text-xs font-medium">
+                              <div className="w-1.5 h-1.5 bg-green-400 rounded-full mr-2"></div>
+                              🚗 AI Part Identification
                             </Link>
                           </div>
                         )}
@@ -520,6 +534,7 @@ export default function Navbar() {
               )}
 
               {/* 3. ACCOUNTS SECTION */}
+              {(canView('ACCOUNTS', 'GROUP_MASTER') || canView('ACCOUNTS', 'COA_MASTER') || canView('ACCOUNTS', 'JOURNAL_VOUCHER') || canView('ACCOUNTS', 'PAYMENTS') || canView('ACCOUNTS', 'RECEIPTS') || canView('ACCOUNTS', 'DEBIT_NOTE') || canView('ACCOUNTS', 'CREDIT_NOTE') || canView('REPORTS', 'FINANCIAL_STATEMENTS') || canView('REPORTS', 'LEDGER_REPORT') || canView('REPORTS', 'RECEIVABLES_PAYABLES_REPORT') || canView('ACCOUNTS', 'DYNAMIC_MAPPING')) && (
               <div className="space-y-2">
                 <button
                   onClick={() => setAccountsOpen(!accountsOpen)}
@@ -639,18 +654,24 @@ export default function Navbar() {
 
                       {accountsReportsOpen && (
                         <div className="ml-6 space-y-1">
-                          <Link to="/accounts/trial-balance" className="flex items-center p-2 rounded-lg hover:bg-pink-50 hover:text-pink-700 transition-all duration-200 text-xs font-medium">
-                            <div className="w-1.5 h-1.5 bg-pink-400 rounded-full mr-2"></div>
-                            Trial Balance
-                          </Link>
-                          <Link to="/accounts/profit-loss" className="flex items-center p-2 rounded-lg hover:bg-pink-50 hover:text-pink-700 transition-all duration-200 text-xs font-medium">
-                            <div className="w-1.5 h-1.5 bg-pink-400 rounded-full mr-2"></div>
-                            Profit & Loss
-                          </Link>
-                          <Link to="/accounts/balance-sheet" className="flex items-center p-2 rounded-lg hover:bg-pink-50 hover:text-pink-700 transition-all duration-200 text-xs font-medium">
-                            <div className="w-1.5 h-1.5 bg-pink-400 rounded-full mr-2"></div>
-                            Balance Sheet
-                          </Link>
+                          {canView('REPORTS', 'FINANCIAL_STATEMENTS') && (
+                            <Link to="/accounts/financial-statements" className="flex items-center p-2 rounded-lg hover:bg-pink-50 hover:text-pink-700 transition-all duration-200 text-xs font-medium">
+                              <div className="w-1.5 h-1.5 bg-pink-400 rounded-full mr-2"></div>
+                              📊 Financial Statements
+                            </Link>
+                          )}
+                          {canView('REPORTS', 'LEDGER_REPORT') && (
+                            <Link to="/accounts/ledger" className="flex items-center p-2 rounded-lg hover:bg-pink-50 hover:text-pink-700 transition-all duration-200 text-xs font-medium">
+                              <div className="w-1.5 h-1.5 bg-pink-400 rounded-full mr-2"></div>
+                              📖 Ledger Report
+                            </Link>
+                          )}
+                          {canView('REPORTS', 'RECEIVABLES_PAYABLES_REPORT') && (
+                            <Link to="/accounts/receivables-payables" className="flex items-center p-2 rounded-lg hover:bg-pink-50 hover:text-pink-700 transition-all duration-200 text-xs font-medium">
+                              <div className="w-1.5 h-1.5 bg-pink-400 rounded-full mr-2"></div>
+                              💰 Receivables / Payables
+                            </Link>
+                          )}
                         </div>
                       )}
                     </div>
@@ -679,6 +700,10 @@ export default function Navbar() {
                               Dynamic Transaction Mapping
                             </Link>
                           )}
+                          <Link to="/financial-year" className="flex items-center p-2 rounded-lg hover:bg-purple-50 hover:text-purple-700 transition-all duration-200 text-xs font-medium">
+                            <div className="w-1.5 h-1.5 bg-purple-400 rounded-full mr-2"></div>
+                            📅 Financial Year
+                          </Link>
                         </div>
                       )}
                       </div>
@@ -686,6 +711,7 @@ export default function Navbar() {
                   </div>
                 )}
               </div>
+              )}
 
               {/* 4. SETTINGS SECTION */}
               {canView('SECURITY', 'USER_MANAGEMENT') && (

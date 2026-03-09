@@ -3,11 +3,12 @@ const router = express.Router();
 const pool = require("../db");
 const { authenticateToken } = require("../middleware/auth");
 const { checkPermission } = require("../middleware/checkPermission");
+const { checkPeriodStatus, checkPeriodStatusForUpdate } = require("../middleware/checkPeriodStatus");
 
 /**
  * Create Complete Purchase (Header + Items) - New Step-based Form
  */
-router.post("/complete", authenticateToken, checkPermission('INVENTORY_PURCHASE_ADD'), async (req, res) => {
+router.post("/complete", authenticateToken, checkPermission('INVENTORY_PURCHASE_ADD'), checkPeriodStatus, async (req, res) => {
   const {
     fyearid = 1,
     trdate,
@@ -130,7 +131,7 @@ router.post("/complete", authenticateToken, checkPermission('INVENTORY_PURCHASE_
 /**
  * Create Purchase Invoice (Header Only)
  */
-router.post("/", authenticateToken, checkPermission('INVENTORY_PURCHASE_ADD'), async (req, res) => {
+router.post("/", authenticateToken, checkPermission('INVENTORY_PURCHASE_ADD'), checkPeriodStatus, async (req, res) => {
   const {
     FYearID, TrNo, TrDate, SuppInvNo, SuppInvDt, PartyID,
     Remark, InvAmt, TptCharge, LabCharge, MiscCharge, PackCharge,
@@ -163,7 +164,7 @@ router.post("/", authenticateToken, checkPermission('INVENTORY_PURCHASE_ADD'), a
 /**
  * Update Purchase Invoice (Header Only)
  */
-router.put("/:tranId", authenticateToken, checkPermission('INVENTORY_PURCHASE_EDIT'), async (req, res) => {
+router.put("/:tranId", authenticateToken, checkPermission('INVENTORY_PURCHASE_EDIT'), checkPeriodStatusForUpdate, async (req, res) => {
   const { tranId } = req.params;
   const {
     FYearID, TrNo, TrDate, SuppInvNo, SuppInvDt, PartyID,
@@ -510,7 +511,7 @@ router.post('/:tranId/costing/confirm', authenticateToken, checkPermission('INVE
  * Confirm Purchase - Marks purchase as confirmed (GRN posted)
  * Note: Stock updates happen in /costing/confirm endpoint, not here
  */
-router.post('/:tranId/confirm', authenticateToken, checkPermission('INVENTORY_PURCHASE_EDIT'), async (req, res) => {
+router.post('/:tranId/confirm', authenticateToken, checkPermission('INVENTORY_PURCHASE_EDIT'), checkPeriodStatus, async (req, res) => {
   const { tranId } = req.params;
   const client = await pool.connect();
   
@@ -552,7 +553,7 @@ router.post('/:tranId/confirm', authenticateToken, checkPermission('INVENTORY_PU
  * Post Purchase to Accounts - Creates accounting entries using dynamic mapping
  * This posts the purchase to accounts and marks as accounts_posted
  */
-router.post('/:tranId/post', authenticateToken, checkPermission('INVENTORY_PURCHASE_EDIT'), async (req, res) => {
+router.post('/:tranId/post', authenticateToken, checkPermission('INVENTORY_PURCHASE_EDIT'), checkPeriodStatus, async (req, res) => {
   const { tranId } = req.params;
   const userId = req.user?.user_id;
   const client = await pool.connect();

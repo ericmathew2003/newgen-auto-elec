@@ -811,6 +811,8 @@ export default function PurchaseReturnForm({ onClose, onSaved, onDataChanged, in
     }
 
     setSaving(true);
+    let finalReturnNumber = header.PurchRetNo; // Declare at function level
+    
     try {
       const payload = {
         header: mapHeaderToApi(post),
@@ -830,8 +832,6 @@ export default function PurchaseReturnForm({ onClose, onSaved, onDataChanged, in
         );
         setNoticeMessage("success", "Purchase return updated successfully");
       } else {
-        let finalReturnNumber = header.PurchRetNo;
-        
         if (!header.PurchRetNo || header.PurchRetNo === "NEW") {
           console.log("Frontend: Current PurchRetNo is NEW, generating number...");
           const generatedNumber = await generateNextReturnNo();
@@ -895,6 +895,9 @@ export default function PurchaseReturnForm({ onClose, onSaved, onDataChanged, in
         setHeader((prev) => ({ ...prev, IsPosted: true }));
       }
 
+      // Capture the return number before setTimeout to avoid scope issues
+      const savedReturnNumber = finalReturnNumber || header.PurchRetNo;
+
       // Update refs after all React state updates and calculations are processed
       console.log("Save completed, scheduling state capture");
       setTimeout(() => {
@@ -902,12 +905,24 @@ export default function PurchaseReturnForm({ onClose, onSaved, onDataChanged, in
         // Use a callback to get the most current state after all updates
         setHeader(currentHeader => {
           setItems(currentItems => {
+            // Make sure we have the updated return number
+            const updatedHeader = {
+              ...currentHeader,
+              PurchRetNo: savedReturnNumber
+            };
+            
             // Capture the actual current state after all calculations
             setLastSavedState({
-              header: { ...currentHeader },
+              header: updatedHeader,
               items: [...currentItems]
             });
             setJustSaved(true);
+            
+            // Update the header with the correct return number if it changed
+            if (updatedHeader.PurchRetNo !== currentHeader.PurchRetNo) {
+              setTimeout(() => setHeader(updatedHeader), 0);
+            }
+            
             return currentItems;
           });
           return currentHeader;

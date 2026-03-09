@@ -160,11 +160,8 @@ export default function PurchaseReturnPage() {
   };
 
   const handleSaved = (savedData) => {
-    // Update the editing return data to enable Confirm button
-    if (savedData) {
-      setEditingReturn(savedData);
-    }
-    // Refresh the list but keep form open
+    // Don't update editingReturn - let the form maintain its own state
+    // Just refresh the list to show updated data in the table
     fetchPurchaseReturns();
   };
 

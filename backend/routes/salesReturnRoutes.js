@@ -1,6 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const pool = require("../db");
+const { checkPeriodStatus, checkPeriodStatusForUpdate } = require("../middleware/checkPeriodStatus");
 
 // Helper to normalize empty strings to null
 const nn = (v) => (v === undefined || v === null || String(v).trim() === "" ? null : v);
@@ -168,7 +169,7 @@ router.get("/:salesRetId", async (req, res) => {
 });
 
 // Create Sales Return (Header + Items)
-router.post("/", async (req, res) => {
+router.post("/", checkPeriodStatus, async (req, res) => {
   const { header = {}, items = [] } = req.body || {};
   
   // Log received data for debugging
@@ -291,7 +292,7 @@ router.post("/", async (req, res) => {
 });
 
 // Update Sales Return (Header Only)
-router.put("/:salesRetId", async (req, res) => {
+router.put("/:salesRetId", checkPeriodStatusForUpdate, async (req, res) => {
   const { salesRetId } = req.params;
   if (!/^\d+$/.test(String(salesRetId))) {
     return res.status(400).json({ error: "Invalid sales return id" });
@@ -419,7 +420,7 @@ router.post("/:salesRetId/items/replace", async (req, res) => {
 });
 
 // Confirm sales return (update inventory and stock ledger)
-router.post("/:salesRetId/confirm", async (req, res) => {
+router.post("/:salesRetId/confirm", checkPeriodStatus, async (req, res) => {
   const { salesRetId } = req.params;
   if (!/^\d+$/.test(String(salesRetId))) {
     return res.status(400).json({ error: "Invalid sales return id" });
@@ -500,7 +501,7 @@ router.post("/:salesRetId/confirm", async (req, res) => {
 });
 
 // Post sales return (create journals and acc_trn_invoice entry)
-router.post("/:salesRetId/post", async (req, res) => {
+router.post("/:salesRetId/post", checkPeriodStatus, async (req, res) => {
   const { salesRetId } = req.params;
   if (!/^\d+$/.test(String(salesRetId))) {
     return res.status(400).json({ error: "Invalid sales return id" });
@@ -537,9 +538,12 @@ router.post("/:salesRetId/post", async (req, res) => {
 
     // Get sales return master data for journal generation
     const returnMasterRes = await client.query(
-      `SELECT sales_ret_id, fyear_id, sales_ret_no, sales_ret_date, party_id,
-              taxable_amount, cgst_amount, sgst_amount, igst_amount, rounded_off, total_amount, total_cost
-       FROM inv_trn_sales_return_master WHERE sales_ret_id = $1`,
+      `SELECT m.sales_ret_id, m.fyear_id, m.sales_ret_no, m.sales_ret_date, m.party_id,
+              m.taxable_amount, m.cgst_amount, m.sgst_amount, m.igst_amount, m.rounded_off, m.total_amount, m.total_cost,
+              COALESCE(p.partyname, 'Unknown Customer') as customer_name
+       FROM inv_trn_sales_return_master m
+       LEFT JOIN tblmasparty p ON m.party_id = p.partyid
+       WHERE m.sales_ret_id = $1`,
       [salesRetId]
     );
     
@@ -624,7 +628,7 @@ router.post("/:salesRetId/post", async (req, res) => {
             salesRetId,
             0, // Will be updated after calculating totals
             0,
-            `Sales Return ${returnMaster.sales_ret_no} - ${eventCode}`
+            `Sales Return ${returnMaster.sales_ret_no} - ${returnMaster.customer_name}`
           ]);
           
           const journalMasId = journalMasterRes.rows[0].journal_mas_id;

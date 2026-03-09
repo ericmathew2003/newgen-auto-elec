@@ -40,6 +40,13 @@ import DebitNoteForm from './DebitNoteForm';
 import CreditNoteListPage from './CreditNoteListPage';
 import CreditNoteForm from './CreditNoteForm';
 import DynamicTransactionMappingPage from './DynamicTransactionMappingPage';
+import FinancialYearPage from './FinancialYearPage';
+import CashFlowDashboard from './CashFlowDashboard';
+import PartIdentification from './PartIdentification';
+import FinancialStatementsPage from './FinancialStatementsPage';
+import LedgerReportPage from './LedgerReportPage';
+import ReceivablesPayablesPage from './ReceivablesPayablesPage';
+import StockInHandReport from './StockInHandReport';
 import { DarkModeProvider } from './contexts/DarkModeContext';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { ProtectedRoute as PermissionProtectedRoute } from './components/ProtectedRoute';
@@ -60,7 +67,7 @@ function ProtectedRoute({ children, adminOnly = false }) {
   }
 
   if (!user) {
-    return <Navigate to="/login" replace />;
+    return <Navigate to="/" replace />;
   }
 
   if (adminOnly && user.role !== 'ADMIN') {
@@ -282,6 +289,11 @@ function App() {
                 <MLReportsPage />
               </AuthenticatedLayout>
             } />
+            <Route path="/cashflow-prediction" element={
+              <AuthenticatedLayout>
+                <CashFlowDashboard />
+              </AuthenticatedLayout>
+            } />
 
             {/* User Management */}
             <Route path="/users" element={
@@ -418,6 +430,56 @@ function App() {
               <AuthenticatedLayout>
                 <PermissionProtectedRoute permission="ACCOUNTS_DYNAMIC_MAPPING_VIEW">
                   <DynamicTransactionMappingPage />
+                </PermissionProtectedRoute>
+              </AuthenticatedLayout>
+            } />
+
+            {/* Financial Year Module */}
+            <Route path="/financial-year" element={
+              <AuthenticatedLayout>
+                <FinancialYearPage />
+              </AuthenticatedLayout>
+            } />
+
+            {/* Part Identification Module */}
+            <Route path="/parts/identify" element={
+              <AuthenticatedLayout>
+                <PartIdentification />
+              </AuthenticatedLayout>
+            } />
+
+            {/* Financial Statements Module */}
+            <Route path="/accounts/financial-statements" element={
+              <AuthenticatedLayout>
+                <PermissionProtectedRoute permission="REPORTS_FINANCIAL_STATEMENTS_VIEW">
+                  <FinancialStatementsPage />
+                </PermissionProtectedRoute>
+              </AuthenticatedLayout>
+            } />
+
+            {/* Ledger Report Module */}
+            <Route path="/accounts/ledger" element={
+              <AuthenticatedLayout>
+                <PermissionProtectedRoute permission="REPORTS_LEDGER_REPORT_VIEW">
+                  <LedgerReportPage />
+                </PermissionProtectedRoute>
+              </AuthenticatedLayout>
+            } />
+
+            {/* Receivables & Payables Module */}
+            <Route path="/accounts/receivables-payables" element={
+              <AuthenticatedLayout>
+                <PermissionProtectedRoute permission="REPORTS_RECEIVABLES_PAYABLES_REPORT_VIEW">
+                  <ReceivablesPayablesPage />
+                </PermissionProtectedRoute>
+              </AuthenticatedLayout>
+            } />
+
+            {/* Inventory Reports */}
+            <Route path="/inventory/stock-in-hand" element={
+              <AuthenticatedLayout>
+                <PermissionProtectedRoute permission="INVENTORY_STOCK_IN_HAND_REPORT_VIEW">
+                  <StockInHandReport />
                 </PermissionProtectedRoute>
               </AuthenticatedLayout>
             } />

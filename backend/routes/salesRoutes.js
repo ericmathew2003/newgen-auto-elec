@@ -1,6 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const pool = require("../db");
+const { checkPeriodStatus, checkPeriodStatusForUpdate } = require("../middleware/checkPeriodStatus");
 
 /**
  * SALES ROUTES aligned to new schema:
@@ -13,7 +14,7 @@ const pool = require("../db");
 const nn = (v) => (v === undefined || v === null || String(v).trim() === "" ? null : v);
 
 // Create Sales Invoice (Header Only) with atomic invoice number assignment
-router.post("/", async (req, res) => {
+router.post("/", checkPeriodStatus, async (req, res) => {
   const {
     fyear_id,
     inv_no,
@@ -92,7 +93,6 @@ router.post("/", async (req, res) => {
     res.json({ success: true, inv_master_id: result.rows[0]?.inv_master_id, inv_no: result.rows[0]?.inv_no });
   } catch (err) {
     await client.query("ROLLBACK");
-    console.error(err);
     res.status(500).json({ error: "Failed to create sales invoice" });
   } finally {
     client.release();
@@ -100,7 +100,7 @@ router.post("/", async (req, res) => {
 });
 
 // Update Sales Invoice (Header Only)
-router.put("/:invMasterId", async (req, res) => {
+router.put("/:invMasterId", checkPeriodStatusForUpdate, async (req, res) => {
   const { invMasterId } = req.params;
   if (!/^\d+$/.test(String(invMasterId))) {
     return res.status(400).json({ error: "Invalid invoice id" });
@@ -165,7 +165,6 @@ router.put("/:invMasterId", async (req, res) => {
     );
     res.json({ success: true });
   } catch (err) {
-    console.error(err);
     res.status(500).json({ error: "Failed to update sales invoice" });
   }
 });
@@ -187,7 +186,6 @@ router.get("/next-invno", async (req, res) => {
     res.json({ next_inv_no: String(r.rows[0]?.next_no || 1) });
   } catch (err) {
     await client.query("ROLLBACK");
-    console.error(err);
     res.status(500).json({ error: "Failed to compute next invoice number" });
   } finally {
     client.release();
@@ -212,10 +210,7 @@ router.get("/summary", async (req, res) => {
   try {
     const { fromDate, toDate } = req.query;
 
-    console.log("Sales summary endpoint called with:", { fromDate, toDate });
-
     if (!fromDate || !toDate) {
-      console.log("Missing dates - fromDate:", fromDate, "toDate:", toDate);
       return res.status(400).json({ error: "fromDate and toDate are required" });
     }
 
@@ -240,14 +235,10 @@ router.get("/summary", async (req, res) => {
       ORDER BY m.inv_date, m.inv_no
     `;
 
-    console.log("Executing sales summary query with params:", [fromDate, toDate]);
-
     try {
       const result = await pool.query(query, [fromDate, toDate]);
-      console.log("Sales summary query executed successfully, result count:", result.rows.length);
       res.json(result.rows);
     } catch (queryError) {
-      console.error("Database query error:", queryError);
       return res.status(400).json({
         error: "Database query failed",
         details: queryError.message,
@@ -256,8 +247,6 @@ router.get("/summary", async (req, res) => {
       });
     }
   } catch (err) {
-    console.error("Error fetching sales summary:", err.message);
-    console.error("Full error:", err);
     res.status(500).json({
       error: "Server Error",
       details: err.message,
@@ -271,12 +260,7 @@ router.get("/report", async (req, res) => {
   try {
     const { fromDate, toDate } = req.query;
 
-    console.log("Report endpoint called with:", { fromDate, toDate });
-    console.log("fromDate type:", typeof fromDate, "value:", fromDate);
-    console.log("toDate type:", typeof toDate, "value:", toDate);
-
     if (!fromDate || !toDate) {
-      console.log("Missing dates - fromDate:", fromDate, "toDate:", toDate);
       return res.status(400).json({ error: "fromDate and toDate are required" });
     }
 
@@ -306,7 +290,6 @@ router.get("/report", async (req, res) => {
       ORDER BY m.inv_date, m.inv_no, d.srno
     `;
 
-    console.log("Executing query with params:", [fromDate, toDate]);
     console.log("Query:", query);
 
     try {
@@ -349,7 +332,7 @@ router.get("/", async (req, res) => {
       `SELECT m.inv_master_id, m.inv_no, m.inv_date,
               COALESCE(p.partyname, m.customer_name) AS customer_name,
               m.taxable_tot, m.cgst_amount, m.sgst_amount, m.igst_amount, m.tot_amount, m.rounded_off,
-              m.is_posted, m.is_confirmed
+              m.is_posted, m.is_confirmed, m.is_paid
        FROM public.trn_invoice_master m
        LEFT JOIN public.tblmasparty p ON p.partyid = m.party_id
        ${filter}
@@ -481,7 +464,7 @@ router.delete("/:invMasterId", async (req, res) => {
 
 // Confirm sales invoice (set is_confirmed = true)
 // Confirm sales invoice - Updates inventory and creates stock ledger entries
-router.post("/:invMasterId/confirm", async (req, res) => {
+router.post("/:invMasterId/confirm", checkPeriodStatus, async (req, res) => {
   const { invMasterId } = req.params;
   
   if (!/^\d+$/.test(String(invMasterId))) {
@@ -562,7 +545,7 @@ router.post("/:invMasterId/confirm", async (req, res) => {
 });
 
 // Mark sales invoice as posted (locked) + create accounting and stock ledger entries atomically
-router.post("/:invMasterId/post", async (req, res) => {
+router.post("/:invMasterId/post", checkPeriodStatus, async (req, res) => {
   const { invMasterId } = req.params;
   const client = await pool.connect();
   const num = (v) => parseFloat(v ?? 0) || 0; // safe numeric coercion
@@ -571,9 +554,13 @@ router.post("/:invMasterId/post", async (req, res) => {
 
     // Fetch invoice master
     const hdrRes = await client.query(
-      `SELECT inv_master_id, fyear_id, inv_no, inv_date, party_id, customer_name, account_id,
-              taxable_tot, cgst_amount, sgst_amount, igst_amount, tot_amount, rounded_off, is_posted, is_confirmed
-         FROM public.trn_invoice_master WHERE inv_master_id=$1`,
+      `SELECT m.inv_master_id, m.fyear_id, m.inv_no, m.inv_date, m.party_id, m.customer_name, m.account_id,
+              m.taxable_tot, m.cgst_amount, m.sgst_amount, m.igst_amount, m.tot_amount, m.rounded_off, 
+              m.is_posted, m.is_confirmed,
+              COALESCE(m.customer_name, p.partyname, 'Unknown Customer') as display_customer_name
+         FROM public.trn_invoice_master m
+         LEFT JOIN tblmasparty p ON m.party_id = p.partyid
+         WHERE m.inv_master_id=$1`,
       [invMasterId]
     );
     const m = hdrRes.rows[0];
@@ -648,17 +635,17 @@ router.post("/:invMasterId/post", async (req, res) => {
       });
       
       // Prepare transaction data for value source mapping
-      // First, calculate COGS from invoice details
+      // First, calculate COGS from invoice master (tot_avg_cost is already calculated)
       let cogsAmount = 0;
       try {
         const cogsRes = await client.query(`
-          SELECT COALESCE(SUM(d.avg_cost * d.qty), 0) as total_cogs
-          FROM public.trn_invoice_detail d
-          WHERE d.inv_master_id = $1
+          SELECT COALESCE(tot_avg_cost, 0) as total_cogs
+          FROM public.trn_invoice_master
+          WHERE inv_master_id = $1
         `, [invMasterId]);
         
         cogsAmount = parseFloat(cogsRes.rows[0]?.total_cogs || 0);
-        console.log(`Calculated COGS amount: ${cogsAmount}`);
+        console.log(`Calculated COGS amount from master table: ${cogsAmount}`);
       } catch (cogsError) {
         console.log('Error calculating COGS:', cogsError.message);
         cogsAmount = 0;
@@ -672,7 +659,8 @@ router.post("/:invMasterId/post", async (req, res) => {
         SALES_IGST_AMOUNT: igstAmt,
         SALES_DISCOUNT_AMOUNT: 0, // Add if needed
         ROUND_OFF_AMOUNT: roundOff,
-        COST_OF_GOODS_SOLD: cogsAmount
+        COST_OF_GOODS_SOLD: cogsAmount, // Keep for backward compatibility
+        SALES_COGS_AMOUNT: cogsAmount    // This is what the mappings use!
       };
 
       console.log('Transaction data for journal generation:', transactionData);
@@ -692,13 +680,20 @@ router.post("/:invMasterId/post", async (req, res) => {
         // Create separate journal entries for each event code
         for (const [eventCode, mappings] of Object.entries(eventGroups)) {
           console.log(`\n=== Creating journal for event: ${eventCode} ===`);
-        console.log(`Event has ${mappings.length} mappings`);
-        
-        // Debug: Log transaction data for this event
-        console.log('Available transaction data:');
-        Object.entries(transactionData).forEach(([key, value]) => {
-          console.log(`  ${key}: ${value}`);
-        });
+          console.log(`Event has ${mappings.length} mappings`);
+          
+          // Check if this is COGS event and if COGS amount is 0
+          if (eventCode === 'COGS' && cogsAmount === 0) {
+            console.log('⚠️  Skipping COGS journal creation because COGS amount is 0');
+            console.log('   Items may not have avg_cost values set');
+            continue; // Skip this event
+          }
+          
+          // Debug: Log transaction data for this event
+          console.log('Available transaction data:');
+          Object.entries(transactionData).forEach(([key, value]) => {
+            console.log(`  ${key}: ${value}`);
+          });
           
           // Create journal master entry for this event
           const journalMasterRes = await client.query(`
@@ -716,7 +711,7 @@ router.post("/:invMasterId/post", async (req, res) => {
             invMasterId,
             0, // Will be updated after calculating totals
             0,
-            `Sales Invoice ${m.inv_no} - ${eventCode} - ${m.customer_name || 'Unknown Customer'}`
+            `Sales Invoice ${m.inv_no} - ${m.display_customer_name}`
           ]);
 
           const journalMasId = journalMasterRes.rows[0].journal_mas_id;
@@ -734,8 +729,24 @@ router.post("/:invMasterId/post", async (req, res) => {
             console.log(`Debit/Credit: ${mapping.debit_credit}`);
             console.log(`Value Source: ${mapping.value_source}`);
             console.log(`Amount from transaction data: ${amount}`);
+            console.log(`Is Dynamic D/C: ${mapping.is_dynamic_dc}`);
             
-            if (amount > 0) {
+            // Skip only if amount is exactly 0 (allow negative amounts for rounding, etc.)
+            if (amount !== 0) {
+              
+              // Determine actual debit/credit based on is_dynamic_dc flag
+              let actualDebitCredit = mapping.debit_credit;
+              let absoluteAmount = Math.abs(amount);
+              
+              if (mapping.is_dynamic_dc) {
+                // For dynamic entries, flip D/C based on sign
+                // Positive amount: use configured D/C
+                // Negative amount: flip D/C
+                if (amount < 0) {
+                  actualDebitCredit = mapping.debit_credit === 'D' ? 'C' : 'D';
+                }
+                console.log(`Dynamic D/C: Original=${mapping.debit_credit}, Amount=${amount}, Actual=${actualDebitCredit}`);
+              }
               
               // Get account ID from account nature (flexible matching)
               // First try exact match, then try pattern matching for transaction-specific natures
@@ -776,10 +787,10 @@ router.post("/:invMasterId/post", async (req, res) => {
 
               console.log(`✅ Creating journal detail entry:`);
               console.log(`   Account: ${accountRes.rows[0].account_name} (${accountRes.rows[0].account_code})`);
-              console.log(`   ${mapping.debit_credit === 'D' ? 'Debit' : 'Credit'}: ${amount}`);
+              console.log(`   ${actualDebitCredit === 'D' ? 'Debit' : 'Credit'}: ${absoluteAmount}`);
               console.log(`   Description: ${description}`);
 
-              // Insert journal detail entry
+              // Insert journal detail entry using absolute amount and actual debit/credit
               await client.query(`
                 INSERT INTO public.acc_journal_detail 
                 (journal_mas_id, account_id, party_id, debit_amount, credit_amount, description, created_date)
@@ -788,16 +799,16 @@ router.post("/:invMasterId/post", async (req, res) => {
                 journalMasId,
                 accountId,
                 m.party_id,
-                mapping.debit_credit === 'D' ? amount : 0,
-                mapping.debit_credit === 'C' ? amount : 0,
+                actualDebitCredit === 'D' ? absoluteAmount : 0,
+                actualDebitCredit === 'C' ? absoluteAmount : 0,
                 description
               ]);
 
-              // Track totals for this event
-              if (mapping.debit_credit === 'D') {
-                eventDebits += amount;
+              // Track totals for this event using absolute amount
+              if (actualDebitCredit === 'D') {
+                eventDebits += absoluteAmount;
               } else {
-                eventCredits += amount;
+                eventCredits += absoluteAmount;
               }
             } else {
               console.log(`❌ SKIPPING mapping ${mapping.account_nature} (${mapping.debit_credit})`);

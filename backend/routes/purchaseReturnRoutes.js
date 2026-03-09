@@ -1,6 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const pool = require("../db");
+const { checkPeriodStatus, checkPeriodStatusForUpdate } = require("../middleware/checkPeriodStatus");
 
 // Helper to normalize empty strings to null (for bigint/numeric/date)
 const nn = (v) => (v === undefined || v === null || String(v).trim() === "" ? null : v);
@@ -39,21 +40,14 @@ router.get("/", async (req, res) => {
 router.get("/next-number", async (req, res) => {
   try {
     const selectedFYearID = req.query.fyear_id;
-    console.log("Backend: Generating next number for fyear_id:", selectedFYearID);
     
     const sql = selectedFYearID
       ? `SELECT COALESCE(MAX(purch_ret_no), 0) + 1 AS next_no FROM trn_purchase_return_master WHERE fyear_id = $1`
       : `SELECT COALESCE(MAX(purch_ret_no), 0) + 1 AS next_no FROM trn_purchase_return_master`;
     const params = selectedFYearID ? [selectedFYearID] : [];
     
-    console.log("Backend: SQL query:", sql);
-    console.log("Backend: Query params:", params);
-    
     const result = await pool.query(sql, params);
     const next_no = result.rows[0]?.next_no || 1;
-    
-    console.log("Backend: Query result:", result.rows[0]);
-    console.log("Backend: Returning next_no:", next_no);
     
     res.json({ next_no });
   } catch (err) {
@@ -94,7 +88,7 @@ router.get("/:purchRetId", async (req, res) => {
 });
 
 // Create Purchase Return (Header + Items) with atomic number assignment
-router.post("/", async (req, res) => {
+router.post("/", checkPeriodStatus, async (req, res) => {
   const { header = {}, items = [] } = req.body || {};
   const {
     fyear_id,
@@ -119,10 +113,8 @@ router.post("/", async (req, res) => {
 
     // If purch_ret_no is missing or marked as 'NEW', allocate the next number atomically
     let retNoToUse = purch_ret_no;
-    console.log("Backend CREATE: Received purch_ret_no:", purch_ret_no);
     
     const needsAutoNumber = purch_ret_no === undefined || purch_ret_no === null || String(purch_ret_no).trim() === "" || String(purch_ret_no).toUpperCase() === "NEW";
-    console.log("Backend CREATE: needsAutoNumber:", needsAutoNumber);
     
     if (needsAutoNumber) {
       await client.query("LOCK TABLE trn_purchase_return_master IN EXCLUSIVE MODE");
@@ -130,15 +122,10 @@ router.post("/", async (req, res) => {
         ? `SELECT COALESCE(MAX(purch_ret_no), 0) + 1 AS next_no FROM trn_purchase_return_master WHERE fyear_id = $1`
         : `SELECT COALESCE(MAX(purch_ret_no), 0) + 1 AS next_no FROM trn_purchase_return_master`;
       const params = fyear_id ? [fyear_id] : [];
-      console.log("Backend CREATE: Auto-number SQL:", sql);
-      console.log("Backend CREATE: Auto-number params:", params);
       
       const r = await client.query(sql, params);
       retNoToUse = r.rows[0]?.next_no || 1;
-      console.log("Backend CREATE: Auto-generated number:", retNoToUse);
     }
-    
-    console.log("Backend CREATE: Final retNoToUse:", retNoToUse);
 
     const result = await client.query(
       `INSERT INTO trn_purchase_return_master
@@ -201,7 +188,6 @@ router.post("/", async (req, res) => {
     await client.query("COMMIT");
     
     const savedReturnNo = result.rows[0]?.purch_ret_no;
-    console.log("Backend CREATE: Saved return number:", savedReturnNo);
     
     const response = { 
       success: true, 
@@ -210,7 +196,6 @@ router.post("/", async (req, res) => {
       purch_ret_no: savedReturnNo 
     };
     
-    console.log("Backend CREATE: Sending response:", response);
     res.json(response);
   } catch (err) {
     await client.query("ROLLBACK");
@@ -222,7 +207,7 @@ router.post("/", async (req, res) => {
 });
 
 // Update Purchase Return (Header Only)
-router.put("/:purchRetId", async (req, res) => {
+router.put("/:purchRetId", checkPeriodStatusForUpdate, async (req, res) => {
   const { purchRetId } = req.params;
   if (!/^\d+$/.test(String(purchRetId))) {
     return res.status(400).json({ error: "Invalid purchase return id" });
@@ -297,7 +282,7 @@ router.put("/:purchRetId", async (req, res) => {
 });
 
 // Replace all detail rows for a purchase return
-router.post("/:purchRetId/items/replace", async (req, res) => {
+router.post("/:purchRetId/items/replace", checkPeriodStatus, async (req, res) => {
   const { purchRetId } = req.params;
   const { items = [], fyear_id } = req.body || {};
   
@@ -353,7 +338,7 @@ router.post("/:purchRetId/items/replace", async (req, res) => {
 });
 
 // Confirm purchase return - Updates inventory and creates stock ledger entries
-router.post("/:purchRetId/confirm", async (req, res) => {
+router.post("/:purchRetId/confirm", checkPeriodStatus, async (req, res) => {
   const { purchRetId } = req.params;
   if (!/^\d+$/.test(String(purchRetId))) {
     return res.status(400).json({ error: "Invalid purchase return id" });
@@ -435,7 +420,7 @@ router.post("/:purchRetId/confirm", async (req, res) => {
 });
 
 // Post purchase return (create accounting entries only - stock already updated in confirm)
-router.post("/:purchRetId/post", async (req, res) => {
+router.post("/:purchRetId/post", checkPeriodStatus, async (req, res) => {
   const { purchRetId } = req.params;
   if (!/^\d+$/.test(String(purchRetId))) {
     return res.status(400).json({ error: "Invalid purchase return id" });
@@ -475,11 +460,38 @@ router.post("/:purchRetId/post", async (req, res) => {
     // DYNAMIC JOURNAL GENERATION FOR PURCHASE RETURN
     // ========================================
     
+    // Check if journals already exist for this purchase return and delete them
+    const existingJournalsRes = await client.query(
+      `SELECT journal_mas_id, journal_serial 
+       FROM public.acc_journal_master 
+       WHERE source_document_type = 'PURCHASE_RETURN' 
+       AND source_document_id = $1`,
+      [purchRetId]
+    );
+    
+    if (existingJournalsRes.rows.length > 0) {
+      for (const journal of existingJournalsRes.rows) {
+        // Delete journal details first
+        await client.query(
+          `DELETE FROM public.acc_journal_detail WHERE journal_mas_id = $1`,
+          [journal.journal_mas_id]
+        );
+        // Delete journal master
+        await client.query(
+          `DELETE FROM public.acc_journal_master WHERE journal_mas_id = $1`,
+          [journal.journal_mas_id]
+        );
+      }
+    }
+    
     // Get purchase return master data for journal generation
     const returnMasterRes = await client.query(
-      `SELECT pret_id, fyear_id, purch_ret_no, tran_date, party_id,
-              taxable_total, cgst_amount, sgst_amount, igst_amount, rounded_off, total_amount
-       FROM trn_purchase_return_master WHERE pret_id = $1`,
+      `SELECT m.pret_id, m.fyear_id, m.purch_ret_no, m.tran_date, m.party_id,
+              m.taxable_total, m.cgst_amount, m.sgst_amount, m.igst_amount, m.rounded_off, m.total_amount,
+              COALESCE(p.partyname, 'Unknown Supplier') as supplier_name
+       FROM trn_purchase_return_master m
+       LEFT JOIN tblmasparty p ON m.party_id = p.partyid
+       WHERE m.pret_id = $1`,
       [purchRetId]
     );
     
@@ -508,10 +520,8 @@ router.post("/:purchRetId/post", async (req, res) => {
       ORDER BY event_code, entry_sequence
     `);
     
-    console.log(`Query found ${mappingsRes.rows.length} mappings for Purchase Return`);
     
     if (mappingsRes.rows.length > 0) {
-      console.log(`Found ${mappingsRes.rows.length} journal mappings for Purchase Return`);
       
       // Prepare transaction data for value source mapping
       const transactionData = {
@@ -523,7 +533,6 @@ router.post("/:purchRetId/post", async (req, res) => {
           ROUND_OFF_AMOUNT: roundedOff
         };
         
-        console.log('Transaction data for journal generation:', transactionData);
         
         try {
           // Group mappings by event_code
@@ -535,12 +544,9 @@ router.post("/:purchRetId/post", async (req, res) => {
             eventGroups[mapping.event_code].push(mapping);
           });
           
-          console.log(`Found ${Object.keys(eventGroups).length} event codes:`, Object.keys(eventGroups));
           
           // Create journal entries for each event code
           for (const [eventCode, mappings] of Object.entries(eventGroups)) {
-            console.log(`\n=== Creating journal for event: ${eventCode} ===`);
-            console.log(`Event has ${mappings.length} mappings`);
             
             // Create journal master entry
             const journalMasterRes = await client.query(`
@@ -558,24 +564,17 @@ router.post("/:purchRetId/post", async (req, res) => {
               purchRetId,
               0, // Will be updated after calculating totals
               0,
-              `Purchase Return ${returnMaster.purch_ret_no} - ${eventCode}`
+              `Purchase Return for ${returnMaster.supplier_name}`
             ]);
             
             const journalMasId = journalMasterRes.rows[0].journal_mas_id;
-            console.log(`Created journal master with ID: ${journalMasId} for event: ${eventCode}`);
             
             let eventDebits = 0, eventCredits = 0;
             
             // Generate journal detail entries
-            console.log(`\nProcessing ${mappings.length} mappings for event ${eventCode}:`);
             for (const mapping of mappings) {
               const amount = transactionData[mapping.value_source] || 0;
               
-              console.log(`\n--- Processing mapping ${mapping.entry_sequence} ---`);
-              console.log(`Account Nature: ${mapping.account_nature}`);
-              console.log(`Debit/Credit: ${mapping.debit_credit}`);
-              console.log(`Value Source: ${mapping.value_source}`);
-              console.log(`Amount from transaction data: ${amount}`);
               
               if (amount > 0) {
                 // Get account ID from account nature
@@ -599,10 +598,7 @@ router.post("/:purchRetId/post", async (req, res) => {
                 let accountId = null;
                 if (accountRes.rows.length > 0) {
                   accountId = accountRes.rows[0].account_id;
-                  console.log(`Found account ID ${accountId} (${accountRes.rows[0].account_code} - ${accountRes.rows[0].account_name})`);
                 } else {
-                  console.log(`❌ WARNING: No account found for nature: ${mapping.account_nature}`);
-                  console.log(`   Skipping this entry`);
                   continue;
                 }
                 
@@ -612,10 +608,6 @@ router.post("/:purchRetId/post", async (req, res) => {
                   .replace('{{purch_ret_no}}', returnMaster.purch_ret_no || '')
                   .replace('{{tran_date}}', returnMaster.tran_date || '');
                 
-                console.log(`✅ Creating journal detail entry:`);
-                console.log(`   Account: ${accountRes.rows[0].account_name} (${accountRes.rows[0].account_code})`);
-                console.log(`   ${mapping.debit_credit === 'D' ? 'Debit' : 'Credit'}: ${amount}`);
-                console.log(`   Description: ${description}`);
                 
                 // Insert journal detail entry
                 await client.query(`
@@ -638,8 +630,6 @@ router.post("/:purchRetId/post", async (req, res) => {
                   eventCredits += amount;
                 }
               } else {
-                console.log(`❌ SKIPPING mapping ${mapping.account_nature} (${mapping.debit_credit})`);
-                console.log(`   Reason: Amount is ${amount}`);
               }
             }
             
@@ -650,22 +640,17 @@ router.post("/:purchRetId/post", async (req, res) => {
               WHERE journal_mas_id = $3
             `, [eventDebits, eventCredits, journalMasId]);
             
-            console.log(`Journal entries created for event ${eventCode}. Debits: ${eventDebits}, Credits: ${eventCredits}`);
           }
           
-          console.log(`\n=== All journal entries created successfully ===`);
-          console.log(`Total events processed: ${Object.keys(eventGroups).length}`);
           
         } catch (journalError) {
           console.error('Error creating journal entries:', journalError);
           throw journalError; // Re-throw to trigger rollback
         }
       } else {
-        console.log('No journal mappings found for Purchase Return - skipping journal creation');
       }
 
     // Populate acc_trn_invoice table for purchase return tracking
-    console.log(`Populating acc_trn_invoice table for purchase return ${purchRetId}...`);
     try {
       // Get the full purchase return data
       const returnData = await client.query(
@@ -700,7 +685,6 @@ router.post("/:purchRetId/post", async (req, res) => {
           `PRET-${returnInfo.purch_ret_no}`, // inv_reference
           true                           // is_posted
         ]);
-        console.log(`Successfully added purchase return ${returnInfo.purch_ret_no} to acc_trn_invoice table`);
       }
     } catch (accTrnError) {
       console.error('Error populating acc_trn_invoice table for purchase return:', accTrnError);

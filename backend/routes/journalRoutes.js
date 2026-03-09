@@ -3,6 +3,7 @@ const router = express.Router();
 const pool = require("../db");
 const { authenticateToken } = require("../middleware/auth");
 const { checkPermission } = require("../middleware/checkPermission");
+const { checkPeriodStatus, checkPeriodStatusForUpdate } = require("../middleware/checkPeriodStatus");
 
 // ===== CREDIT NOTE ROUTES (using journal tables) =====
 
@@ -111,7 +112,7 @@ router.get("/credit-notes/all", authenticateToken, async (req, res) => {
 });
 
 // Create new credit note (using journal tables)
-router.post("/credit-notes", authenticateToken, async (req, res) => {
+router.post("/credit-notes", authenticateToken, checkPeriodStatus, async (req, res) => {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
@@ -343,7 +344,7 @@ router.get("/credit-notes/:id", authenticateToken, async (req, res) => {
 });
 
 // Update credit note (using journal tables)
-router.put("/credit-notes/:id", authenticateToken, async (req, res) => {
+router.put("/credit-notes/:id", authenticateToken, checkPeriodStatusForUpdate, async (req, res) => {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
@@ -702,7 +703,7 @@ router.get("/debit-notes/all", authenticateToken, async (req, res) => {
 });
 
 // Create new debit note (using journal tables)
-router.post("/debit-notes", authenticateToken, checkPermission('ACCOUNTS_DEBIT_NOTE_ADD'), async (req, res) => {
+router.post("/debit-notes", authenticateToken, checkPermission('ACCOUNTS_DEBIT_NOTE_ADD'), checkPeriodStatus, async (req, res) => {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
@@ -932,7 +933,7 @@ router.get("/debit-notes/:id", authenticateToken, checkPermission('ACCOUNTS_DEBI
 });
 
 // Update debit note (using journal tables)
-router.put("/debit-notes/:id", authenticateToken, checkPermission('ACCOUNTS_DEBIT_NOTE_EDIT'), async (req, res) => {
+router.put("/debit-notes/:id", authenticateToken, checkPermission('ACCOUNTS_DEBIT_NOTE_EDIT'), checkPeriodStatusForUpdate, async (req, res) => {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
@@ -1298,7 +1299,7 @@ router.get("/serial/next", authenticateToken, checkPermission('ACCOUNTS_JOURNAL_
 });
 
 // Create new journal entry
-router.post("/", authenticateToken, checkPermission('ACCOUNTS_JOURNAL_VOUCHER_ADD'), async (req, res) => {
+router.post("/", authenticateToken, checkPermission('ACCOUNTS_JOURNAL_VOUCHER_ADD'), checkPeriodStatus, async (req, res) => {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
@@ -1473,7 +1474,7 @@ router.get("/:id", authenticateToken, checkPermission('ACCOUNTS_JOURNAL_VOUCHER_
 });
 
 // Update journal entry
-router.put("/:id", authenticateToken, checkPermission('ACCOUNTS_JOURNAL_VOUCHER_EDIT'), async (req, res) => {
+router.put("/:id", authenticateToken, checkPermission('ACCOUNTS_JOURNAL_VOUCHER_EDIT'), checkPeriodStatusForUpdate, async (req, res) => {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');

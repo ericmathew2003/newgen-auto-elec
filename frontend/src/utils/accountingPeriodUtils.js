@@ -26,7 +26,6 @@ export const getSelectedAccountingPeriod = async () => {
       dateTo: new Date(selectedPeriod.fydateto)
     };
   } catch (error) {
-    console.error("Error fetching accounting period:", error);
     throw error;
   }
 };

@@ -1,6 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const pool = require("../db");
+const { checkPeriodStatus, checkPeriodStatusForUpdate } = require("../middleware/checkPeriodStatus");
 
 const nn = (v) => (v === undefined || v === null || String(v).trim() === "" ? null : v);
 
@@ -120,13 +121,8 @@ router.get("/:receiptId", async (req, res) => {
 });
 
 // Create receipt
-router.post("/", async (req, res) => {
+router.post("/", checkPeriodStatus, async (req, res) => {
   const { header = {}, allocations = [], cheque = null } = req.body || {};
-  
-  console.log('=== Receipt Creation Request ===');
-  console.log('Header:', JSON.stringify(header, null, 2));
-  console.log('Allocations:', JSON.stringify(allocations, null, 2));
-  console.log('Cheque:', JSON.stringify(cheque, null, 2));
   
   const client = await pool.connect();
   try {
@@ -199,7 +195,6 @@ router.post("/", async (req, res) => {
     }
 
     await client.query("COMMIT");
-    console.log('✓ Receipt created successfully:', receiptId);
     res.json({ 
       success: true, 
       receipt_id: receiptId,
@@ -207,10 +202,7 @@ router.post("/", async (req, res) => {
     });
   } catch (err) {
     await client.query("ROLLBACK");
-    console.error('❌ Receipt creation error:', err);
-    console.error('Error message:', err.message);
-    console.error('Error detail:', err.detail);
-    console.error('Error code:', err.code);
+    console.error(err);
     res.status(500).json({ error: "Failed to create receipt", details: err.message });
   } finally {
     client.release();
@@ -218,7 +210,7 @@ router.post("/", async (req, res) => {
 });
 
 // Update receipt
-router.put("/:receiptId", async (req, res) => {
+router.put("/:receiptId", checkPeriodStatusForUpdate, async (req, res) => {
   const { receiptId } = req.params;
   const { header = {}, allocations = [], cheque = null } = req.body || {};
   
@@ -309,74 +301,15 @@ router.put("/:receiptId", async (req, res) => {
   }
 });
 
-// Confirm receipt
-router.post("/:receiptId/confirm", async (req, res) => {
+// Confirm and Post receipt (merged operation)
+router.post("/:receiptId/confirm", checkPeriodStatus, async (req, res) => {
   const { receiptId } = req.params;
   
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
 
-    const receipt = await client.query(
-      `SELECT is_confirmed FROM acc_trn_receipts_voucher WHERE receipt_id = $1`,
-      [receiptId]
-    );
-
-    if (receipt.rows.length === 0) {
-      await client.query("ROLLBACK");
-      return res.status(404).json({ error: "Receipt not found" });
-    }
-
-    if (receipt.rows[0].is_confirmed) {
-      await client.query("ROLLBACK");
-      return res.status(400).json({ error: "Receipt already confirmed" });
-    }
-
-    const allocations = await client.query(
-      `SELECT invoice_id, allocated_amount FROM acc_trn_receipt_allocation WHERE receipt_id = $1`,
-      [receiptId]
-    );
-
-    for (const alloc of allocations.rows) {
-      await client.query(
-        `UPDATE acc_trn_invoice
-         SET paid_amount = paid_amount + $1,
-             balance_amount = tran_amount - (paid_amount + $1),
-             status = CASE 
-               WHEN (tran_amount - (paid_amount + $1)) = 0 THEN 2
-               WHEN (paid_amount + $1) > 0 THEN 1
-               ELSE 0
-             END,
-             edited_date = NOW()
-         WHERE tran_id = $2`,
-        [alloc.allocated_amount, alloc.invoice_id]
-      );
-    }
-
-    await client.query(
-      `UPDATE acc_trn_receipts_voucher SET is_confirmed = TRUE, edited_date = NOW() WHERE receipt_id = $1`,
-      [receiptId]
-    );
-
-    await client.query("COMMIT");
-    res.json({ success: true, message: "Receipt confirmed successfully" });
-  } catch (err) {
-    await client.query("ROLLBACK");
-    console.error(err);
-    res.status(500).json({ error: "Failed to confirm receipt", details: err.message });
-  } finally {
-    client.release();
-  }
-});
-
-// Post receipt
-router.post("/:receiptId/post", async (req, res) => {
-  const { receiptId } = req.params;
-  
-  const client = await pool.connect();
-  try {
-    await client.query("BEGIN");
-
+    // Get receipt with party details
     const receipt = await client.query(
       `SELECT r.*, party.partyname
        FROM acc_trn_receipts_voucher r
@@ -392,16 +325,53 @@ router.post("/:receiptId/post", async (req, res) => {
 
     const rct = receipt.rows[0];
 
-    if (!rct.is_confirmed) {
+    if (rct.is_confirmed) {
       await client.query("ROLLBACK");
-      return res.status(400).json({ error: "Receipt must be confirmed before posting" });
+      return res.status(400).json({ error: "Receipt already confirmed and posted" });
     }
 
-    if (rct.is_posted) {
-      await client.query("ROLLBACK");
-      return res.status(400).json({ error: "Receipt already posted" });
+    // Step 1: Update invoice allocations (paid_amount, balance_amount, status)
+    const allocations = await client.query(
+      `SELECT a.invoice_id, a.allocated_amount, i.inv_master_id
+       FROM acc_trn_receipt_allocation a
+       JOIN acc_trn_invoice i ON i.tran_id = a.invoice_id
+       WHERE a.receipt_id = $1`,
+      [receiptId]
+    );
+
+    for (const alloc of allocations.rows) {
+      const newPaidAmount = await client.query(
+        `SELECT (paid_amount + $1::numeric) as new_paid, tran_amount FROM acc_trn_invoice WHERE tran_id = $2`,
+        [alloc.allocated_amount, alloc.invoice_id]
+      );
+      
+      const { new_paid, tran_amount } = newPaidAmount.rows[0];
+      const newBalance = parseFloat(tran_amount) - parseFloat(new_paid);
+      
+      await client.query(
+        `UPDATE acc_trn_invoice
+         SET paid_amount = $1::numeric,
+             balance_amount = $2::numeric,
+             status = CASE 
+               WHEN $2::numeric <= 0.01 THEN 2
+               WHEN $1::numeric > 0 THEN 1
+               ELSE 0
+             END,
+             edited_date = NOW()
+         WHERE tran_id = $3`,
+        [new_paid, newBalance, alloc.invoice_id]
+      );
+
+      // Check if invoice is fully paid and update is_paid flag
+      if (newBalance <= 0.01) {
+        await client.query(
+          `UPDATE trn_invoice_master SET is_paid = TRUE WHERE inv_master_id = $1`,
+          [alloc.inv_master_id]
+        );
+      }
     }
 
+    // Step 2: Create journal entries
     const journalSerial = `RCT-${rct.receipt_no}`;
     const journalResult = await client.query(
       `INSERT INTO acc_journal_master
@@ -457,13 +427,55 @@ router.post("/:receiptId/post", async (req, res) => {
       );
     }
 
+    // Step 3: Mark as confirmed and posted
     await client.query(
-      `UPDATE acc_trn_receipts_voucher SET is_posted = TRUE, edited_date = NOW() WHERE receipt_id = $1`,
+      `UPDATE acc_trn_receipts_voucher 
+       SET is_confirmed = TRUE, is_posted = TRUE, edited_date = NOW() 
+       WHERE receipt_id = $1`,
       [receiptId]
     );
 
     await client.query("COMMIT");
-    res.json({ success: true, message: "Receipt posted successfully" });
+    res.json({ success: true, message: "Receipt confirmed and posted successfully" });
+  } catch (err) {
+    await client.query("ROLLBACK");
+    console.error(err);
+    res.status(500).json({ error: "Failed to confirm and post receipt", details: err.message });
+  } finally {
+    client.release();
+  }
+});
+
+// Post receipt (kept for backward compatibility, but now just calls confirm logic)
+router.post("/:receiptId/post", checkPeriodStatus, async (req, res) => {
+  const { receiptId } = req.params;
+  
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+
+    const receipt = await client.query(
+      `SELECT is_posted FROM acc_trn_receipts_voucher WHERE receipt_id = $1`,
+      [receiptId]
+    );
+
+    if (receipt.rows.length === 0) {
+      await client.query("ROLLBACK");
+      return res.status(404).json({ error: "Receipt not found" });
+    }
+
+    if (receipt.rows[0].is_posted) {
+      await client.query("ROLLBACK");
+      return res.status(400).json({ error: "Receipt already posted" });
+    }
+
+    // Receipt exists but not posted, this shouldn't happen with new flow
+    // but handle it gracefully
+    await client.query("ROLLBACK");
+    return res.status(400).json({ 
+      error: "Receipt must be confirmed first. Confirm operation now handles both confirmation and posting." 
+    });
+
   } catch (err) {
     await client.query("ROLLBACK");
     console.error(err);

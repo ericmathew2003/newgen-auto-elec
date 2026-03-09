@@ -28,6 +28,11 @@ const natureRoutes = require("./routes/natureRoutes");
 const valueSourceRoutes = require("./routes/valueSourceRoutes");
 const notificationRoutes = require("./routes/notificationRoutes");
 const mlRoutes = require("./routes/mlRoutes");
+const financialYearRoutes = require("./routes/financialYearRoutes");
+const partIdentificationRoutes = require("./routes/partIdentificationRoutes");
+const financialReportsRoutes = require("./routes/financialReportsRoutes");
+const receivablesPayablesRoutes = require("./routes/receivablesPayablesRoutes");
+const stockReportRoutes = require("./routes/stockReportRoutes");
 
 // Conditionally load ML Python routes only if explicitly enabled
 // Set ENABLE_ML_PYTHON=true in .env to enable Python ML routes
@@ -69,7 +74,7 @@ const corsOptions = {
     }
   },
   credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization']
 };
 
@@ -78,6 +83,8 @@ app.use(cors(corsOptions));
 app.use(express.json());
 
 //Routes
+app.use("/api/financial-years", financialYearRoutes);
+app.use("/api/financial-periods", financialYearRoutes);
 app.use('/api/auth', authRoutes);
 app.use("/api/brands", brandRoutes);
 app.use("/api/groups", groupRoutes);
@@ -103,6 +110,10 @@ app.use("/api/account-natures", natureRoutes);
 app.use("/api/value-sources", valueSourceRoutes);
 app.use("/api/notifications", notificationRoutes);
 app.use("/api/ml", mlRoutes);
+app.use("/api/parts", partIdentificationRoutes);
+app.use("/api/reports", financialReportsRoutes);
+app.use("/api/receivables-payables", receivablesPayablesRoutes);
+app.use("/api/stock-reports", stockReportRoutes);
 
 // Only register ML Python routes if axios is available
 if (mlPythonRoutes) {

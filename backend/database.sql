@@ -445,6 +445,8 @@ CREATE TABLE public.acc_mas_coa (
     
     -- Account Nature: Links to transaction mapping system
     account_nature VARCHAR(50),
+
+    root_group_id SMALLINT NOT NULL,
     
     -- Control Flag: TRUE if journal entries can be posted directly to this account
     is_posting_allowed BOOLEAN NOT NULL DEFAULT TRUE,
@@ -715,7 +717,7 @@ CREATE TABLE sec_users (
     user_password TEXT NOT NULL,
     is_active BOOLEAN NOT NULL DEFAULT TRUE,
     created_date TIMESTAMP DEFAULT now(),
-    edited_dateTIMESTAMP DEFAULT now()
+    edited_date TIMESTAMP DEFAULT now()
 );
 
 

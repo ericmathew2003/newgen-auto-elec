@@ -348,4 +348,44 @@ router.get("/outstanding/list", authenticateToken, checkPermission('ACCOUNTS_INV
   }
 });
 
+/**
+ * Get acc_trn_invoice record by inv_master_id
+ * Used to get tran_id for payment allocation
+ */
+router.get("/by-master/:invMasterId", authenticateToken, async (req, res) => {
+  try {
+    const { invMasterId } = req.params;
+
+    const result = await pool.query(`
+      SELECT 
+        tran_id,
+        fyear_id,
+        party_id,
+        tran_type,
+        inv_master_id,
+        tran_date,
+        party_inv_no,
+        party_inv_date,
+        tran_amount,
+        paid_amount,
+        balance_amount,
+        status,
+        inv_reference
+      FROM acc_trn_invoice
+      WHERE inv_master_id = $1
+      LIMIT 1
+    `, [invMasterId]);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: "Invoice not found in accounts receivable" });
+    }
+
+    res.json(result.rows[0]);
+
+  } catch (err) {
+    console.error('Error fetching invoice by master id:', err);
+    res.status(500).json({ error: "Failed to fetch invoice" });
+  }
+});
+
 module.exports = router;

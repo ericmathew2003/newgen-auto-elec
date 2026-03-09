@@ -1,8 +1,86 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { BookA, PlusCircle, MinusCircle, CheckCircle, Save, RotateCcw, ArrowLeft } from 'lucide-react';
 
 const API_ENDPOINT = '/api/accounting/journals';
+
+// Searchable Select Component for Accounts
+const SearchableAccountSelect = ({ value, onChange, accounts, required = false }) => {
+    const [isOpen, setIsOpen] = useState(false);
+    const [searchTerm, setSearchTerm] = useState('');
+    const dropdownRef = useRef(null);
+    const inputRef = useRef(null);
+
+    const selectedAccount = accounts.find(acc => acc.account_id === value);
+    const displayText = selectedAccount 
+        ? `${selectedAccount.account_code} - ${selectedAccount.account_name}`
+        : '';
+
+    const filteredAccounts = useMemo(() => {
+        if (!searchTerm) return accounts;
+        const term = searchTerm.toLowerCase();
+        return accounts.filter(acc => 
+            acc.account_code.toLowerCase().includes(term) ||
+            acc.account_name.toLowerCase().includes(term)
+        );
+    }, [accounts, searchTerm]);
+
+    useEffect(() => {
+        const handleClickOutside = (event) => {
+            if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+                setIsOpen(false);
+                setSearchTerm('');
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
+
+    const handleSelect = (accountId) => {
+        onChange(accountId);
+        setIsOpen(false);
+        setSearchTerm('');
+    };
+
+    return (
+        <div ref={dropdownRef} className="relative w-full">
+            <input
+                ref={inputRef}
+                type="text"
+                value={isOpen ? searchTerm : displayText}
+                onChange={(e) => {
+                    setSearchTerm(e.target.value);
+                    if (!isOpen) setIsOpen(true);
+                }}
+                onFocus={() => setIsOpen(true)}
+                onClick={() => setIsOpen(true)}
+                placeholder="Type to search account..."
+                required={required}
+                className="w-full p-1 border border-gray-300 rounded focus:ring-red-500 focus:border-red-500 text-xs"
+            />
+            {isOpen && (
+                <div className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded shadow-lg max-h-60 overflow-y-auto">
+                    {filteredAccounts.length > 0 ? (
+                        filteredAccounts.map(account => (
+                            <div
+                                key={account.account_id}
+                                onClick={() => handleSelect(account.account_id)}
+                                className={`p-2 text-xs cursor-pointer hover:bg-blue-50 ${
+                                    value === account.account_id ? 'bg-blue-100' : ''
+                                }`}
+                            >
+                                <div className="font-semibold">{account.account_code}</div>
+                                <div className="text-gray-600">{account.account_name}</div>
+                            </div>
+                        ))
+                    ) : (
+                        <div className="p-2 text-xs text-gray-500">No accounts found</div>
+                    )}
+                </div>
+            )}
+        </div>
+    );
+};
 
 const initialLineItem = {
     tempId: 1,
@@ -88,6 +166,67 @@ const AccJournalEntryForm = () => {
             }
         } catch (error) {
             console.error('Error fetching journal serial:', error);
+        }
+    };
+
+    const duplicateLastJournal = async () => {
+        try {
+            setIsLoading(true);
+            // Fetch the last journal entry
+            const response = await fetch(`${API_ENDPOINT}?limit=1&page=1`);
+            if (!response.ok) {
+                showMessage('Failed to fetch last journal entry', 'error');
+                return;
+            }
+            
+            const data = await response.json();
+            if (!data.journals || data.journals.length === 0) {
+                showMessage('No previous journal entries found to duplicate', 'error');
+                return;
+            }
+            
+            const lastJournal = data.journals[0];
+            
+            // Fetch the full journal details
+            const detailResponse = await fetch(`${API_ENDPOINT}/${lastJournal.journal_mas_id}`);
+            if (!detailResponse.ok) {
+                showMessage('Failed to fetch journal details', 'error');
+                return;
+            }
+            
+            const journalData = await detailResponse.json();
+            
+            // Get new serial number
+            await fetchJournalSerial();
+            
+            // Set master data (excluding ID and serial, use today's date)
+            setMasterData(prev => ({
+                ...prev,
+                journalDate: new Date().toISOString().substring(0, 10),
+                sourceDocumentType: journalData.source_document_type || 'Journal',
+                sourceDocumentRef: journalData.source_document_ref || '',
+                narration: journalData.narration || '',
+            }));
+            
+            // Set journal details
+            const duplicatedDetails = journalData.details.map((detail, index) => ({
+                tempId: index + 1,
+                accountId: detail.account_id || '',
+                partyId: detail.party_id || '',
+                debitAmount: parseFloat(detail.debit_amount) || 0,
+                creditAmount: parseFloat(detail.credit_amount) || 0,
+                description: detail.description || '',
+            }));
+            
+            setJournalDetails(duplicatedDetails);
+            setNextTempId(duplicatedDetails.length + 1);
+            
+            showMessage('Last journal entry duplicated successfully. Review and click "Post Journal Entry" to save.', 'success');
+        } catch (error) {
+            console.error('Error duplicating journal:', error);
+            showMessage('Error duplicating last journal entry', 'error');
+        } finally {
+            setIsLoading(false);
         }
     };
 
@@ -404,19 +543,12 @@ const AccJournalEntryForm = () => {
                                     <tr key={line.tempId} className="hover:bg-red-50">
                                         
                                         <td className="p-1 whitespace-nowrap">
-                                            <select
+                                            <SearchableAccountSelect
                                                 value={line.accountId}
-                                                onChange={(e) => handleLineChange(line.tempId, 'accountId', e.target.value)}
-                                                required
-                                                className="w-full p-1 border border-gray-300 rounded focus:ring-red-500 focus:border-red-500 text-xs"
-                                            >
-                                                <option value="">Select Account</option>
-                                                {accounts.map(account => (
-                                                    <option key={account.account_id} value={account.account_id}>
-                                                        {account.account_code} - {account.account_name}
-                                                    </option>
-                                                ))}
-                                            </select>
+                                                onChange={(accountId) => handleLineChange(line.tempId, 'accountId', accountId)}
+                                                accounts={accounts}
+                                                required={true}
+                                            />
                                         </td>
                                         
                                         <td className="p-1 whitespace-nowrap">
@@ -522,6 +654,20 @@ const AccJournalEntryForm = () => {
 
 
                 <div className="mt-8 pt-6 border-t border-gray-200 flex justify-end space-x-3">
+                    {!isEditMode && (
+                        <button
+                            type="button"
+                            onClick={duplicateLastJournal}
+                            disabled={isLoading}
+                            className="flex items-center space-x-2 px-6 py-3 border border-blue-500 text-blue-600 font-semibold rounded-lg shadow-sm hover:bg-blue-50 transition duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                            title="Duplicate the last journal entry"
+                        >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                            </svg>
+                            <span>Duplicate Last Journal</span>
+                        </button>
+                    )}
                     <button
                         type="button"
                         onClick={() => { 
