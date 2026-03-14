@@ -134,20 +134,52 @@ ML/simple_*.py
 ML/visualize_*.py
 ML/quick_*.py
 ML/create_*.py
+ML/debug_*.py
+ML/fix_*.py
+ML/use_*.py
+ML/final_*.py
+ML/detailed_*.py
+ML/gradual_*.py
+ML/filtered_*.py
+ML/diagnose_*.py
 ML/*.bat
 !ML/start_service.bat
 !ML/start_vision_system.bat
 ML/*.md
 !ML/README.md
 !ML/INDEX.md
-ML/training_images/
+
+# ML Training datasets - all of them (large image folders, not needed in repo)
 ML/dataset/
+ML/clean_dataset/
+ML/final_dataset/
+ML/focused_dataset/
+ML/phase_1_dataset/
+ML/phase_2_dataset/
+ML/phase_3_dataset/
+ML/phase_4_dataset/
+ML/phase_5_dataset/
 ML/data/
 ML/uploads/
-ML/models/
 ML/__pycache__/
 ML/*.pyc
 ML/.ipynb_checkpoints/
+
+# ML Models - ignore all by default, then explicitly keep the active ones
+ML/models/
+
+# Keep active parts vision model (used by hybrid_parts_service.py on port 8007)
+# Backend calls port 8007 -> hybrid_parts_service.py -> loads these two files
+!ML/models/parts_classifier.h5
+!ML/models/class_indices.json
+
+# Keep active fault diagnosis models (used by fault_diagnosis_system.py on port 8008)
+!ML/models/fault_diagnosis_model.pkl
+!ML/models/symptom_vectorizer.pkl
+
+# Keep cashflow category mapping (used by categorized_cashflow_service.py)
+# Note: cashflow_predictor.py trains on-the-fly from DB - no saved model needed
+!ML/models/category_mapping.json
 
 # Keep these essential ML service files
 !ML/cashflow_service.py
@@ -156,15 +188,50 @@ ML/.ipynb_checkpoints/
 !ML/categorized_cashflow_service.py
 !ML/auto_parts_business_intelligence.py
 !ML/parts_vision_service.py
+!ML/fault_diagnosis_system.py
+!ML/advanced_fault_diagnosis.py
+!ML/hybrid_parts_service.py
+!ML/enhanced_parts_vision_service.py
+!ML/filtered_parts_vision.py
 !ML/requirements.txt
 !ML/requirements_vision.txt
 !ML/.env.example
 
-# Root level test files and scripts
+# Root level test, debug, fix, verify, check scripts (all formats)
+# Underscore variants
+test_*.js
+check_*.js
+debug_*.js
+verify_*.js
+fix_*.js
+compare_*.js
+update_*.js
+create_*.js
+frontend_*.js
+# Hyphen variants
+test-*.js
 check-*.js
+debug-*.js
+verify-*.js
+fix-*.js
+# SQL test/fix/check files at root
+check_*.sql
 check-*.sql
+fix_*.sql
+fix-*.sql
+verify_*.sql
 verify-*.sql
+find_*.sql
+create_*.sql
+test_*.sql
+test-*.sql
+# HTML test files
 test-*.html
+checkbox_test.html
+# Text/report files
+test-*.txt
+test-*.html
+test-report.html
 custom-reporter.js
 run-tests.bat
 run-tests.sh

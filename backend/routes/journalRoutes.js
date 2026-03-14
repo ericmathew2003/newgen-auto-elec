@@ -1208,18 +1208,31 @@ router.get("/all", authenticateToken, checkPermission('ACCOUNTS_JOURNAL_VOUCHER_
       });
     }
     
-    const { page = 1, limit = 50, search = '' } = req.query;
+    const { page = 1, limit = 50, search = '', finyearid } = req.query;
     const offset = (page - 1) * limit;
     
     let whereClause = '';
     let params = [];
     
+    // Build WHERE clause
+    const conditions = [];
+    
     if (search) {
-      whereClause = `WHERE 
-        jm.journal_serial ILIKE $1 OR 
-        jm.source_document_ref ILIKE $1 OR 
-        jm.narration ILIKE $1`;
-      params = [`%${search}%`];
+      params.push(`%${search}%`);
+      conditions.push(`(
+        jm.journal_serial ILIKE $${params.length} OR 
+        jm.source_document_ref ILIKE $${params.length} OR 
+        jm.narration ILIKE $${params.length}
+      )`);
+    }
+    
+    if (finyearid) {
+      params.push(finyearid);
+      conditions.push(`jm.finyearid = $${params.length}`);
+    }
+    
+    if (conditions.length > 0) {
+      whereClause = `WHERE ${conditions.join(' AND ')}`;
     }
     
     console.log("Executing query with params:", params);

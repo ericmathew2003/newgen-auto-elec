@@ -64,6 +64,37 @@ class PredictionRequest(BaseModel):
 # Initialize predictor
 predictor = CashFlowPredictor()
 
+# Auto-train on startup
+@app.on_event("startup")
+async def startup_event():
+    """Train model automatically on service startup"""
+    try:
+        print("🚀 Starting Cash Flow Prediction Service...")
+        print("🤖 Auto-training model on startup...")
+        
+        # Train the model automatically
+        conn = None
+        try:
+            conn = get_db()
+            if conn:
+                historical_data = fetch_cash_flow_data(days_back=180)
+                if len(historical_data) >= 7:
+                    predictor.fit(historical_data)
+                    print("✅ Model trained successfully on startup!")
+                else:
+                    print(f"⚠️ Insufficient data ({len(historical_data)} days) - need at least 7 days")
+            else:
+                print("❌ Database connection failed - model not trained")
+        except Exception as e:
+            print(f"⚠️ Auto-training failed: {e}")
+            print("💡 You can manually train using the /train endpoint")
+        finally:
+            if conn:
+                conn.close()
+                
+    except Exception as e:
+        print(f"❌ Startup error: {e}")
+
 def fetch_cash_flow_data(days_back: int = 90) -> pd.DataFrame:
     """
     Fetch cash flow data from journal entries

@@ -142,12 +142,32 @@ class PartsVisionService:
     
     def _initialize_classification_model(self):
         """Initialize or load classification model"""
-        model_path = 'ML/models/parts_classifier.h5'
+        # Try both relative and absolute paths
+        model_paths = [
+            'models/parts_classifier.h5',
+            'ML/models/parts_classifier.h5',
+            os.path.join(os.path.dirname(__file__), 'models', 'parts_classifier.h5')
+        ]
         
-        if os.path.exists(model_path):
-            logger.info("Loading existing classification model...")
-            self.classification_model = tf.keras.models.load_model(model_path)
-        else:
+        model_loaded = False
+        for model_path in model_paths:
+            if os.path.exists(model_path):
+                try:
+                    logger.info(f"Loading classification model from: {model_path}")
+                    self.classification_model = tf.keras.models.load_model(model_path)
+                    logger.info("✅ Classification model loaded successfully!")
+                    model_loaded = True
+                    break
+                except Exception as e:
+                    logger.error(f"Failed to load model from {model_path}: {e}")
+        
+        if not model_loaded:
+            logger.warning("No existing model found, creating new one...")
+            self._create_new_model()
+    
+    def _create_new_model(self):
+        """Create a new classification model"""
+        try:
             logger.info("Creating new classification model with transfer learning...")
             # Create model with transfer learning
             base_model = MobileNetV2(
@@ -176,16 +196,33 @@ class PartsVisionService:
             )
             
             logger.info(f"Model created with {len(PART_CATEGORIES)} categories")
+        except Exception as e:
+            logger.error(f"Failed to create model: {e}")
+            self.classification_model = None
     
     def _initialize_feature_extractor(self):
         """Initialize feature extractor for similarity search"""
         if self.classification_model:
-            # Use the feature layer before final classification
-            self.feature_extractor = Model(
-                inputs=self.classification_model.input,
-                outputs=self.classification_model.get_layer('feature_dense').output
-            )
-            logger.info("Feature extractor initialized")
+            try:
+                # Try to use the second-to-last dense layer for features
+                # Based on the error, the model has 'dense_8' and 'dense_9' layers
+                self.feature_extractor = Model(
+                    inputs=self.classification_model.input,
+                    outputs=self.classification_model.get_layer('dense_8').output
+                )
+                logger.info("Feature extractor initialized using dense_8 layer")
+            except Exception as e:
+                logger.warning(f"Could not initialize feature extractor: {e}")
+                # Fallback: use global average pooling layer
+                try:
+                    self.feature_extractor = Model(
+                        inputs=self.classification_model.input,
+                        outputs=self.classification_model.get_layer('global_average_pooling2d_4').output
+                    )
+                    logger.info("Feature extractor initialized using global_average_pooling2d_4 layer")
+                except Exception as e2:
+                    logger.error(f"Failed to initialize feature extractor: {e2}")
+                    self.feature_extractor = None
     
     def _initialize_ocr(self):
         """Initialize OCR reader"""

@@ -128,7 +128,12 @@ export default function HomePage() {
       setError("");
       setLoading(true);
       console.log('Manually refreshing dashboard data...');
-      const res = await axios.get(`${API_BASE_URL}/api/dashboard/summary`, getAuthHeaders());
+      
+      // Add financial year filter
+      const selectedFYearID = localStorage.getItem('selectedFYearID');
+      const params = selectedFYearID ? `?fyearid=${selectedFYearID}` : '';
+      
+      const res = await axios.get(`${API_BASE_URL}/api/dashboard/summary${params}`, getAuthHeaders());
       setData(res.data);
       console.log('Dashboard data refreshed:', res.data);
     } catch (err) {
@@ -145,7 +150,12 @@ export default function HomePage() {
       try {
         setError("");
         setLoading(true);
-        const res = await axios.get(`${API_BASE_URL}/api/dashboard/summary`, getAuthHeaders());
+        
+        // Add financial year filter
+        const selectedFYearID = localStorage.getItem('selectedFYearID');
+        const params = selectedFYearID ? `?fyearid=${selectedFYearID}` : '';
+        
+        const res = await axios.get(`${API_BASE_URL}/api/dashboard/summary${params}`, getAuthHeaders());
         if (isMounted) {
           setData(res.data);
         }

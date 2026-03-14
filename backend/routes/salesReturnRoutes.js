@@ -80,7 +80,7 @@ router.get("/sold-items/:partyId", async (req, res) => {
         i.unit,
         d.qty as sold_qty,
         d.rate as sold_rate,
-        COALESCE(d.avg_cost, i.avgcost, 0) as item_cost,
+        COALESCE(d.avg_cost / NULLIF(d.qty, 0), i.avgcost, 0) as item_cost,
         d.taxable_rate,
         d.cgst_per,
         d.sgst_per,

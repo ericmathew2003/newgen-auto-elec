@@ -37,10 +37,24 @@ const upload = multer({
   }
 });
 
-const ML_SERVICE_URL = 'http://localhost:8002';
+const ML_SERVICE_URL = 'http://localhost:8007'; // Updated to use hybrid service
+const USE_ML_SERVICE = true; // ✅ ML enabled - Hybrid service with better filtering!
 
 // Helper function to call ML service
 async function callMLService(endpoint, filePath) {
+  // If ML service is disabled, return default response
+  if (!USE_ML_SERVICE) {
+    console.log('ML service disabled, using database-only mode');
+    return {
+      success: true,
+      results: {
+        category: 'general',
+        confidence: 0.5,
+        part_number: null
+      }
+    };
+  }
+  
   try {
     const formData = new FormData();
     formData.append('file', fs.createReadStream(filePath));
@@ -52,10 +66,70 @@ async function callMLService(endpoint, filePath) {
       timeout: 30000
     });
     
-    return response.data;
+    // Handle filtered service response format
+    const data = response.data;
+    
+    // Check if image was rejected by filter
+    if (data.success === false && data.reason === 'not_automotive_part') {
+      console.log('Image rejected by automotive filter:', data.message);
+      return {
+        success: false,
+        filtered: true,
+        reason: data.reason,
+        message: data.message,
+        detected_object: data.detected_object,
+        results: {
+          category: 'not_automotive',
+          confidence: 0,
+          part_number: null
+        }
+      };
+    }
+    
+    // Handle successful identification from hybrid service
+    if (data.success && data.your_model) {
+      return {
+        success: true,
+        filtered: false,
+        results: {
+          category: data.your_model.category,
+          confidence: data.your_model.confidence,
+          part_number: null, // Will be extracted from Google Vision texts if available
+          inventory_matches: data.inventory_matches || []
+        }
+      };
+    }
+    
+    // Handle successful identification (legacy format)
+    if (data.success && data.classification) {
+      return {
+        success: true,
+        filtered: false,
+        results: {
+          category: data.classification.category,
+          confidence: data.classification.confidence,
+          part_number: data.part_number || null,
+          inventory_matches: data.inventory_matches || []
+        }
+      };
+    }
+    
+    return data;
   } catch (error) {
     console.error(`ML Service Error (${endpoint}):`, error.message);
-    throw error;
+    if (error.response) {
+      console.error('ML Service Response:', error.response.data);
+    }
+    // Return a safe default instead of throwing
+    return {
+      success: false,
+      error: error.message,
+      results: {
+        category: 'unknown',
+        confidence: 0,
+        part_number: null
+      }
+    };
   }
 }
 
@@ -92,13 +166,41 @@ router.post('/identify', authenticateToken, upload.single('image'), async (req, 
     console.log(`Processing part identification for file: ${req.file.filename}`);
     
     // Call ML service for identification
-    const mlResult = await callMLService('/identify-part', req.file.path);
+    const mlResult = await callMLService('/identify', req.file.path);
     
-    if (!mlResult.success) {
-      return res.status(500).json({ error: 'ML service failed to process image' });
+    console.log('ML Service Response:', JSON.stringify(mlResult, null, 2));
+    
+    // Handle filtered rejection (non-automotive image)
+    if (mlResult.success === false) {
+      console.log('Image rejected by hybrid service:', mlResult.reason);
+      return res.status(400).json({
+        success: false,
+        filtered: true,
+        error: 'Not an automotive part',
+        message: mlResult.message || 'This image does not appear to contain automotive parts',
+        reason: mlResult.reason,
+        suggestion: 'Please upload an image of a car part (brake pad, filter, bearing, etc.)'
+      });
+    }
+    
+    if (!mlResult || !mlResult.success) {
+      console.error('ML service failed:', mlResult);
+      return res.status(500).json({ 
+        error: 'ML service failed to process image',
+        details: mlResult ? mlResult.error : 'No response from ML service'
+      });
+    }
+    
+    // Validate ML results
+    if (!mlResult.results) {
+      console.error('ML service returned no results');
+      return res.status(500).json({ 
+        error: 'ML service returned invalid response',
+        details: 'No results object in response'
+      });
     }
 
-    const { category, confidence, part_number } = mlResult.results;
+    const { category, confidence, part_number } = mlResult.results || {};
     
     client = await pool.connect();
     
@@ -106,15 +208,13 @@ router.post('/identify', authenticateToken, upload.single('image'), async (req, 
     let compatibleMakes = [];
     let groupInfo = null;
     
-    // If confidence is too low, try to use part number or show general results
-    let effectiveCategory = category;
-    if (confidence < 0.5 && !part_number) {
-      console.log(`Low confidence (${confidence}), will show general results`);
-      effectiveCategory = 'general';
-    }
+    // Use the category as-is from ML
+    let effectiveCategory = category || 'general';
     
-    // Map ML category to your group name
-    const groupName = CATEGORY_TO_GROUP_MAP[effectiveCategory] || CATEGORY_TO_GROUP_MAP[category] || effectiveCategory.toUpperCase();
+    // Map ML category to your group name - with null safety
+    const groupName = effectiveCategory 
+      ? (CATEGORY_TO_GROUP_MAP[effectiveCategory] || CATEGORY_TO_GROUP_MAP[category] || effectiveCategory.toUpperCase())
+      : 'GENERAL';
     
     console.log(`Identified category: ${category} -> Group: ${groupName}`);
     console.log(`Searching for group with name: "${groupName}"`);
@@ -149,6 +249,58 @@ router.post('/identify', authenticateToken, upload.single('image'), async (req, 
     } else {
       console.log(`Found group: ${JSON.stringify(groupResult.rows[0])}`);
       groupInfo = groupResult.rows[0];
+    }
+    
+    // Fallback: If no group found, show popular items from all groups
+    if (!groupInfo) {
+      console.log('No group found, showing popular items from all categories');
+      
+      const fallbackQuery = `
+        SELECT 
+          i.itemcode,
+          i.itemname,
+          i.partno,
+          i.model,
+          i.packing,
+          i.barcode,
+          i.sprice,
+          i.mrp,
+          i.curstock,
+          i.unit,
+          g.groupname,
+          b.brandname,
+          m.makename as car_make
+        FROM tblmasitem i
+        LEFT JOIN tblmasgroup g ON i.groupid = g.groupid
+        LEFT JOIN tblmasbrand b ON i.brandid = b.brandid
+        LEFT JOIN tblmasmake m ON i.makeid = m.makeid
+        WHERE (i.deleted = false OR i.deleted IS NULL)
+        ORDER BY i.curstock DESC, i.itemname
+        LIMIT 20
+      `;
+      
+      const fallbackResult = await client.query(fallbackQuery);
+      partDetails = fallbackResult.rows;
+      
+      // Get all makes
+      const allMakesQuery = `
+        SELECT DISTINCT 
+          m.makeid,
+          m.makename,
+          COUNT(i.itemcode) as parts_count
+        FROM tblmasitem i
+        INNER JOIN tblmasmake m ON i.makeid = m.makeid
+        WHERE (i.deleted = false OR i.deleted IS NULL)
+          AND m.makename IS NOT NULL
+        GROUP BY m.makeid, m.makename
+        ORDER BY parts_count DESC, m.makename
+        LIMIT 10
+      `;
+      
+      const allMakesResult = await client.query(allMakesQuery);
+      compatibleMakes = allMakesResult.rows;
+      
+      console.log(`Fallback: Showing ${partDetails.length} popular items`);
     }
     
     if (groupInfo) {
@@ -259,11 +411,13 @@ router.post('/identify', authenticateToken, upload.single('image'), async (req, 
     const response = {
       success: true,
       identification: {
-        category: category,
-        category_display: category.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase()),
-        confidence: confidence,
+        category: category || 'unknown',
+        category_display: category 
+          ? category.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())
+          : 'Unknown',
+        confidence: confidence || 0,
         group_name: groupName,
-        part_number: part_number
+        part_number: part_number || null
       },
       exact_match: exactMatch,
       group_info: groupInfo,
@@ -541,11 +695,14 @@ router.get('/ml-health', authenticateToken, async (req, res) => {
     const response = await axios.get(`${ML_SERVICE_URL}/health`, { timeout: 5000 });
     res.json({
       success: true,
+      service_url: ML_SERVICE_URL,
+      service_type: 'Filtered Parts Vision',
       ml_service: response.data
     });
   } catch (error) {
     res.status(503).json({
       success: false,
+      service_url: ML_SERVICE_URL,
       error: 'ML service unavailable',
       details: error.message
     });

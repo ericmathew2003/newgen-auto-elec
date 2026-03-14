@@ -23,9 +23,9 @@ router.post('/login', async (req, res) => {
   const { username, password } = req.body;
   
   try {
-    // Get user from sec_users table
+    // Get user from sec_users table (case-insensitive username)
     const user = await pool.query(
-      'SELECT user_id, username, full_name, email, user_password, is_active FROM sec_users WHERE username = $1', 
+      'SELECT user_id, username, full_name, email, user_password, is_active FROM sec_users WHERE LOWER(username) = LOWER($1)', 
       [username]
     );
     

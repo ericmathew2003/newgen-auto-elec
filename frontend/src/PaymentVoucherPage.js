@@ -29,6 +29,12 @@ const PaymentVoucherPage = () => {
       if (filters.fromDate) params.append('fromDate', filters.fromDate);
       if (filters.toDate) params.append('toDate', filters.toDate);
       if (filters.vendorId) params.append('vendorId', filters.vendorId);
+      
+      // Add financial year filter
+      const selectedFYearID = localStorage.getItem('selectedFYearID');
+      if (selectedFYearID) {
+        params.append('fyearId', selectedFYearID);
+      }
 
       const response = await axios.get(`${API_BASE_URL}/api/payments?${params.toString()}`);
       setPayments(response.data);

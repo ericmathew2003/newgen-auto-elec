@@ -5,7 +5,7 @@ const { authenticateToken } = require('../middleware/auth');
 const { checkPermission } = require('../middleware/checkPermission');
 
 // Get Party Ledger (Customer or Supplier)
-router.get('/ledger', authenticateToken, checkPermission('REPORTS_RECEIVABLES_PAYABLES_REPORT_VIEW'), async (req, res) => {
+router.get('/ledger', authenticateToken, checkPermission('ACCOUNTS_Customer_Ledger_View'), async (req, res) => {
   try {
     const { partyId, partyType, fromDate, toDate } = req.query;
 
@@ -182,7 +182,7 @@ router.get('/ledger', authenticateToken, checkPermission('REPORTS_RECEIVABLES_PA
 });
 
 // Get Party Aging Report (Customer or Supplier)
-router.get('/aging', authenticateToken, checkPermission('REPORTS_RECEIVABLES_PAYABLES_REPORT_VIEW'), async (req, res) => {
+router.get('/aging', authenticateToken, checkPermission('ACCOUNTS_Customer_Aging_View'), async (req, res) => {
   try {
     const { partyId, partyType, fromDate, toDate } = req.query;
 

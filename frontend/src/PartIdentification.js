@@ -113,7 +113,22 @@ const PartIdentification = () => {
       setResult(response.data);
     } catch (error) {
       console.error('Error identifying part:', error);
-      setError(error.response?.data?.error || 'Failed to identify part. Please try again.');
+      
+      // Handle filtered rejection (non-automotive image)
+      if (error.response?.status === 400 && error.response?.data?.filtered) {
+        const errorData = error.response.data;
+        setError(
+          <div className="space-y-2">
+            <p className="font-semibold text-red-700">❌ {errorData.message}</p>
+            <p className="text-sm text-red-600">
+              Detected: <span className="font-mono">{errorData.detected_object}</span>
+            </p>
+            <p className="text-sm text-gray-600">{errorData.suggestion}</p>
+          </div>
+        );
+      } else {
+        setError(error.response?.data?.error || 'Failed to identify part. Please try again.');
+      }
     } finally {
       setLoading(false);
     }
@@ -242,7 +257,8 @@ const PartIdentification = () => {
               </div>
             </div>
 
-            {/* Camera Section */}
+            {/* Camera Section - Temporarily Hidden */}
+            {false && (
             <div className="bg-white rounded-lg shadow-lg p-6">
               <h2 className="text-2xl font-semibold mb-4 flex items-center">
                 <Camera className="w-6 h-6 mr-2 text-green-600" />
@@ -284,12 +300,15 @@ const PartIdentification = () => {
               
               <canvas ref={canvasRef} className="hidden" />
             </div>
+            )}
 
             {/* Error Display */}
             {error && (
-              <div className="bg-red-50 border border-red-200 rounded-lg p-4 flex items-center">
-                <AlertCircle className="w-5 h-5 text-red-600 mr-3 flex-shrink-0" />
-                <p className="text-red-700">{error}</p>
+              <div className="bg-red-50 border border-red-200 rounded-lg p-4 flex items-start">
+                <AlertCircle className="w-5 h-5 text-red-600 mr-3 flex-shrink-0 mt-0.5" />
+                <div className="text-red-700">
+                  {typeof error === 'string' ? error : error}
+                </div>
               </div>
             )}
           </div>

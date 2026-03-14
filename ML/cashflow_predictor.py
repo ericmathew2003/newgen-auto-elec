@@ -793,36 +793,40 @@ class CashFlowPredictor:
         }
     
     def scenario_analysis(self, base_prediction: Dict, scenarios: List[Dict]) -> Dict:
-        """What-if analysis"""
+        """What-if analysis - applies all scenarios cumulatively"""
         results = []
         
+        # Start with base predictions
+        cumulative_modified = [pred.copy() for pred in base_prediction['predictions']]
+        
+        # Apply each scenario cumulatively
         for scenario in scenarios:
-            modified = base_prediction['predictions'].copy()
             day_idx = scenario['day'] - 1
             
-            if 0 <= day_idx < len(modified):
-                pred = modified[day_idx].copy()
-                
+            if 0 <= day_idx < len(cumulative_modified):
+                # Apply the scenario to the specific day
+                # Note: amount can be negative (e.g., delay payment = negative outflow)
                 if scenario['type'] == 'inflow':
-                    pred['predicted_inflow'] += scenario['amount']
+                    cumulative_modified[day_idx]['predicted_inflow'] += scenario['amount']
                 elif scenario['type'] == 'outflow':
-                    pred['predicted_outflow'] += scenario['amount']
+                    # For outflow: positive amount = more outflow (bad), negative amount = less outflow (good)
+                    cumulative_modified[day_idx]['predicted_outflow'] += scenario['amount']
                 
-                pred['net_flow'] = pred['predicted_inflow'] - pred['predicted_outflow']
+                # Recalculate net flow for the affected day
+                cumulative_modified[day_idx]['net_flow'] = cumulative_modified[day_idx]['predicted_inflow'] - cumulative_modified[day_idx]['predicted_outflow']
                 
-                for i in range(day_idx, len(modified)):
-                    if i == day_idx:
-                        if i > 0:
-                            modified[i]['predicted_balance'] = modified[i-1]['predicted_balance'] + pred['net_flow']
-                        else:
-                            modified[i]['predicted_balance'] = base_prediction['summary']['current_balance'] + pred['net_flow']
+                # Recalculate balances from the affected day onwards
+                for i in range(day_idx, len(cumulative_modified)):
+                    if i == 0:
+                        # First day uses current balance
+                        cumulative_modified[i]['predicted_balance'] = base_prediction['summary']['current_balance'] + cumulative_modified[i]['net_flow']
                     else:
-                        modified[i]['predicted_balance'] = modified[i-1]['predicted_balance'] + modified[i]['net_flow']
+                        # Subsequent days use previous day's balance
+                        cumulative_modified[i]['predicted_balance'] = cumulative_modified[i-1]['predicted_balance'] + cumulative_modified[i]['net_flow']
                 
-                modified[day_idx] = pred
-                
+                # Calculate impact after this scenario
                 original_final = base_prediction['predictions'][-1]['predicted_balance']
-                modified_final = modified[-1]['predicted_balance']
+                modified_final = cumulative_modified[-1]['predicted_balance']
                 impact = modified_final - original_final
                 
                 results.append({

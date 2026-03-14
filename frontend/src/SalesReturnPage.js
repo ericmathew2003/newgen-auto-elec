@@ -120,6 +120,25 @@ export default function SalesReturnPage() {
     }
   };
 
+  const handleView = async (sr) => {
+    if (!sr.sales_ret_id) return;
+    try {
+      const r = await axios.get(`${API_BASE_URL}/api/sales-return/${sr.sales_ret_id}`, getAuthHeaders());
+      setEditingReturn({ ...r.data, viewMode: true });
+    } catch (e) {
+      console.error(e);
+      alert("Failed to load sales return for viewing");
+    }
+  };
+
+  const handleRowClick = (sr) => {
+    if (sr.is_posted) {
+      handleView(sr);
+    } else if (canEdit('INVENTORY', 'SALES_RETURN')) {
+      handleEdit(sr);
+    }
+  };
+
   const handleClose = () => {
     setEditingReturn(null);
     fetchSalesReturns();
@@ -234,6 +253,7 @@ export default function SalesReturnPage() {
         initialData={editingReturn}
         onClose={handleClose}
         onDataChanged={fetchSalesReturns}
+        viewMode={editingReturn.viewMode}
       />
     );
   }
@@ -241,7 +261,12 @@ export default function SalesReturnPage() {
   return (
     <div className="p-4">
       <div className="flex items-center justify-between mb-4">
-        <h1 className="text-2xl font-bold">Sales Returns</h1>
+        <div>
+          <h1 className="text-2xl font-bold">Sales Returns</h1>
+          <p className="text-sm text-gray-600 mt-1">
+            Click on any row to edit (unposted) or view (posted) sales returns. Posted records open in read-only mode.
+          </p>
+        </div>
         {canCreate('INVENTORY', 'SALES_RETURN') && (
           <button
             onClick={handleNew}
@@ -366,9 +391,15 @@ export default function SalesReturnPage() {
             {currentRecords.map((sr) => (
               <tr
                 key={sr.sales_ret_id}
-                className="border-t hover:bg-blue-50 cursor-pointer"
-                onClick={() => canEdit('INVENTORY', 'SALES_RETURN') && !sr.is_posted && handleEdit(sr)}
-                title={canEdit('INVENTORY', 'SALES_RETURN') && !sr.is_posted ? "Click to edit" : ""}
+                className={`border-t hover:bg-blue-50 transition-colors cursor-pointer`}
+                onClick={() => handleRowClick(sr)}
+                title={
+                  sr.is_posted 
+                    ? "Click to view this posted sales return (read-only)" 
+                    : canEdit('INVENTORY', 'SALES_RETURN')
+                      ? "Click to edit this sales return" 
+                      : "You don't have permission to edit"
+                }
               >
                 <td className="p-2 text-center" onClick={(e) => e.stopPropagation()}>
                   <input
@@ -377,7 +408,21 @@ export default function SalesReturnPage() {
                     onChange={() => toggleRow(sr.sales_ret_id)}
                   />
                 </td>
-                <td className="p-2">{sr.sales_ret_no}</td>
+                <td className="p-2">
+                  <div className="flex items-center">
+                    {sr.is_posted ? (
+                      <svg className="w-4 h-4 mr-2 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                      </svg>
+                    ) : canEdit('INVENTORY', 'SALES_RETURN') ? (
+                      <svg className="w-4 h-4 mr-2 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                      </svg>
+                    ) : null}
+                    {sr.sales_ret_no}
+                  </div>
+                </td>
                 <td className="p-2">{dateToInput(sr.sales_ret_date)}</td>
                 <td className="p-2">{sr.partyname}</td>
                 <td className="p-2 text-right">{n(sr.taxable_amount).toFixed(2)}</td>
@@ -393,6 +438,23 @@ export default function SalesReturnPage() {
                 </td>
                 <td className="p-2 text-center" onClick={(e) => e.stopPropagation()}>
                   <div className="flex gap-1 justify-center">
+                    {sr.is_posted ? (
+                      <button
+                        onClick={() => handleView(sr)}
+                        className="px-2 py-1 text-xs bg-gray-600 text-white rounded hover:bg-gray-700"
+                        title="View Sales Return (Read-only)"
+                      >
+                        View
+                      </button>
+                    ) : canEdit('INVENTORY', 'SALES_RETURN') ? (
+                      <button
+                        onClick={() => handleEdit(sr)}
+                        className="px-2 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700"
+                        title="Edit Sales Return"
+                      >
+                        Edit
+                      </button>
+                    ) : null}
                     {!sr.is_confirmed && !sr.is_posted && canEdit('INVENTORY', 'SALES_RETURN') && (
                       <button
                         onClick={() => handleConfirm(sr)}
@@ -414,7 +476,9 @@ export default function SalesReturnPage() {
                       </button>
                     )}
                     {sr.is_posted && (
-                      <span className="px-2 py-1 text-xs bg-gray-200 text-gray-600 rounded">Posted</span>
+                      <span className="px-2 py-1 text-xs bg-green-100 text-green-800 rounded font-medium">
+                        Posted
+                      </span>
                     )}
                   </div>
                 </td>

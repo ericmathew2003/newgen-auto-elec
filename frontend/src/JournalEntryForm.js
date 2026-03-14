@@ -153,9 +153,16 @@ const AccJournalEntryForm = () => {
   const fetchJournalIds = async () => {
     try {
       const token = localStorage.getItem('token');
+      const selectedFYearID = localStorage.getItem('selectedFYearID');
+      
+      // Build query params
+      const params = new URLSearchParams({ limit: '1000' });
+      if (selectedFYearID) {
+        params.append('finyearid', selectedFYearID);
+      }
       
       // Fetch all journals without pagination limit
-      const response = await axios.get(`${API_BASE_URL}/api/accounting/journals/all?limit=1000`, {
+      const response = await axios.get(`${API_BASE_URL}/api/accounting/journals/all?${params.toString()}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       
@@ -232,10 +239,17 @@ const AccJournalEntryForm = () => {
     try {
       setIsLoading(true);
       const token = localStorage.getItem('token');
+      const selectedFYearID = localStorage.getItem('selectedFYearID');
+      
+      // Build query params
+      const params = new URLSearchParams({ page: '1', limit: '1' });
+      if (selectedFYearID) {
+        params.append('finyearid', selectedFYearID);
+      }
       
       // Fetch the last journal entry by ID (most recent journal_mas_id)
       // Backend orders by journal_mas_id DESC, so page=1&limit=1 gets the highest ID
-      const response = await axios.get(`${API_BASE_URL}/api/accounting/journals/all?page=1&limit=1`, {
+      const response = await axios.get(`${API_BASE_URL}/api/accounting/journals/all?${params.toString()}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       

@@ -6,6 +6,16 @@ const { authenticateToken } = require('../middleware/auth');
 // Dashboard metrics and charts
 router.get('/summary', authenticateToken, async (req, res) => {
   try {
+    const { fyearid } = req.query;
+    
+    // Build WHERE clauses for financial year filtering
+    const purchaseWhere = fyearid ? `WHERE FYearID = $1` : '';
+    const salesWhere = fyearid ? `WHERE fyear_id = $1 AND is_deleted = false` : 'WHERE is_deleted = false';
+    const purchaseMonthlyWhere = fyearid ? `WHERE FYearID = $1` : '';
+    const salesMonthlyWhere = fyearid ? `WHERE fyear_id = $1 AND is_deleted = false` : 'WHERE is_deleted = false';
+    
+    const params = fyearid ? [fyearid] : [];
+    
     const [purchaseTotals, salesTotals, suppliers, customers, itemStats, purchaseMonthly, salesMonthly] = await Promise.all([
       pool.query(`
         SELECT
@@ -13,15 +23,16 @@ router.get('/summary', authenticateToken, async (req, res) => {
           COALESCE(SUM(CGST+SGST+IGST),0) AS total_purchase_tax,
           COUNT(*) AS purchase_count
         FROM tblTrnPurchase
-      `),
+        ${purchaseWhere}
+      `, params),
       pool.query(`
         SELECT
           COALESCE(SUM(tot_amount),0) AS total_sales,
           COALESCE(SUM(cgst_amount+sgst_amount+igst_amount),0) AS total_sales_tax,
           COUNT(*) AS sales_count
         FROM public.trn_invoice_master
-        WHERE is_deleted = false
-      `),
+        ${salesWhere}
+      `, params),
       // Use the same query as CustomerPage to ensure consistency
       pool.query(`
         SELECT COUNT(*) as suppliers 
@@ -54,17 +65,18 @@ router.get('/summary', authenticateToken, async (req, res) => {
         SELECT to_char(TrDate, 'YYYY-MM') AS ym,
           COALESCE(SUM(InvAmt),0) AS total
         FROM tblTrnPurchase
+        ${purchaseMonthlyWhere}
         GROUP BY 1
         ORDER BY 1
-      `),
+      `, params),
       pool.query(`
         SELECT to_char(inv_date, 'YYYY-MM') AS ym,
           COALESCE(SUM(tot_amount),0) AS total
         FROM public.trn_invoice_master
-        WHERE is_deleted = false
+        ${salesMonthlyWhere}
         GROUP BY 1
         ORDER BY 1
-      `)
+      `, params)
     ]);
 
     const total_purchase = Number(purchaseTotals.rows[0]?.total_purchase || 0);

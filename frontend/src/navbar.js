@@ -366,37 +366,37 @@ export default function Navbar() {
                         {masterOpen && (
                           <div className="ml-6 space-y-1">
                             {canView('INVENTORY', 'GROUP_MASTER') && (
-                              <Link to="/groups" className="flex items-center p-2 rounded-lg hover:bg-orange-50 hover:text-orange-700 transition-all duration-200 text-xs font-medium">
+                              <Link to="/groups" className="flex items-center p-2 rounded-lg hover:bg-orange-50 hover:text-orange-700 transition-all duration-200 text-sm font-medium">
                                 <div className="w-1.5 h-1.5 bg-orange-400 rounded-full mr-2"></div>
                                 Groups
                               </Link>
                             )}
                             {canView('INVENTORY', 'MAKE_MASTER') && (
-                              <Link to="/makes" className="flex items-center p-2 rounded-lg hover:bg-orange-50 hover:text-orange-700 transition-all duration-200 text-xs font-medium">
+                              <Link to="/makes" className="flex items-center p-2 rounded-lg hover:bg-orange-50 hover:text-orange-700 transition-all duration-200 text-sm font-medium">
                                 <div className="w-1.5 h-1.5 bg-orange-400 rounded-full mr-2"></div>
                                 Makes
                               </Link>
                             )}
                             {canView('INVENTORY', 'BRAND_MASTER') && (
-                              <Link to="/brands" className="flex items-center p-2 rounded-lg hover:bg-orange-50 hover:text-orange-700 transition-all duration-200 text-xs font-medium">
+                              <Link to="/brands" className="flex items-center p-2 rounded-lg hover:bg-orange-50 hover:text-orange-700 transition-all duration-200 text-sm font-medium">
                                 <div className="w-1.5 h-1.5 bg-orange-400 rounded-full mr-2"></div>
                                 Brands
                               </Link>
                             )}
                             {canView('INVENTORY', 'ITEM_MASTER') && (
-                              <Link to="/items" className="flex items-center p-2 rounded-lg hover:bg-orange-50 hover:text-orange-700 transition-all duration-200 text-xs font-medium">
+                              <Link to="/items" className="flex items-center p-2 rounded-lg hover:bg-orange-50 hover:text-orange-700 transition-all duration-200 text-sm font-medium">
                                 <div className="w-1.5 h-1.5 bg-orange-400 rounded-full mr-2"></div>
                                 Item Master
                               </Link>
                             )}
                             {canView('INVENTORY', 'SUPPLIER_MASTER') && (
-                              <Link to="/suppliers" className="flex items-center p-2 rounded-lg hover:bg-orange-50 hover:text-orange-700 transition-all duration-200 text-xs font-medium">
+                              <Link to="/suppliers" className="flex items-center p-2 rounded-lg hover:bg-orange-50 hover:text-orange-700 transition-all duration-200 text-sm font-medium">
                                 <div className="w-1.5 h-1.5 bg-orange-400 rounded-full mr-2"></div>
                                 Suppliers
                               </Link>
                             )}
                             {canView('INVENTORY', 'CUSTOMER_MASTER') && (
-                              <Link to="/customers" className="flex items-center p-2 rounded-lg hover:bg-orange-50 hover:text-orange-700 transition-all duration-200 text-xs font-medium">
+                              <Link to="/customers" className="flex items-center p-2 rounded-lg hover:bg-orange-50 hover:text-orange-700 transition-all duration-200 text-sm font-medium">
                                 <div className="w-1.5 h-1.5 bg-orange-400 rounded-full mr-2"></div>
                                 Customers
                               </Link>
@@ -425,13 +425,13 @@ export default function Navbar() {
                         {purchaseOpen && (
                           <div className="ml-6 space-y-1">
                             {canView('INVENTORY', 'PURCHASE') && (
-                              <Link to="/purchase" className="flex items-center p-2 rounded-lg hover:bg-green-50 hover:text-green-700 transition-all duration-200 text-xs font-medium">
+                              <Link to="/purchase" className="flex items-center p-2 rounded-lg hover:bg-green-50 hover:text-green-700 transition-all duration-200 text-sm font-medium">
                                 <div className="w-1.5 h-1.5 bg-green-400 rounded-full mr-2"></div>
                                 Purchase
                               </Link>
                             )}
                             {canView('INVENTORY', 'PURCHASE_RETURN') && (
-                              <Link to="/purchase-return" className="flex items-center p-2 rounded-lg hover:bg-green-50 hover:text-green-700 transition-all duration-200 text-xs font-medium">
+                              <Link to="/purchase-return" className="flex items-center p-2 rounded-lg hover:bg-green-50 hover:text-green-700 transition-all duration-200 text-sm font-medium">
                                 <div className="w-1.5 h-1.5 bg-green-400 rounded-full mr-2"></div>
                                 Purchase Return
                               </Link>
@@ -460,13 +460,13 @@ export default function Navbar() {
                         {salesOpen && (
                           <div className="ml-6 space-y-1">
                             {canView('INVENTORY', 'SALES') && (
-                              <Link to="/sale" className="flex items-center p-2 rounded-lg hover:bg-emerald-50 hover:text-emerald-700 transition-all duration-200 text-xs font-medium">
+                              <Link to="/sale" className="flex items-center p-2 rounded-lg hover:bg-emerald-50 hover:text-emerald-700 transition-all duration-200 text-sm font-medium">
                                 <div className="w-1.5 h-1.5 bg-emerald-400 rounded-full mr-2"></div>
                                 Sales
                               </Link>
                             )}
                             {canView('INVENTORY', 'SALES_RETURN') && (
-                              <Link to="/sales-return" className="flex items-center p-2 rounded-lg hover:bg-emerald-50 hover:text-emerald-700 transition-all duration-200 text-xs font-medium">
+                              <Link to="/sales-return" className="flex items-center p-2 rounded-lg hover:bg-emerald-50 hover:text-emerald-700 transition-all duration-200 text-sm font-medium">
                                 <div className="w-1.5 h-1.5 bg-emerald-400 rounded-full mr-2"></div>
                                 Sales Return
                               </Link>
@@ -477,7 +477,7 @@ export default function Navbar() {
                     )}
 
                     {/* Inventory Reports */}
-                    {(canView('INVENTORY', 'REPORT_GST_INVOICE') || canView('INVENTORY', 'REPORT_SALES_PURCHASE')) && (
+                    {(canView('INVENTORY', 'REPORT_GST_INVOICE') || canView('INVENTORY', 'REPORT_SALES_PURCHASE') || canView('INVENTORY', 'STOCK_IN_HAND_REPORT')) && (
                       <div className="space-y-1">
                         <button
                           onClick={() => setReportsOpen(!reportsOpen)}
@@ -495,34 +495,38 @@ export default function Navbar() {
                         {reportsOpen && (
                           <div className="ml-6 space-y-1">
                             {canView('INVENTORY', 'REPORT_GST_INVOICE') && (
-                              <Link to="/report" className="flex items-center p-2 rounded-lg hover:bg-purple-50 hover:text-purple-700 transition-all duration-200 text-xs font-medium">
+                              <Link to="/report" className="flex items-center p-2 rounded-lg hover:bg-purple-50 hover:text-purple-700 transition-all duration-200 text-sm font-medium">
                                 <div className="w-1.5 h-1.5 bg-purple-400 rounded-full mr-2"></div>
                                 GST Invoice Report
                               </Link>
                             )}
                             {canView('INVENTORY', 'REPORT_SALES_PURCHASE') && (
-                              <Link to="/sales-purchase-reports" className="flex items-center p-2 rounded-lg hover:bg-purple-50 hover:text-purple-700 transition-all duration-200 text-xs font-medium">
+                              <Link to="/sales-purchase-reports" className="flex items-center p-2 rounded-lg hover:bg-purple-50 hover:text-purple-700 transition-all duration-200 text-sm font-medium">
                                 <div className="w-1.5 h-1.5 bg-purple-400 rounded-full mr-2"></div>
                                 Sales Report
                               </Link>
                             )}
                             {canView('INVENTORY', 'STOCK_IN_HAND_REPORT') && (
-                              <Link to="/inventory/stock-in-hand" className="flex items-center p-2 rounded-lg hover:bg-purple-50 hover:text-purple-700 transition-all duration-200 text-xs font-medium">
+                              <Link to="/inventory/stock-in-hand" className="flex items-center p-2 rounded-lg hover:bg-purple-50 hover:text-purple-700 transition-all duration-200 text-sm font-medium">
                                 <div className="w-1.5 h-1.5 bg-purple-400 rounded-full mr-2"></div>
                                 Stock In Hand
                               </Link>
                             )}
-                            <Link to="/ml-reports" className="flex items-center p-2 rounded-lg hover:bg-purple-50 hover:text-purple-700 transition-all duration-200 text-xs font-medium">
+                            <Link to="/ml-reports" className="flex items-center p-2 rounded-lg hover:bg-purple-50 hover:text-purple-700 transition-all duration-200 text-sm font-medium">
                               <div className="w-1.5 h-1.5 bg-purple-400 rounded-full mr-2"></div>
                               ML Reports & Analytics
                             </Link>
-                            <Link to="/cashflow-prediction" className="flex items-center p-2 rounded-lg hover:bg-blue-50 hover:text-blue-700 transition-all duration-200 text-xs font-medium">
+                            <Link to="/cashflow-prediction" className="flex items-center p-2 rounded-lg hover:bg-blue-50 hover:text-blue-700 transition-all duration-200 text-sm font-medium">
                               <div className="w-1.5 h-1.5 bg-blue-400 rounded-full mr-2"></div>
                               💰 Cash Flow Prediction
                             </Link>
-                            <Link to="/parts/identify" className="flex items-center p-2 rounded-lg hover:bg-green-50 hover:text-green-700 transition-all duration-200 text-xs font-medium">
+                            <Link to="/parts/identify" className="flex items-center p-2 rounded-lg hover:bg-green-50 hover:text-green-700 transition-all duration-200 text-sm font-medium">
                               <div className="w-1.5 h-1.5 bg-green-400 rounded-full mr-2"></div>
                               🚗 AI Part Identification
+                            </Link>
+                            <Link to="/fault-diagnosis" className="flex items-center p-2 rounded-lg hover:bg-red-50 hover:text-red-700 transition-all duration-200 text-sm font-medium">
+                              <div className="w-1.5 h-1.5 bg-red-400 rounded-full mr-2"></div>
+                              🔧 AI Fault Diagnosis
                             </Link>
                           </div>
                         )}
@@ -534,7 +538,7 @@ export default function Navbar() {
               )}
 
               {/* 3. ACCOUNTS SECTION */}
-              {(canView('ACCOUNTS', 'GROUP_MASTER') || canView('ACCOUNTS', 'COA_MASTER') || canView('ACCOUNTS', 'JOURNAL_VOUCHER') || canView('ACCOUNTS', 'PAYMENTS') || canView('ACCOUNTS', 'RECEIPTS') || canView('ACCOUNTS', 'DEBIT_NOTE') || canView('ACCOUNTS', 'CREDIT_NOTE') || canView('REPORTS', 'FINANCIAL_STATEMENTS') || canView('REPORTS', 'LEDGER_REPORT') || canView('REPORTS', 'RECEIVABLES_PAYABLES_REPORT') || canView('ACCOUNTS', 'DYNAMIC_MAPPING')) && (
+              {(canView('ACCOUNTS', 'GROUP_MASTER') || canView('ACCOUNTS', 'COA_MASTER') || canView('ACCOUNTS', 'JOURNAL_VOUCHER') || canView('ACCOUNTS', 'PAYMENTS') || canView('ACCOUNTS', 'RECEIPTS') || canView('ACCOUNTS', 'DEBIT_NOTE') || canView('ACCOUNTS', 'CREDIT_NOTE') || canView('REPORTS', 'FINANCIAL_STATEMENTS') || canView('REPORTS', 'LEDGER') || canView('REPORTS', 'RECEIVABLES_PAYABLES_REPORT') || canView('ACCOUNTS', 'DYNAMIC_MAPPING')) && (
               <div className="space-y-2">
                 <button
                   onClick={() => setAccountsOpen(!accountsOpen)}
@@ -571,13 +575,13 @@ export default function Navbar() {
                       {accountsMasterOpen && (
                         <div className="ml-6 space-y-1">
                           {canView('ACCOUNTS', 'GROUP_MASTER') && (
-                            <Link to="/accounts/group-master" className="flex items-center p-2 rounded-lg hover:bg-indigo-50 hover:text-indigo-700 transition-all duration-200 text-xs font-medium">
+                            <Link to="/accounts/group-master" className="flex items-center p-2 rounded-lg hover:bg-indigo-50 hover:text-indigo-700 transition-all duration-200 text-sm font-medium">
                               <div className="w-1.5 h-1.5 bg-indigo-400 rounded-full mr-2"></div>
                               Group Master
                             </Link>
                           )}
                           {canView('ACCOUNTS', 'COA_MASTER') && (
-                            <Link to="/accounts/coa-master" className="flex items-center p-2 rounded-lg hover:bg-indigo-50 hover:text-indigo-700 transition-all duration-200 text-xs font-medium">
+                            <Link to="/accounts/coa-master" className="flex items-center p-2 rounded-lg hover:bg-indigo-50 hover:text-indigo-700 transition-all duration-200 text-sm font-medium">
                               <div className="w-1.5 h-1.5 bg-indigo-400 rounded-full mr-2"></div>
                               Account Master
                             </Link>
@@ -604,31 +608,31 @@ export default function Navbar() {
                       {accountsTransactionsOpen && (
                         <div className="ml-6 space-y-1">
                           {canView('ACCOUNTS', 'JOURNAL_VOUCHER') && (
-                            <Link to="/accounts/journal-voucher" className="flex items-center p-2 rounded-lg hover:bg-teal-50 hover:text-teal-700 transition-all duration-200 text-xs font-medium">
+                            <Link to="/accounts/journal-voucher" className="flex items-center p-2 rounded-lg hover:bg-teal-50 hover:text-teal-700 transition-all duration-200 text-sm font-medium">
                               <div className="w-1.5 h-1.5 bg-teal-400 rounded-full mr-2"></div>
                               Journal Voucher
                             </Link>
                           )}
                           {canView('ACCOUNTS', 'PAYMENTS') && (
-                            <Link to="/payment-voucher" className="flex items-center p-2 rounded-lg hover:bg-teal-50 hover:text-teal-700 transition-all duration-200 text-xs font-medium">
+                            <Link to="/payment-voucher" className="flex items-center p-2 rounded-lg hover:bg-teal-50 hover:text-teal-700 transition-all duration-200 text-sm font-medium">
                               <div className="w-1.5 h-1.5 bg-teal-400 rounded-full mr-2"></div>
                               Payment Voucher
                             </Link>
                           )}
                           {canView('ACCOUNTS', 'RECEIPTS') && (
-                            <Link to="/receipt-voucher" className="flex items-center p-2 rounded-lg hover:bg-teal-50 hover:text-teal-700 transition-all duration-200 text-xs font-medium">
+                            <Link to="/receipt-voucher" className="flex items-center p-2 rounded-lg hover:bg-teal-50 hover:text-teal-700 transition-all duration-200 text-sm font-medium">
                               <div className="w-1.5 h-1.5 bg-teal-400 rounded-full mr-2"></div>
                               Receipt Voucher
                             </Link>
                           )}
                           {canView('ACCOUNTS', 'DEBIT_NOTE') && (
-                            <Link to="/accounts/debit-note" className="flex items-center p-2 rounded-lg hover:bg-teal-50 hover:text-teal-700 transition-all duration-200 text-xs font-medium">
+                            <Link to="/accounts/debit-note" className="flex items-center p-2 rounded-lg hover:bg-teal-50 hover:text-teal-700 transition-all duration-200 text-sm font-medium">
                               <div className="w-1.5 h-1.5 bg-teal-400 rounded-full mr-2"></div>
                               Debit Note
                             </Link>
                           )}
                           {canView('ACCOUNTS', 'CREDIT_NOTE') && (
-                            <Link to="/accounts/credit-note" className="flex items-center p-2 rounded-lg hover:bg-teal-50 hover:text-teal-700 transition-all duration-200 text-xs font-medium">
+                            <Link to="/accounts/credit-note" className="flex items-center p-2 rounded-lg hover:bg-teal-50 hover:text-teal-700 transition-all duration-200 text-sm font-medium">
                               <div className="w-1.5 h-1.5 bg-teal-400 rounded-full mr-2"></div>
                               Credit Note
                             </Link>
@@ -655,19 +659,19 @@ export default function Navbar() {
                       {accountsReportsOpen && (
                         <div className="ml-6 space-y-1">
                           {canView('REPORTS', 'FINANCIAL_STATEMENTS') && (
-                            <Link to="/accounts/financial-statements" className="flex items-center p-2 rounded-lg hover:bg-pink-50 hover:text-pink-700 transition-all duration-200 text-xs font-medium">
+                            <Link to="/accounts/financial-statements" className="flex items-center p-2 rounded-lg hover:bg-pink-50 hover:text-pink-700 transition-all duration-200 text-sm font-medium">
                               <div className="w-1.5 h-1.5 bg-pink-400 rounded-full mr-2"></div>
                               📊 Financial Statements
                             </Link>
                           )}
-                          {canView('REPORTS', 'LEDGER_REPORT') && (
-                            <Link to="/accounts/ledger" className="flex items-center p-2 rounded-lg hover:bg-pink-50 hover:text-pink-700 transition-all duration-200 text-xs font-medium">
+                          {canView('REPORTS', 'LEDGER') && (
+                            <Link to="/accounts/ledger" className="flex items-center p-2 rounded-lg hover:bg-pink-50 hover:text-pink-700 transition-all duration-200 text-sm font-medium">
                               <div className="w-1.5 h-1.5 bg-pink-400 rounded-full mr-2"></div>
                               📖 Ledger Report
                             </Link>
                           )}
                           {canView('REPORTS', 'RECEIVABLES_PAYABLES_REPORT') && (
-                            <Link to="/accounts/receivables-payables" className="flex items-center p-2 rounded-lg hover:bg-pink-50 hover:text-pink-700 transition-all duration-200 text-xs font-medium">
+                            <Link to="/accounts/receivables-payables" className="flex items-center p-2 rounded-lg hover:bg-pink-50 hover:text-pink-700 transition-all duration-200 text-sm font-medium">
                               <div className="w-1.5 h-1.5 bg-pink-400 rounded-full mr-2"></div>
                               💰 Receivables / Payables
                             </Link>
@@ -695,12 +699,12 @@ export default function Navbar() {
                       {accountsSettingsOpen && (
                         <div className="ml-6 space-y-1">
                           {canView('ACCOUNTS', 'DYNAMIC_MAPPING') && (
-                            <Link to="/accounts/settings/dynamic-transaction-mapping" className="flex items-center p-2 rounded-lg hover:bg-purple-50 hover:text-purple-700 transition-all duration-200 text-xs font-medium">
+                            <Link to="/accounts/settings/dynamic-transaction-mapping" className="flex items-center p-2 rounded-lg hover:bg-purple-50 hover:text-purple-700 transition-all duration-200 text-sm font-medium">
                               <div className="w-1.5 h-1.5 bg-purple-400 rounded-full mr-2"></div>
                               Dynamic Transaction Mapping
                             </Link>
                           )}
-                          <Link to="/financial-year" className="flex items-center p-2 rounded-lg hover:bg-purple-50 hover:text-purple-700 transition-all duration-200 text-xs font-medium">
+                          <Link to="/financial-year" className="flex items-center p-2 rounded-lg hover:bg-purple-50 hover:text-purple-700 transition-all duration-200 text-sm font-medium">
                             <div className="w-1.5 h-1.5 bg-purple-400 rounded-full mr-2"></div>
                             📅 Financial Year
                           </Link>
@@ -750,19 +754,19 @@ export default function Navbar() {
 
                       {securityOpen && (
                         <div className="ml-6 space-y-1">
-                          <Link to="/settings/security/user-management" className="flex items-center p-2 rounded-lg hover:bg-red-50 hover:text-red-700 transition-all duration-200 text-xs font-medium">
+                          <Link to="/settings/security/user-management" className="flex items-center p-2 rounded-lg hover:bg-red-50 hover:text-red-700 transition-all duration-200 text-sm font-medium">
                             <div className="w-1.5 h-1.5 bg-red-400 rounded-full mr-2"></div>
                             User Management
                           </Link>
-                          <Link to="/settings/security/role-management" className="flex items-center p-2 rounded-lg hover:bg-red-50 hover:text-red-700 transition-all duration-200 text-xs font-medium">
+                          <Link to="/settings/security/role-management" className="flex items-center p-2 rounded-lg hover:bg-red-50 hover:text-red-700 transition-all duration-200 text-sm font-medium">
                             <div className="w-1.5 h-1.5 bg-red-400 rounded-full mr-2"></div>
                             Role Management
                           </Link>
-                          <Link to="/settings/security/permission-assignment" className="flex items-center p-2 rounded-lg hover:bg-red-50 hover:text-red-700 transition-all duration-200 text-xs font-medium">
+                          <Link to="/settings/security/permission-assignment" className="flex items-center p-2 rounded-lg hover:bg-red-50 hover:text-red-700 transition-all duration-200 text-sm font-medium">
                             <div className="w-1.5 h-1.5 bg-red-400 rounded-full mr-2"></div>
                             Permission / Rights Assignment
                           </Link>
-                          <Link to="/settings/security/user-role-review" className="flex items-center p-2 rounded-lg hover:bg-red-50 hover:text-red-700 transition-all duration-200 text-xs font-medium">
+                          <Link to="/settings/security/user-role-review" className="flex items-center p-2 rounded-lg hover:bg-red-50 hover:text-red-700 transition-all duration-200 text-sm font-medium">
                             <div className="w-1.5 h-1.5 bg-red-400 rounded-full mr-2"></div>
                             User Role Review
                           </Link>

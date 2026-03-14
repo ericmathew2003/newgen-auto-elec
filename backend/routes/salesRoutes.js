@@ -390,7 +390,7 @@ router.get("/:invMasterId", async (req, res) => {
   }
 });
 
-// Replace all detail rows for a sale
+// Replace all detail rows for a sale with automatic consolidation of duplicate items
 // Body: { items: [{ fyear_id, srno, itemcode, unit, qty, avg_cost, taxable_rate, cgst_per, sgst_per, igst_per,
 //                   cgst_amount, sgst_amount, igst_amount, rate, dis_per, dis_amount, tot_amount, description, is_deleted }] }
 router.post("/:invMasterId/items/replace", async (req, res) => {
@@ -401,7 +401,72 @@ router.post("/:invMasterId/items/replace", async (req, res) => {
     await client.query("BEGIN");
     await client.query(`DELETE FROM public.trn_invoice_detail WHERE inv_master_id=$1`, [invMasterId]);
 
+    // ========================================
+    // CONSOLIDATE DUPLICATE ITEMS
+    // ========================================
+    const consolidatedItems = {};
+    
     for (const it of items) {
+      // Skip deleted items
+      if (it.is_deleted) continue;
+      
+      // Create unique key based on itemcode and rate
+      const key = `${it.itemcode}_${it.rate || 0}`;
+      
+      if (consolidatedItems[key]) {
+        // Item with same itemcode and rate exists - consolidate
+        const existing = consolidatedItems[key];
+        
+        // Add quantities
+        existing.qty = (parseFloat(existing.qty) || 0) + (parseFloat(it.qty) || 0);
+        
+        // Recalculate amounts based on consolidated quantity
+        const totalQty = existing.qty;
+        const rate = parseFloat(existing.rate) || 0;
+        
+        // Calculate taxable amount
+        existing.taxable_rate = totalQty * rate;
+        
+        // Calculate tax amounts (assuming same tax rates)
+        const cgstPer = parseFloat(existing.cgst_per) || 0;
+        const sgstPer = parseFloat(existing.sgst_per) || 0;
+        const igstPer = parseFloat(existing.igst_per) || 0;
+        
+        existing.cgst_amount = (existing.taxable_rate * cgstPer) / 100;
+        existing.sgst_amount = (existing.taxable_rate * sgstPer) / 100;
+        existing.igst_amount = (existing.taxable_rate * igstPer) / 100;
+        
+        // Calculate total amount
+        existing.tot_amount = existing.taxable_rate + existing.cgst_amount + existing.sgst_amount + existing.igst_amount;
+        
+        // Update average cost (weighted average)
+        const existingCost = parseFloat(existing.avg_cost) || 0;
+        const newCost = parseFloat(it.avg_cost) || 0;
+        const existingQtyBefore = (parseFloat(existing.qty) || 0) - (parseFloat(it.qty) || 0);
+        const newQty = parseFloat(it.qty) || 0;
+        
+        if (totalQty > 0) {
+          existing.avg_cost = ((existingCost * existingQtyBefore) + (newCost * newQty)) / totalQty;
+        }
+        
+        console.log(`📦 Consolidated item ${it.itemcode} at rate ${rate}: qty ${existingQtyBefore} + ${newQty} = ${totalQty}`);
+        
+      } else {
+        // New item - add to consolidated list
+        consolidatedItems[key] = { ...it };
+        console.log(`➕ Added new item ${it.itemcode} at rate ${it.rate}: qty ${it.qty}`);
+      }
+    }
+
+    // Convert consolidated items back to array and assign new serial numbers
+    const finalItems = Object.values(consolidatedItems);
+    
+    console.log(`📊 Consolidation complete: ${items.length} original items → ${finalItems.length} consolidated items`);
+
+    // Insert consolidated items
+    for (let i = 0; i < finalItems.length; i++) {
+      const it = finalItems[i];
+      
       await client.query(
         `INSERT INTO public.trn_invoice_detail
          (fyear_id, inv_master_id, srno, itemcode, unit, qty, avg_cost, taxable_rate,
@@ -411,7 +476,7 @@ router.post("/:invMasterId/items/replace", async (req, res) => {
         [
           nn(it.fyear_id),
           invMasterId,
-          nn(it.srno),
+          i + 1, // New sequential serial number
           nn(it.itemcode),
           it.unit ?? null,
           nn(it.qty ?? 0),
@@ -433,10 +498,16 @@ router.post("/:invMasterId/items/replace", async (req, res) => {
       );
     }
 
-    const sumRes = await client.query(`SELECT COALESCE(SUM(avg_cost),0) AS tot FROM public.trn_invoice_detail WHERE inv_master_id=$1`, [invMasterId]);
+    const sumRes = await client.query(`SELECT COALESCE(SUM(avg_cost * qty),0) AS tot FROM public.trn_invoice_detail WHERE inv_master_id=$1`, [invMasterId]);
     await client.query(`UPDATE public.trn_invoice_master SET tot_avg_cost=$2 WHERE inv_master_id=$1`, [invMasterId, sumRes.rows[0]?.tot ?? 0]);
     await client.query("COMMIT");
-    res.json({ success: true, count: items.length });
+    
+    res.json({ 
+      success: true, 
+      originalCount: items.length,
+      consolidatedCount: finalItems.length,
+      message: `Successfully consolidated ${items.length} items into ${finalItems.length} lines`
+    });
   } catch (err) {
     await client.query("ROLLBACK");
     console.error(err);

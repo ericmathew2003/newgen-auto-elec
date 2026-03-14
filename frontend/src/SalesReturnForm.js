@@ -17,7 +17,7 @@ const dateToInput = (val) => {
   return local.toISOString().slice(0, 10);
 };
 
-export default function SalesReturnForm({ initialData, onClose, onDataChanged }) {
+export default function SalesReturnForm({ initialData, onClose, onDataChanged, viewMode = false }) {
   const [header, setHeader] = useState({
     SalesRetNo: "",
     SalesRetDate: new Date().toISOString().slice(0, 10),
@@ -194,15 +194,15 @@ export default function SalesReturnForm({ initialData, onClose, onDataChanged })
       return;
     }
 
-    // Calculate amounts
+    // Calculate amounts with proper rounding to avoid floating point precision issues
     const rate = n(selectedSoldItem.sold_rate);
-    const taxableAmount = qty * rate;
+    const taxableAmount = Math.round((qty * rate) * 100) / 100;
     const cgstPer = n(selectedSoldItem.cgst_per);
     const sgstPer = n(selectedSoldItem.sgst_per);
     const igstPer = n(selectedSoldItem.igst_per);
-    const cgstAmount = (taxableAmount * cgstPer) / 100;
-    const sgstAmount = (taxableAmount * sgstPer) / 100;
-    const igstAmount = (taxableAmount * igstPer) / 100;
+    const cgstAmount = Math.round((taxableAmount * cgstPer / 100) * 100) / 100;
+    const sgstAmount = Math.round((taxableAmount * sgstPer / 100) * 100) / 100;
+    const igstAmount = Math.round((taxableAmount * igstPer / 100) * 100) / 100;
     const totalAmount = taxableAmount + cgstAmount + sgstAmount + igstAmount;
 
     const newItem = {
@@ -288,14 +288,16 @@ export default function SalesReturnForm({ initialData, onClose, onDataChanged })
     const cgst = items.reduce((sum, it) => sum + n(it.cgst_amount), 0);
     const sgst = items.reduce((sum, it) => sum + n(it.sgst_amount), 0);
     const igst = items.reduce((sum, it) => sum + n(it.igst_amount), 0);
-    const total = taxable + cgst + sgst + igst;
+    
+    // Fix floating point precision issues by rounding to 2 decimal places
+    const total = Math.round((taxable + cgst + sgst + igst) * 100) / 100;
 
     setHeader(h => ({
       ...h,
-      TaxableAmount: taxable,
-      CGSTAmount: cgst,
-      SGSTAmount: sgst,
-      IGSTAmount: igst,
+      TaxableAmount: Math.round(taxable * 100) / 100,
+      CGSTAmount: Math.round(cgst * 100) / 100,
+      SGSTAmount: Math.round(sgst * 100) / 100,
+      IGSTAmount: Math.round(igst * 100) / 100,
       TotalAmount: total,
     }));
   }, [items]);
@@ -501,7 +503,7 @@ export default function SalesReturnForm({ initialData, onClose, onDataChanged })
     setTimeout(() => setNotice({ open: false, type: "", message: "" }), 3000);
   };
 
-  const isReadOnly = header.IsPosted || header.IsConfirmed;
+  const isReadOnly = header.IsPosted || header.IsConfirmed || viewMode;
 
   return (
     <div className="p-4">
@@ -520,7 +522,24 @@ export default function SalesReturnForm({ initialData, onClose, onDataChanged })
       <div className="flex items-start justify-between mb-4">
         {/* Left: section heading and command buttons */}
         <div className="flex flex-col gap-3">
-          <h2 className="text-2xl font-semibold text-gray-900">Sales Return</h2>
+          <div className="flex items-center gap-3">
+            <h2 className="text-2xl font-semibold text-gray-900">Sales Return</h2>
+            {viewMode && (
+              <span className="px-3 py-1 bg-blue-100 text-blue-800 text-sm font-medium rounded-full">
+                View Mode (Read-Only)
+              </span>
+            )}
+            {header.IsPosted && (
+              <span className="px-3 py-1 bg-green-100 text-green-800 text-sm font-medium rounded-full">
+                Posted
+              </span>
+            )}
+            {header.IsConfirmed && !header.IsPosted && (
+              <span className="px-3 py-1 bg-yellow-100 text-yellow-800 text-sm font-medium rounded-full">
+                Confirmed
+              </span>
+            )}
+          </div>
           <div className="flex flex-wrap items-center gap-2">
             <button
               onClick={onClose}

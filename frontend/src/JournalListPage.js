@@ -34,11 +34,18 @@ export default function JournalListPage() {
       }
       
       const token = localStorage.getItem('token');
+      const selectedFYearID = localStorage.getItem('selectedFYearID');
+      
       const params = new URLSearchParams({
         page: currentPage,
         limit: recordsPerPage,
         search: searchTerm
       });
+      
+      // Add financial year filter
+      if (selectedFYearID) {
+        params.append('finyearid', selectedFYearID);
+      }
       
       console.log("Fetching journals from:", `${API_BASE_URL}/api/accounting/journals/all?${params}`);
       const res = await axios.get(`${API_BASE_URL}/api/accounting/journals/all?${params}`, {

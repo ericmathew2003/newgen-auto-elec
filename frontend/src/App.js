@@ -43,6 +43,7 @@ import DynamicTransactionMappingPage from './DynamicTransactionMappingPage';
 import FinancialYearPage from './FinancialYearPage';
 import CashFlowDashboard from './CashFlowDashboard';
 import PartIdentification from './PartIdentification';
+import FaultDiagnosis from './FaultDiagnosis';
 import FinancialStatementsPage from './FinancialStatementsPage';
 import LedgerReportPage from './LedgerReportPage';
 import ReceivablesPayablesPage from './ReceivablesPayablesPage';
@@ -447,6 +448,11 @@ function App() {
                 <PartIdentification />
               </AuthenticatedLayout>
             } />
+            <Route path="/fault-diagnosis" element={
+              <AuthenticatedLayout>
+                <FaultDiagnosis />
+              </AuthenticatedLayout>
+            } />
 
             {/* Financial Statements Module */}
             <Route path="/accounts/financial-statements" element={
@@ -460,7 +466,7 @@ function App() {
             {/* Ledger Report Module */}
             <Route path="/accounts/ledger" element={
               <AuthenticatedLayout>
-                <PermissionProtectedRoute permission="REPORTS_LEDGER_REPORT_VIEW">
+                <PermissionProtectedRoute permission="REPORTS_LEDGER_VIEW">
                   <LedgerReportPage />
                 </PermissionProtectedRoute>
               </AuthenticatedLayout>

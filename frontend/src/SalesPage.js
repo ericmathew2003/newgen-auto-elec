@@ -66,6 +66,7 @@ export default function SalesPage() {
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState(null); // { tranid }
   const [saving, setSaving] = useState(false);
+  const [savedSnapshot, setSavedSnapshot] = useState(null); // snapshot after last save/load
   // Validation and notice (match purchase pattern)
   const [headerErrors, setHeaderErrors] = useState({});
   const [notice, setNotice] = useState({ open: false, type: 'error', message: '' });
@@ -190,12 +191,10 @@ export default function SalesPage() {
       if (fromDate) params.fromDate = fromDate;
       if (toDate) params.toDate = toDate;
 
-      // TEMPORARY FIX: Use correct financial year ID (2) instead of localStorage value (1)
-      // TODO: Create proper financial year selection UI
+      // Include selected financial year
       const selectedFYearID = localStorage.getItem("selectedFYearID");
       if (selectedFYearID) {
-        // Override with correct fyear_id that matches your data
-        params.fyearId = "2"; // Changed from selectedFYearID to "2"
+        params.fyearId = selectedFYearID;
       }
 
       const r = await axios.get(`${API_BASE_URL}/api/sales`, { params, ...getAuthHeaders() });
@@ -293,6 +292,13 @@ export default function SalesPage() {
   const isConfirmed = salesStatus === 'CONFIRMED';
   const isDraft = salesStatus === 'DRAFT';
   const isLocked = isPosted;
+
+  // Dirty detection: compare current header+items to last saved/loaded snapshot
+  const isFormDirty = useMemo(() => {
+    if (!savedSnapshot) return true; // new unsaved form is always "dirty"
+    const currentSnap = JSON.stringify({ header, items });
+    return currentSnap !== savedSnapshot;
+  }, [savedSnapshot, header, items]);
 
   // Helpers to map header UI <-> API payload (snake_case)
   const mapHeaderToApi = (h, { post } = {}) => ({
@@ -765,6 +771,8 @@ export default function SalesPage() {
       if (!editing?.tranid) {
         setEditing({ tranid: tranId });
       }
+      // Mark form as clean after successful save
+      setSavedSnapshot(JSON.stringify({ header, items }));
     } catch (e) {
       console.error(e);
       setNotice({ open: true, type: 'error', message: e.response?.data?.error || e.message || 'Failed to save' });
@@ -1427,6 +1435,32 @@ export default function SalesPage() {
       applyHeaderTotals(formatted);
       setEditing({ tranid: row.tranid });
       setShowForm(true);
+      // Mark form as clean after loading
+      setSavedSnapshot(JSON.stringify({ header: {
+        FYearID: h.fyear_id || '',
+        InvNo: h.inv_no || '',
+        InvDate: dateToInput(h.inv_date) || '',
+        RefNo: h.ref_no || '',
+        PartyID: h.party_id || '',
+        Customer_Name: h.customer_name || '',
+        AccountID: h.account_id || '',
+        TaxableTot: Number(h.taxable_tot || 0),
+        DisPerc: Number(h.dis_perc || 0),
+        DisAmt: Number(h.dis_amount || 0),
+        MiscPerAdd: Number(h.misc_per_add || 0),
+        MiscAmtAdd: Number(h.misc_amount_add || 0),
+        TotAvgCost: Number(h.tot_avg_cost || 0),
+        TotAmount: Number(h.tot_amount || 0),
+        Rounded: Number(h.rounded_off || 0),
+        CGST_Amount: Number(h.cgst_amount || 0),
+        SGST_Amount: Number(h.sgst_amount || 0),
+        IGST_Amount: Number(h.igst_amount || 0),
+        Remark: h.description || '',
+        Is_Posted: !!h.is_posted,
+        Is_Confirmed: !!h.is_confirmed,
+        Is_Paid: !!h.is_paid,
+        GrandTotal: Number(h.tot_amount || 0) + Number(h.rounded_off || 0),
+      }, items: formatted }));
     } catch (e) {
       console.error(e);
       alert('Failed to load sales invoice');
@@ -1470,6 +1504,7 @@ export default function SalesPage() {
     });
     setItems([]);
     setEditing(null);
+    setSavedSnapshot(null); // new form has no saved state
   };
 
   return (
@@ -1729,7 +1764,7 @@ export default function SalesPage() {
                 </button>
                 {((editing?.tranid && canEdit('INVENTORY', 'SALES')) || (!editing?.tranid && canCreate('INVENTORY', 'SALES'))) && (
                   <button
-                    disabled={saving || isLocked}
+                    disabled={saving || isLocked || !isFormDirty}
                     onClick={() => handleSave({ post: false })}
                     className="px-4 py-2 rounded-lg text-white shadow bg-gradient-to-r from-purple-400 to-purple-600 hover:from-purple-500 hover:to-purple-700 disabled:opacity-50"
                   >
@@ -2145,13 +2180,29 @@ export default function SalesPage() {
                         {/* Qty / Rate */}
                         <div className="grid grid-cols-2 gap-3 text-sm">
                           <div>
-                            <label className="block text-xs text-gray-500">Qty</label>
+                            <label className="block text-xs text-gray-500">
+                              Qty
+                              {selectedItem && (
+                                <span className={`ml-2 font-medium ${n(modalItemData.Qty) > n(selectedItem.curstock || 0) ? 'text-red-500' : 'text-green-600'}`}>
+                                  (Stock: {n(selectedItem.curstock || 0).toFixed(2)})
+                                </span>
+                              )}
+                            </label>
                             <input
                               ref={qtyRef}
                               type="number"
                               value={modalItemData.Qty}
-                              onChange={e => calculateModalTotals(selectedItem, n(e.target.value), modalItemData.Rate, modalItemData.CGSTPer, modalItemData.SGSTPer, modalItemData.IGSTPer)}
-                              className="w-full border rounded p-3 text-right [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                              onChange={e => {
+                                const entered = n(e.target.value);
+                                const maxStock = n(selectedItem?.curstock || 0);
+                                const qty = entered > maxStock ? maxStock : entered;
+                                if (entered > maxStock) {
+                                  setNotice({ open: true, type: 'error', message: `Quantity cannot exceed stock in hand (${maxStock.toFixed(2)})` });
+                                }
+                                calculateModalTotals(selectedItem, qty, modalItemData.Rate, modalItemData.CGSTPer, modalItemData.SGSTPer, modalItemData.IGSTPer);
+                              }}
+                              max={n(selectedItem?.curstock || 0)}
+                              className={`w-full border rounded p-3 text-right [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none ${n(modalItemData.Qty) > n(selectedItem?.curstock || 0) ? 'border-red-400 bg-red-50' : ''}`}
                             />
                           </div>
                           <div>
@@ -2194,13 +2245,15 @@ export default function SalesPage() {
                           <button
                             ref={saveAddNewRef}
                             onClick={addItemAndContinue}
-                            className="px-3 py-2 border rounded"
+                            disabled={n(modalItemData.Qty) > n(selectedItem?.curstock || 0) || n(modalItemData.Qty) <= 0}
+                            className="px-3 py-2 border rounded disabled:opacity-50"
                           >
                             Add & Continue
                           </button>
                           <button
                             onClick={addItemToForm}
-                            className="px-3 py-2 bg-blue-600 text-white rounded"
+                            disabled={n(modalItemData.Qty) > n(selectedItem?.curstock || 0) || n(modalItemData.Qty) <= 0}
+                            className="px-3 py-2 bg-blue-600 text-white rounded disabled:opacity-50"
                           >
                             Add
                           </button>
