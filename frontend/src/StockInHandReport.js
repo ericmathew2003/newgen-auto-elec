@@ -16,9 +16,14 @@ const StockInHandReport = () => {
   const [loading, setLoading] = useState(false);
   const [reportData, setReportData] = useState(null);
   const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
+  const [companyInfo, setCompanyInfo] = useState(null);
 
   useEffect(() => {
     fetchGroups();
+    const token = localStorage.getItem('token');
+    axios.get(`${API_BASE_URL}/api/company`, { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => setCompanyInfo(r.data || {}))
+      .catch(() => {});
   }, []);
 
   const fetchGroups = async () => {
@@ -271,6 +276,18 @@ const StockInHandReport = () => {
           <div className="bg-white rounded-lg shadow-md overflow-hidden printable-report">
             {/* Report Header */}
             <div className="bg-gradient-to-r from-blue-600 to-blue-700 text-white p-6">
+              {/* Company info - top left */}
+              {companyInfo && (
+                <div className="text-left text-sm text-blue-100 mb-3">
+                  <div className="font-bold text-white text-base">{companyInfo.company_name}</div>
+                  {(companyInfo.address_line1 || companyInfo.city) && (
+                    <div>{[companyInfo.address_line1, companyInfo.city].filter(Boolean).join(', ')}</div>
+                  )}
+                  {(companyInfo.address_line2 || companyInfo.state) && (
+                    <div>{[companyInfo.address_line2, companyInfo.state].filter(Boolean).join(', ')}</div>
+                  )}
+                </div>
+              )}
               <h2 className="text-2xl font-bold text-center">
                 Stock In Hand Report
               </h2>

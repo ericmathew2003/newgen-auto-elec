@@ -553,6 +553,12 @@ router.post("/:salesRetId/post", checkPeriodStatus, async (req, res) => {
       return res.status(404).json({ error: "Sales return master not found" });
     }
 
+    // Get the party's AR account ID so we only set party_id on that line
+    const partyAccRes = await client.query(
+      `SELECT accountid FROM tblmasparty WHERE partyid = $1`, [returnMaster.party_id]
+    );
+    const partyAccountId = partyAccRes.rows[0]?.accountid || null;
+
     const totalAmount = num(returnMaster.total_amount);
     const taxableAmount = num(returnMaster.taxable_amount);
     const cgstAmount = num(returnMaster.cgst_amount);
@@ -687,6 +693,9 @@ router.post("/:salesRetId/post", checkPeriodStatus, async (req, res) => {
               console.log(`   ${mapping.debit_credit === 'D' ? 'Debit' : 'Credit'}: ${amount}`);
               console.log(`   Description: ${description}`);
               
+              // Only set party_id on the AR account line, not on COGS/inventory/revenue lines
+              const linePartyId = (accountId === partyAccountId) ? returnMaster.party_id : null;
+
               // Insert journal detail entry
               await client.query(`
                 INSERT INTO public.acc_journal_detail 
@@ -695,7 +704,7 @@ router.post("/:salesRetId/post", checkPeriodStatus, async (req, res) => {
               `, [
                 journalMasId,
                 accountId,
-                returnMaster.party_id,
+                linePartyId,
                 mapping.debit_credit === 'D' ? amount : 0,
                 mapping.debit_credit === 'C' ? amount : 0,
                 description
@@ -737,7 +746,12 @@ router.post("/:salesRetId/post", checkPeriodStatus, async (req, res) => {
     // Populate acc_trn_invoice table for sales return tracking
     console.log(`Populating acc_trn_invoice table for sales return ${salesRetId}...`);
     try {
-      // Use positive amounts (the tran_type indicates it's a return)
+      // Use taxable + GST components (exact journal amount, no rounding adjustment)
+      // This ensures aging report matches the customer ledger (journal-based)
+      const exactReturnAmount = parseFloat(
+        (taxableAmount + cgstAmount + sgstAmount + igstAmount).toFixed(2)
+      );
+
       await client.query(`
         INSERT INTO public.acc_trn_invoice (
           fyear_id, party_id, tran_type, inv_master_id, tran_date, 
@@ -745,21 +759,21 @@ router.post("/:salesRetId/post", checkPeriodStatus, async (req, res) => {
           balance_amount, status, inv_reference, is_posted
         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
       `, [
-        returnMaster.fyear_id || 1,      // fyear_id
-        returnMaster.party_id,           // party_id (customer)
-        'SAL_RET',                       // tran_type (Sales Return)
-        salesRetId,                      // inv_master_id (using return ID)
-        returnMaster.sales_ret_date,     // tran_date
-        returnMaster.sales_ret_no,       // party_inv_no (return number)
-        returnMaster.sales_ret_date,     // party_inv_date
-        Math.abs(totalAmount),           // tran_amount (positive - constraint requires >= 0)
-        0,                               // paid_amount (initially 0)
-        Math.abs(totalAmount),           // balance_amount (positive - calculated as tran - paid)
-        0,                               // status (0 = Open)
-        `SRET-${returnMaster.sales_ret_no}`, // inv_reference
-        true                             // is_posted
+        returnMaster.fyear_id || 1,
+        returnMaster.party_id,
+        'SAL_RET',
+        salesRetId,
+        returnMaster.sales_ret_date,
+        returnMaster.sales_ret_no,
+        returnMaster.sales_ret_date,
+        exactReturnAmount,           // exact sum of components, no rounding
+        0,
+        exactReturnAmount,
+        0,
+        `SRET-${returnMaster.sales_ret_no}`,
+        true
       ]);
-      console.log(`Successfully added sales return ${returnMaster.sales_ret_no} to acc_trn_invoice table`);
+      console.log(`Successfully added sales return ${returnMaster.sales_ret_no} to acc_trn_invoice table (amount: ${exactReturnAmount})`);
     } catch (accTrnError) {
       console.error('Error populating acc_trn_invoice table for sales return:', accTrnError);
       // Don't throw error - this shouldn't stop the posting process

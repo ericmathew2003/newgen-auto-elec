@@ -9,12 +9,15 @@ const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
 const LedgerReportPage = () => {
   const [accounts, setAccounts] = useState([]);
   const [selectedAccount, setSelectedAccount] = useState('');
+  const [parties, setParties] = useState([]);
+  const [selectedParty, setSelectedParty] = useState('');
   const [fromDate, setFromDate] = useState('');
   const [toDate, setToDate] = useState('');
   const [loading, setLoading] = useState(false);
   const [reportData, setReportData] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [toast, setToast] = useState({ show: false, message: '', type: '' });
+  const [companyInfo, setCompanyInfo] = useState(null);
 
   // Auto-hide toast after 3 seconds
   React.useEffect(() => {
@@ -33,7 +36,24 @@ const LedgerReportPage = () => {
   // Fetch accounts on component mount
   useEffect(() => {
     fetchAccounts();
+    fetchParties();
+    const token = localStorage.getItem('token');
+    axios.get(`${API_BASE_URL}/api/company`, { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => setCompanyInfo(r.data || {}))
+      .catch(() => {});
   }, []);
+
+  const fetchParties = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await axios.get(`${API_BASE_URL}/api/reports/ledger-parties`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setParties(response.data?.parties || []);
+    } catch (error) {
+      console.error('Error fetching parties:', error);
+    }
+  };
 
   const fetchAccounts = async () => {
     try {
@@ -90,15 +110,14 @@ const LedgerReportPage = () => {
     setLoading(true);
     try {
       const token = localStorage.getItem('token');
+      const params = { accountId: selectedAccount, fromDate, toDate };
+      if (selectedParty) params.partyId = selectedParty;
+
       const response = await axios.get(
         `${API_BASE_URL}/api/reports/ledger`,
         {
           headers: { Authorization: `Bearer ${token}` },
-          params: {
-            accountId: selectedAccount,
-            fromDate,
-            toDate
-          }
+          params
         }
       );
 
@@ -158,32 +177,59 @@ const LedgerReportPage = () => {
     const doc = new jsPDF();
     const pageWidth = doc.internal.pageSize.getWidth();
     
-    // Add header
-    doc.setFontSize(18);
+    // Company header - top left
+    let cursorY = 14;
+    if (companyInfo?.company_name) {
+      doc.setFontSize(13);
+      doc.setFont(undefined, 'bold');
+      doc.text(companyInfo.company_name, 14, cursorY);
+      cursorY += 6;
+      doc.setFontSize(9);
+      doc.setFont(undefined, 'normal');
+      const line2 = [companyInfo.address_line1, companyInfo.city].filter(Boolean).join(', ');
+      const line3 = [companyInfo.address_line2, companyInfo.state].filter(Boolean).join(', ');
+      if (line2) { doc.text(line2, 14, cursorY); cursorY += 5; }
+      if (line3) { doc.text(line3, 14, cursorY); cursorY += 5; }
+      cursorY += 2;
+    }
+
+    // Report title
+    doc.setFontSize(16);
     doc.setFont(undefined, 'bold');
-    doc.text('Ledger Report', pageWidth / 2, 20, { align: 'center' });
-    
+    doc.text('Ledger Report', pageWidth / 2, cursorY, { align: 'center' });
+    cursorY += 8;
+
+    // Separator line
+    doc.setDrawColor(59, 130, 246);
+    doc.setLineWidth(0.5);
+    doc.line(14, cursorY, pageWidth - 14, cursorY);
+    cursorY += 6;
+
     // Add account details
     doc.setFontSize(12);
     doc.setFont(undefined, 'bold');
-    doc.text(`Account: ${reportData.account.account_name}`, 20, 30);
+    doc.text(`Account: ${reportData.account.account_name}`, 20, cursorY);
+    cursorY += 6;
     doc.setFontSize(10);
     doc.setFont(undefined, 'normal');
-    doc.text(`Code: ${reportData.account.account_code} | Group: ${reportData.account.group_name}`, 20, 36);
-    doc.text(`Period: ${new Date(reportData.period.from).toLocaleDateString()} to ${new Date(reportData.period.to).toLocaleDateString()}`, 20, 42);
+    doc.text(`Code: ${reportData.account.account_code} | Group: ${reportData.account.group_name}`, 20, cursorY);
+    cursorY += 6;
+    doc.text(`Period: ${new Date(reportData.period.from).toLocaleDateString()} to ${new Date(reportData.period.to).toLocaleDateString()}`, 20, cursorY);
+    cursorY += 8;
 
     // Opening balance
     doc.setFontSize(10);
     doc.setFont(undefined, 'bold');
-    doc.text(`Opening Balance: ${formatNumberForPDF(reportData.opening_balance.amount)} ${reportData.opening_balance.type}`, 20, 50);
+    doc.text(`Opening Balance: ${formatNumberForPDF(reportData.opening_balance.amount)} ${reportData.opening_balance.type}`, 20, cursorY);
+    cursorY += 8;
 
     // Transactions table
     const tableData = reportData.transactions.map(txn => [
       new Date(txn.date).toLocaleDateString(),
       txn.journal_no,
       txn.narration,
-      formatNumberForPDF(txn.debit),
-      formatNumberForPDF(txn.credit),
+      txn.debit ? formatNumberForPDF(txn.debit) : '',
+      txn.credit ? formatNumberForPDF(txn.credit) : '',
       `${formatNumberForPDF(txn.balance)} ${txn.balance_type}`
     ]);
 
@@ -196,7 +242,7 @@ const LedgerReportPage = () => {
     ]);
 
     autoTable(doc, {
-      startY: 55,
+      startY: cursorY,
       head: [['Date', 'Voucher No', 'Narration', 'Debit (Rs.)', 'Credit (Rs.)', 'Balance']],
       body: tableData,
       theme: 'grid',
@@ -333,6 +379,45 @@ const LedgerReportPage = () => {
           </h2>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {/* Party Filter (optional - for customer/supplier ledger) */}
+            <div className="md:col-span-3">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Filter by Party (Customer/Supplier) <span className="text-gray-400 font-normal">— optional, auto-selects account</span>
+              </label>
+              <select
+                value={selectedParty}
+                onChange={(e) => {
+                  const pid = e.target.value;
+                  setSelectedParty(pid);
+                  if (pid) {
+                    const party = parties.find(p => String(p.partyid) === String(pid));
+                    if (party?.accountid) setSelectedAccount(String(party.accountid));
+                  }
+                }}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              >
+                <option value="">-- All Parties (no filter) --</option>
+                {parties.filter(p => p.partytype === 1).length > 0 && (
+                  <optgroup label="Customers">
+                    {parties.filter(p => p.partytype === 1).map(p => (
+                      <option key={p.partyid} value={p.partyid}>
+                        {p.partyname} ({p.account_name || `Acc #${p.accountid}`})
+                      </option>
+                    ))}
+                  </optgroup>
+                )}
+                {parties.filter(p => p.partytype === 2).length > 0 && (
+                  <optgroup label="Suppliers">
+                    {parties.filter(p => p.partytype === 2).map(p => (
+                      <option key={p.partyid} value={p.partyid}>
+                        {p.partyname} ({p.account_name || `Acc #${p.accountid}`})
+                      </option>
+                    ))}
+                  </optgroup>
+                )}
+              </select>
+            </div>
+
             {/* Account Selection */}
             <div className="md:col-span-3">
               <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -352,7 +437,7 @@ const LedgerReportPage = () => {
               </div>
               <select
                 value={selectedAccount}
-                onChange={(e) => setSelectedAccount(e.target.value)}
+                onChange={(e) => { setSelectedAccount(e.target.value); setSelectedParty(''); }}
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 size="5"
               >
@@ -438,9 +523,26 @@ const LedgerReportPage = () => {
           <div className="bg-white rounded-lg shadow-md overflow-hidden">
             {/* Report Header */}
             <div className="bg-gradient-to-r from-blue-600 to-blue-700 text-white p-6">
+              {/* Company info - top left */}
+              {companyInfo && (
+                <div className="text-left text-sm text-blue-100 mb-3">
+                  <div className="font-bold text-white text-base">{companyInfo.company_name}</div>
+                  {(companyInfo.address_line1 || companyInfo.city) && (
+                    <div>{[companyInfo.address_line1, companyInfo.city].filter(Boolean).join(', ')}</div>
+                  )}
+                  {(companyInfo.address_line2 || companyInfo.state) && (
+                    <div>{[companyInfo.address_line2, companyInfo.state].filter(Boolean).join(', ')}</div>
+                  )}
+                </div>
+              )}
               <h2 className="text-2xl font-bold text-center">Ledger Report</h2>
               <div className="mt-4 text-center">
-                <p className="text-lg font-semibold">{reportData.account.account_name}</p>
+                <p className="text-lg font-semibold">
+                  {reportData.account.party_name || reportData.account.account_name}
+                </p>
+                {reportData.account.party_name && (
+                  <p className="text-sm text-blue-100">{reportData.account.account_name}</p>
+                )}
                 <p className="text-sm text-blue-100">
                   Code: {reportData.account.account_code} | Group: {reportData.account.group_name}
                 </p>
@@ -500,10 +602,10 @@ const LedgerReportPage = () => {
                           {txn.narration}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-900">
-                          {formatCurrency(txn.debit)}
+                          {txn.debit ? formatCurrency(txn.debit) : ''}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-900">
-                          {formatCurrency(txn.credit)}
+                          {txn.credit ? formatCurrency(txn.credit) : ''}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-right font-medium text-gray-900">
                           {formatCurrency(txn.balance)} {txn.balance_type}

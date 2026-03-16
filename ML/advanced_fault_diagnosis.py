@@ -109,9 +109,9 @@ class AdvancedFaultDiagnosisSystem:
     def _load_automotive_knowledge_base(self):
         """Load comprehensive automotive fault knowledge base"""
         self.automotive_knowledge_base = [
-            # Engine Issues
+            # ─── ENGINE ───────────────────────────────────────────────────────
             {
-                "symptoms": ["engine overheating", "temperature gauge high", "steam from hood", "coolant leak"],
+                "symptoms": ["engine overheating", "temperature gauge high", "steam from hood", "coolant leak", "radiator boiling"],
                 "fault": "cooling_system_failure",
                 "description": "Cooling system malfunction causing engine overheating",
                 "severity": "high",
@@ -125,7 +125,7 @@ class AdvancedFaultDiagnosisSystem:
                 ]
             },
             {
-                "symptoms": ["engine won't start", "no crank", "battery dead", "clicking sound", "dim lights"],
+                "symptoms": ["engine won't start", "no crank", "battery dead", "clicking sound", "dim lights", "car not starting"],
                 "fault": "battery_charging_failure",
                 "description": "Battery or charging system malfunction",
                 "severity": "high",
@@ -139,7 +139,7 @@ class AdvancedFaultDiagnosisSystem:
                 ]
             },
             {
-                "symptoms": ["engine rough idle", "shaking", "vibration", "misfiring", "poor acceleration"],
+                "symptoms": ["engine rough idle", "shaking", "vibration", "misfiring", "poor acceleration", "engine stuttering"],
                 "fault": "engine_misfire",
                 "description": "Engine misfiring due to ignition or fuel system issues",
                 "severity": "medium",
@@ -152,10 +152,66 @@ class AdvancedFaultDiagnosisSystem:
                     "Verify compression in all cylinders"
                 ]
             },
-            
-            # Brake Issues
             {
-                "symptoms": ["brake noise", "squealing", "grinding", "metallic sound when braking"],
+                "symptoms": ["engine knocking", "ticking noise", "metal knocking sound", "engine rattling", "rod knock"],
+                "fault": "engine_bearing_wear",
+                "description": "Engine internal bearing wear causing knocking noise",
+                "severity": "critical",
+                "parts": ["engine_bearing", "engine_oil", "oil_pump", "crankshaft"],
+                "diagnostic_steps": [
+                    "Check engine oil level and pressure",
+                    "Listen for knock location (top vs bottom)",
+                    "Check oil pressure with gauge",
+                    "Inspect oil for metal particles",
+                    "Perform oil analysis"
+                ]
+            },
+            {
+                "symptoms": ["oil leak", "oil puddle under car", "burning oil smell", "blue smoke exhaust", "oil consumption high"],
+                "fault": "oil_seal_failure",
+                "description": "Engine oil leak from seals or gaskets",
+                "severity": "medium",
+                "parts": ["oil_seal", "gasket", "valve_cover_gasket", "engine_oil"],
+                "diagnostic_steps": [
+                    "Identify leak location with UV dye",
+                    "Check valve cover gasket condition",
+                    "Inspect rear main seal",
+                    "Check oil pan gasket",
+                    "Monitor oil level daily"
+                ]
+            },
+            {
+                "symptoms": ["white smoke exhaust", "coolant loss", "sweet smell exhaust", "milky oil", "overheating with no leak"],
+                "fault": "head_gasket_failure",
+                "description": "Head gasket blown causing coolant and oil mixing",
+                "severity": "critical",
+                "parts": ["head_gasket", "cylinder_head", "coolant"],
+                "diagnostic_steps": [
+                    "Check oil dipstick for milky appearance",
+                    "Test coolant for combustion gases",
+                    "Perform compression test",
+                    "Check for bubbles in coolant reservoir",
+                    "Inspect spark plugs for coolant fouling"
+                ]
+            },
+            {
+                "symptoms": ["check engine light", "engine warning light", "malfunction indicator lamp", "OBD fault code"],
+                "fault": "engine_management_fault",
+                "description": "Engine management system fault detected",
+                "severity": "medium",
+                "parts": ["oxygen_sensor", "mass_airflow_sensor", "throttle_body", "EGR_valve"],
+                "diagnostic_steps": [
+                    "Scan OBD-II for fault codes",
+                    "Check oxygen sensor readings",
+                    "Inspect mass airflow sensor",
+                    "Test throttle position sensor",
+                    "Check EGR valve operation"
+                ]
+            },
+
+            # ─── BRAKES ───────────────────────────────────────────────────────
+            {
+                "symptoms": ["brake noise", "squealing", "grinding", "metallic sound when braking", "brakes screeching"],
                 "fault": "brake_pad_wear",
                 "description": "Brake pads worn beyond safe limits",
                 "severity": "high",
@@ -169,7 +225,7 @@ class AdvancedFaultDiagnosisSystem:
                 ]
             },
             {
-                "symptoms": ["brake pedal soft", "spongy feel", "pedal goes to floor", "brake warning light"],
+                "symptoms": ["brake pedal soft", "spongy feel", "pedal goes to floor", "brake warning light", "brakes not working", "brake failure"],
                 "fault": "brake_fluid_leak",
                 "description": "Brake fluid leak causing loss of braking pressure",
                 "severity": "critical",
@@ -182,10 +238,38 @@ class AdvancedFaultDiagnosisSystem:
                     "Pressure test brake system"
                 ]
             },
-            
-            # Transmission Issues
             {
-                "symptoms": ["gear shifting hard", "difficult shifting", "transmission slipping", "delayed engagement"],
+                "symptoms": ["brake vibration", "steering wheel shakes when braking", "pulsating brakes", "juddering brakes"],
+                "fault": "warped_brake_disc",
+                "description": "Brake disc warped causing vibration when braking",
+                "severity": "medium",
+                "parts": ["brake_disc", "brake_pad"],
+                "diagnostic_steps": [
+                    "Measure brake disc thickness variation",
+                    "Check disc runout with dial gauge",
+                    "Inspect disc for heat cracks",
+                    "Check wheel bearing play",
+                    "Road test for vibration pattern"
+                ]
+            },
+            {
+                "symptoms": ["car pulling to one side when braking", "uneven braking", "brake drag", "one wheel locking"],
+                "fault": "brake_caliper_fault",
+                "description": "Brake caliper seized or sticking",
+                "severity": "high",
+                "parts": ["brake_caliper", "brake_pad", "brake_hose"],
+                "diagnostic_steps": [
+                    "Check caliper slide pins for seizure",
+                    "Inspect caliper piston movement",
+                    "Check for uneven pad wear",
+                    "Test wheel temperature after driving",
+                    "Inspect brake hose for internal collapse"
+                ]
+            },
+
+            # ─── TRANSMISSION / CLUTCH ────────────────────────────────────────
+            {
+                "symptoms": ["gear shifting hard", "difficult shifting", "transmission slipping", "delayed engagement", "gears not engaging"],
                 "fault": "transmission_fluid_low",
                 "description": "Low transmission fluid affecting gear operation",
                 "severity": "medium",
@@ -198,10 +282,38 @@ class AdvancedFaultDiagnosisSystem:
                     "Scan for transmission trouble codes"
                 ]
             },
-            
-            # Electrical Issues
             {
-                "symptoms": ["lights dim", "headlight weak", "electrical problems", "battery drains overnight"],
+                "symptoms": ["clutch slipping", "clutch not engaging", "clutch pedal high", "burning smell clutch", "clutch judder"],
+                "fault": "clutch_wear",
+                "description": "Clutch plate worn out requiring replacement",
+                "severity": "high",
+                "parts": ["clutch_plate", "clutch_bearing", "pressure_plate", "flywheel"],
+                "diagnostic_steps": [
+                    "Test clutch engagement point height",
+                    "Check clutch pedal free play",
+                    "Test for clutch slip under load",
+                    "Inspect clutch hydraulic system",
+                    "Check flywheel condition"
+                ]
+            },
+            {
+                "symptoms": ["gear slipping out", "popping out of gear", "transmission noise", "whining in gear"],
+                "fault": "transmission_gear_fault",
+                "description": "Transmission gear synchronizer or bearing wear",
+                "severity": "high",
+                "parts": ["transmission_bearing", "gear_synchronizer", "transmission_oil"],
+                "diagnostic_steps": [
+                    "Check transmission oil level and condition",
+                    "Test all gear positions for engagement",
+                    "Listen for noise in specific gears",
+                    "Check gear linkage adjustment",
+                    "Inspect transmission mounts"
+                ]
+            },
+
+            # ─── ELECTRICAL ───────────────────────────────────────────────────
+            {
+                "symptoms": ["lights dim", "headlight weak", "electrical problems", "battery drains overnight", "alternator warning light"],
                 "fault": "alternator_failure",
                 "description": "Alternator not charging battery properly",
                 "severity": "high",
@@ -214,10 +326,82 @@ class AdvancedFaultDiagnosisSystem:
                     "Check for warning lights on dashboard"
                 ]
             },
-            
-            # Suspension Issues
             {
-                "symptoms": ["car bouncing", "rough ride", "excessive body roll", "nose diving when braking"],
+                "symptoms": ["starter motor not working", "engine cranks slowly", "starter clicking", "starter grinding noise"],
+                "fault": "starter_motor_failure",
+                "description": "Starter motor malfunction preventing engine start",
+                "severity": "high",
+                "parts": ["starter_motor", "starter_solenoid", "battery"],
+                "diagnostic_steps": [
+                    "Test battery voltage under load",
+                    "Check starter motor connections",
+                    "Test starter solenoid operation",
+                    "Check flywheel ring gear condition",
+                    "Measure voltage drop at starter"
+                ]
+            },
+            {
+                "symptoms": ["fuse blowing", "electrical short", "burning smell electrical", "sparks from wiring", "lights flickering"],
+                "fault": "electrical_short_circuit",
+                "description": "Electrical short circuit in vehicle wiring",
+                "severity": "critical",
+                "parts": ["fuse", "relay", "wiring_harness"],
+                "diagnostic_steps": [
+                    "Identify which circuit is affected",
+                    "Check fuse box for blown fuses",
+                    "Inspect wiring for chafing or damage",
+                    "Test circuit with multimeter",
+                    "Check for water ingress in connectors"
+                ]
+            },
+
+            # ─── STEERING ─────────────────────────────────────────────────────
+            {
+                "symptoms": ["steering heavy", "hard to steer", "power steering failure", "steering wheel stiff", "no power steering"],
+                "fault": "power_steering_failure",
+                "description": "Power steering system malfunction",
+                "severity": "high",
+                "parts": ["power_steering_pump", "power_steering_fluid", "steering_rack", "power_steering_belt"],
+                "diagnostic_steps": [
+                    "Check power steering fluid level",
+                    "Inspect power steering belt condition",
+                    "Test pump pressure output",
+                    "Check for fluid leaks at rack",
+                    "Inspect steering column joints"
+                ]
+            },
+            {
+                "symptoms": ["steering wheel vibration", "steering shimmy", "car pulling left", "car pulling right", "wheel wobble"],
+                "fault": "wheel_alignment_issue",
+                "description": "Wheel alignment or balance problem",
+                "severity": "medium",
+                "parts": ["tie_rod_end", "ball_joint", "wheel_bearing", "steering_rack"],
+                "diagnostic_steps": [
+                    "Check tire pressure in all wheels",
+                    "Inspect tire wear pattern",
+                    "Check wheel balance",
+                    "Measure wheel alignment angles",
+                    "Inspect tie rod ends for play"
+                ]
+            },
+            {
+                "symptoms": ["steering noise", "clunking when turning", "knocking when steering", "creaking steering"],
+                "fault": "steering_joint_wear",
+                "description": "Steering joints or ball joints worn",
+                "severity": "high",
+                "parts": ["ball_joint", "tie_rod_end", "steering_rack", "CV_joint"],
+                "diagnostic_steps": [
+                    "Check ball joint play with pry bar",
+                    "Inspect tie rod end for looseness",
+                    "Test steering rack for play",
+                    "Check CV joint boots for damage",
+                    "Inspect steering column universal joints"
+                ]
+            },
+
+            # ─── SUSPENSION ───────────────────────────────────────────────────
+            {
+                "symptoms": ["car bouncing", "rough ride", "excessive body roll", "nose diving when braking", "suspension bottoming out"],
                 "fault": "shock_absorber_wear",
                 "description": "Worn shock absorbers affecting ride quality",
                 "severity": "medium",
@@ -230,10 +414,38 @@ class AdvancedFaultDiagnosisSystem:
                     "Road test for handling characteristics"
                 ]
             },
-            
-            # Air Conditioning
             {
-                "symptoms": ["ac not cooling", "warm air", "ac compressor noise", "refrigerant leak"],
+                "symptoms": ["suspension noise", "clunking over bumps", "rattling suspension", "knocking from wheel area"],
+                "fault": "suspension_component_wear",
+                "description": "Suspension bushes or links worn causing noise",
+                "severity": "medium",
+                "parts": ["suspension_bush", "stabilizer_link", "strut_mount", "control_arm"],
+                "diagnostic_steps": [
+                    "Inspect anti-roll bar links",
+                    "Check suspension bush condition",
+                    "Test strut top mount bearing",
+                    "Inspect control arm bushes",
+                    "Check for loose suspension bolts"
+                ]
+            },
+            {
+                "symptoms": ["uneven tire wear", "tire wearing on inside", "tire wearing on outside", "feathering tire wear"],
+                "fault": "wheel_alignment_camber",
+                "description": "Incorrect wheel alignment causing uneven tire wear",
+                "severity": "medium",
+                "parts": ["tie_rod_end", "ball_joint", "control_arm"],
+                "diagnostic_steps": [
+                    "Measure camber, caster and toe angles",
+                    "Check for bent suspension components",
+                    "Inspect control arm bushes",
+                    "Check for accident damage",
+                    "Perform 4-wheel alignment"
+                ]
+            },
+
+            # ─── AIR CONDITIONING ─────────────────────────────────────────────
+            {
+                "symptoms": ["ac not cooling", "warm air from ac", "ac compressor noise", "refrigerant leak", "ac not working"],
                 "fault": "ac_system_failure",
                 "description": "Air conditioning system malfunction",
                 "severity": "low",
@@ -246,10 +458,24 @@ class AdvancedFaultDiagnosisSystem:
                     "Inspect AC system for leaks"
                 ]
             },
-            
-            # Fuel System
             {
-                "symptoms": ["engine stalling", "fuel smell", "poor fuel economy", "hard starting"],
+                "symptoms": ["bad smell from ac", "musty smell air conditioning", "mold smell vents", "ac smell"],
+                "fault": "ac_evaporator_contamination",
+                "description": "AC evaporator contaminated with mold or bacteria",
+                "severity": "low",
+                "parts": ["ac_filter", "ac_evaporator"],
+                "diagnostic_steps": [
+                    "Replace cabin air filter",
+                    "Clean evaporator with antibacterial spray",
+                    "Check drain tube for blockage",
+                    "Run AC on max for 10 minutes",
+                    "Inspect evaporator housing"
+                ]
+            },
+
+            # ─── FUEL SYSTEM ──────────────────────────────────────────────────
+            {
+                "symptoms": ["engine stalling", "fuel smell", "poor fuel economy", "hard starting", "engine hesitation"],
                 "fault": "fuel_system_issue",
                 "description": "Fuel delivery or quality problems",
                 "severity": "medium",
@@ -261,9 +487,159 @@ class AdvancedFaultDiagnosisSystem:
                     "Test fuel injector spray pattern",
                     "Check for fuel system leaks"
                 ]
-            }
+            },
+            {
+                "symptoms": ["black smoke exhaust", "rich fuel mixture", "fuel smell from exhaust", "excessive fuel consumption"],
+                "fault": "fuel_injector_fault",
+                "description": "Fuel injectors leaking or stuck open",
+                "severity": "medium",
+                "parts": ["fuel_injector", "fuel_pressure_regulator", "oxygen_sensor"],
+                "diagnostic_steps": [
+                    "Test injector balance with scan tool",
+                    "Check fuel pressure regulator",
+                    "Inspect injector O-rings for leaks",
+                    "Test oxygen sensor readings",
+                    "Check for fuel trim codes"
+                ]
+            },
+
+            # ─── EXHAUST ──────────────────────────────────────────────────────
+            {
+                "symptoms": ["loud exhaust", "exhaust noise", "rumbling exhaust", "exhaust hole", "exhaust blowing"],
+                "fault": "exhaust_system_damage",
+                "description": "Exhaust system damaged or corroded",
+                "severity": "medium",
+                "parts": ["muffler", "exhaust_pipe", "exhaust_gasket"],
+                "diagnostic_steps": [
+                    "Inspect exhaust system for holes",
+                    "Check exhaust manifold gasket",
+                    "Inspect muffler condition",
+                    "Check exhaust hangers",
+                    "Test for exhaust leaks with smoke"
+                ]
+            },
+            {
+                "symptoms": ["catalytic converter smell", "sulfur smell exhaust", "rotten egg smell", "cat converter rattle"],
+                "fault": "catalytic_converter_failure",
+                "description": "Catalytic converter damaged or clogged",
+                "severity": "medium",
+                "parts": ["catalytic_converter", "oxygen_sensor"],
+                "diagnostic_steps": [
+                    "Check for P0420/P0430 fault codes",
+                    "Test oxygen sensor before and after cat",
+                    "Check exhaust back pressure",
+                    "Inspect for physical damage",
+                    "Test converter efficiency"
+                ]
+            },
+
+            # ─── TYRES / WHEELS ───────────────────────────────────────────────
+            {
+                "symptoms": ["flat tyre", "tyre puncture", "tyre pressure low", "tyre deflating", "slow puncture"],
+                "fault": "tyre_puncture",
+                "description": "Tyre puncture or valve failure",
+                "severity": "high",
+                "parts": ["tyre", "tyre_valve", "wheel"],
+                "diagnostic_steps": [
+                    "Check tyre pressure in all wheels",
+                    "Inspect tyre for nails or objects",
+                    "Check valve stem for leaks",
+                    "Submerge tyre in water to find leak",
+                    "Inspect wheel rim for damage"
+                ]
+            },
+            {
+                "symptoms": ["wheel bearing noise", "humming noise driving", "grinding noise from wheel", "wheel noise speed related"],
+                "fault": "wheel_bearing_failure",
+                "description": "Wheel bearing worn causing humming or grinding noise",
+                "severity": "high",
+                "parts": ["wheel_bearing", "hub_assembly"],
+                "diagnostic_steps": [
+                    "Jack up car and spin wheel by hand",
+                    "Check for play in wheel bearing",
+                    "Listen for noise change when turning",
+                    "Check ABS sensor ring condition",
+                    "Inspect hub assembly"
+                ]
+            },
+
+            # ─── COOLING SYSTEM (additional) ──────────────────────────────────
+            {
+                "symptoms": ["radiator leaking", "coolant dripping", "green fluid under car", "coolant puddle"],
+                "fault": "radiator_leak",
+                "description": "Radiator or coolant hose leaking",
+                "severity": "high",
+                "parts": ["radiator", "radiator_hose", "coolant", "radiator_cap"],
+                "diagnostic_steps": [
+                    "Pressure test cooling system",
+                    "Inspect radiator for cracks",
+                    "Check all hose connections",
+                    "Test radiator cap pressure rating",
+                    "Check water pump weep hole"
+                ]
+            },
+
+            # ─── BODY / WINDOWS ───────────────────────────────────────────────
+            {
+                "symptoms": ["window not working", "electric window stuck", "window motor noise", "window off track"],
+                "fault": "window_regulator_failure",
+                "description": "Window regulator or motor failure",
+                "severity": "low",
+                "parts": ["glass_winder", "window_motor", "window_regulator"],
+                "diagnostic_steps": [
+                    "Test window switch operation",
+                    "Check window motor fuse",
+                    "Inspect regulator mechanism",
+                    "Test motor with direct power",
+                    "Check window track alignment"
+                ]
+            },
+            {
+                "symptoms": ["horn not working", "horn weak", "horn stuck on", "no horn sound"],
+                "fault": "horn_failure",
+                "description": "Horn malfunction",
+                "severity": "low",
+                "parts": ["horn", "horn_relay", "horn_fuse"],
+                "diagnostic_steps": [
+                    "Check horn fuse",
+                    "Test horn relay",
+                    "Check horn switch in steering wheel",
+                    "Test horn with direct power",
+                    "Inspect horn mounting and connections"
+                ]
+            },
+            {
+                "symptoms": ["wiper not working", "wiper streaking", "wiper blade worn", "wiper motor fault", "wipers not clearing"],
+                "fault": "wiper_system_fault",
+                "description": "Windscreen wiper system malfunction",
+                "severity": "medium",
+                "parts": ["wiper_blade", "wiper_motor", "wiper_linkage"],
+                "diagnostic_steps": [
+                    "Check wiper blade condition",
+                    "Test wiper motor operation",
+                    "Check wiper fuse and relay",
+                    "Inspect wiper linkage",
+                    "Test wiper switch"
+                ]
+            },
+
+            # ─── LIGHTS ───────────────────────────────────────────────────────
+            {
+                "symptoms": ["headlight not working", "bulb blown", "lights not working", "indicator not working", "tail light out"],
+                "fault": "lighting_failure",
+                "description": "Vehicle lighting system fault",
+                "severity": "medium",
+                "parts": ["bulb", "lights", "fuse", "relay"],
+                "diagnostic_steps": [
+                    "Check bulb condition",
+                    "Test fuse for lighting circuit",
+                    "Check relay operation",
+                    "Inspect wiring connections",
+                    "Test switch operation"
+                ]
+            },
         ]
-        
+
         logger.info(f"Loaded {len(self.automotive_knowledge_base)} fault patterns")
     
     def _initialize_nlp_models(self):
@@ -314,55 +690,113 @@ class AdvancedFaultDiagnosisSystem:
         except Exception as e:
             logger.error(f"Failed to precompute embeddings: {e}")
     
+    # System keyword guard: if symptom contains a system keyword, restrict to that system's faults
+    SYSTEM_KEYWORDS = {
+        "brake": ["brake_pad_wear", "brake_fluid_leak", "warped_brake_disc", "brake_caliper_fault"],
+        "clutch": ["clutch_wear", "transmission_fluid_low"],
+        "gear": ["transmission_fluid_low", "transmission_gear_fault", "clutch_wear"],
+        "transmission": ["transmission_fluid_low", "transmission_gear_fault", "clutch_wear"],
+        "steering": ["power_steering_failure", "wheel_alignment_issue", "steering_joint_wear"],
+        "engine": ["cooling_system_failure", "battery_charging_failure", "engine_misfire",
+                   "engine_bearing_wear", "oil_seal_failure", "head_gasket_failure",
+                   "engine_management_fault", "fuel_system_issue", "fuel_injector_fault"],
+        "coolant": ["cooling_system_failure", "head_gasket_failure", "radiator_leak"],
+        "radiator": ["cooling_system_failure", "radiator_leak"],
+        "oil": ["oil_seal_failure", "engine_bearing_wear"],
+        "fuel": ["fuel_system_issue", "fuel_injector_fault"],
+        "exhaust": ["exhaust_system_damage", "catalytic_converter_failure"],
+        "tyre": ["tyre_puncture", "wheel_bearing_failure", "wheel_alignment_issue"],
+        "tire": ["tyre_puncture", "wheel_bearing_failure", "wheel_alignment_issue"],
+        "wheel": ["wheel_bearing_failure", "tyre_puncture", "wheel_alignment_issue"],
+        "suspension": ["shock_absorber_wear", "suspension_component_wear", "wheel_alignment_camber"],
+        "ac": ["ac_system_failure", "ac_evaporator_contamination"],
+        "air conditioning": ["ac_system_failure", "ac_evaporator_contamination"],
+        "battery": ["battery_charging_failure", "alternator_failure", "electrical_short_circuit"],
+        "alternator": ["alternator_failure", "battery_charging_failure"],
+        "starter": ["starter_motor_failure", "battery_charging_failure"],
+        "light": ["lighting_failure", "alternator_failure"],
+        "window": ["window_regulator_failure"],
+        "wiper": ["wiper_system_fault"],
+        "horn": ["horn_failure"],
+    }
+
+    def _allowed_faults(self, symptom: str) -> set:
+        """Return allowed fault codes based on system keywords. Empty set = no restriction."""
+        s = symptom.lower()
+        allowed = set()
+        for kw, faults in self.SYSTEM_KEYWORDS.items():
+            if kw in s:
+                allowed.update(faults)
+        return allowed
+
     def analyze_symptoms_with_nlp(self, symptoms: List[str]) -> Dict:
-        """Analyze symptoms using pretrained NLP models"""
+        """Analyze symptoms using pretrained NLP models — each symptom diagnosed independently"""
         if not self.sentence_model or self.fault_embeddings is None:
             return self._fallback_analysis(symptoms)
         
         try:
-            # Combine all symptoms into one text
-            symptom_text = " ".join(symptoms).lower()
-            logger.info(f"Processing symptoms: {symptom_text}")
-            
-            # Get embedding for user symptoms
-            symptom_embedding = self.sentence_model.encode([symptom_text])
-            logger.info(f"Generated embedding shape: {symptom_embedding.shape}")
-            
-            # Calculate similarity with all fault patterns
-            similarities = cosine_similarity(symptom_embedding, self.fault_embeddings)[0]
-            logger.info(f"Similarities shape: {similarities.shape}, type: {type(similarities)}")
-            
-            # Get top 3 matches
-            top_indices = np.argsort(similarities)[-3:][::-1]
-            logger.info(f"Top indices: {top_indices}, type: {type(top_indices)}")
-            
-            predicted_faults = []
-            for i, idx in enumerate(top_indices):
-                similarity_score = float(similarities[idx])
-                logger.info(f"Processing index {i}: idx={idx}, similarity={similarity_score}")
-                if similarity_score > 0.3:  # Minimum similarity threshold
+            seen_faults = {}  # fault_code -> best result
+
+            # Diagnose each symptom independently
+            for symptom in symptoms:
+                symptom_text = symptom.lower()
+                allowed = self._allowed_faults(symptom_text)
+                symptom_embedding = self.sentence_model.encode([symptom_text])
+                similarities = cosine_similarity(symptom_embedding, self.fault_embeddings)[0]
+                top_indices = np.argsort(similarities)[-5:][::-1]
+
+                for idx in top_indices:
+                    similarity_score = float(similarities[idx])
                     fault = self.automotive_knowledge_base[idx]
-                    predicted_faults.append({
-                        "fault": fault["fault"],
-                        "description": fault["description"],
-                        "confidence": similarity_score,
-                        "severity": fault["severity"],
-                        "parts": fault["parts"],
-                        "diagnostic_steps": fault["diagnostic_steps"]
-                    })
-            
-            # Safe way to get top similarity
-            top_similarity = 0.0
-            if top_indices.size > 0:
-                top_similarity = float(similarities[top_indices[0]])
-            
+                    fault_code = fault["fault"]
+                    # Apply system keyword guard
+                    if allowed and fault_code not in allowed:
+                        continue
+                    if similarity_score > 0.45:
+                        fault = self.automotive_knowledge_base[idx]
+                        fault_code = fault["fault"]
+                        if fault_code not in seen_faults or similarity_score > seen_faults[fault_code]["confidence"]:
+                            seen_faults[fault_code] = {
+                                "fault": fault_code,
+                                "description": fault["description"],
+                                "confidence": similarity_score,
+                                "severity": fault["severity"],
+                                "parts": fault["parts"],
+                                "diagnostic_steps": fault["diagnostic_steps"],
+                                "triggered_by": symptom
+                            }
+
+            # Also run combined to catch cross-symptom patterns
+            if len(symptoms) > 1:
+                combined_text = " ".join(symptoms).lower()
+                combined_embedding = self.sentence_model.encode([combined_text])
+                similarities = cosine_similarity(combined_embedding, self.fault_embeddings)[0]
+                top_indices = np.argsort(similarities)[-5:][::-1]
+
+                for idx in top_indices:
+                    similarity_score = float(similarities[idx])
+                    if similarity_score > 0.50:
+                        fault = self.automotive_knowledge_base[idx]
+                        fault_code = fault["fault"]
+                        if fault_code not in seen_faults or similarity_score > seen_faults[fault_code]["confidence"]:
+                            seen_faults[fault_code] = {
+                                "fault": fault_code,
+                                "description": fault["description"],
+                                "confidence": similarity_score,
+                                "severity": fault["severity"],
+                                "parts": fault["parts"],
+                                "diagnostic_steps": fault["diagnostic_steps"],
+                                "triggered_by": "combined symptoms"
+                            }
+
+            predicted_faults = sorted(seen_faults.values(), key=lambda x: x["confidence"], reverse=True)
+
             return {
                 "method": "pretrained_nlp",
                 "predicted_faults": predicted_faults,
                 "symptom_analysis": {
-                    "processed_text": symptom_text,
-                    "embedding_size": len(symptom_embedding[0]),
-                    "top_similarity": top_similarity
+                    "processed_text": " | ".join(symptoms),
+                    "faults_detected": len(predicted_faults)
                 }
             }
         
@@ -371,35 +805,56 @@ class AdvancedFaultDiagnosisSystem:
             return self._fallback_analysis(symptoms)
     
     def _fallback_analysis(self, symptoms: List[str]) -> Dict:
-        """Fallback analysis using keyword matching"""
-        symptom_text = " ".join(symptoms).lower()
-        
-        matches = []
-        for fault in self.automotive_knowledge_base:
-            score = 0
-            for symptom in fault["symptoms"]:
-                if symptom.lower() in symptom_text:
-                    score += 1
-            
-            if score > 0:
-                confidence = score / len(fault["symptoms"])
-                matches.append({
-                    "fault": fault["fault"],
-                    "description": fault["description"],
-                    "confidence": confidence,
-                    "severity": fault["severity"],
-                    "parts": fault["parts"],
-                    "diagnostic_steps": fault["diagnostic_steps"]
-                })
-        
-        # Sort by confidence
-        matches.sort(key=lambda x: x["confidence"], reverse=True)
-        
+        """Fallback analysis using keyword matching — each symptom checked independently"""
+        seen_faults = {}
+
+        for symptom in symptoms:
+            symptom_lower = symptom.lower()
+            allowed = self._allowed_faults(symptom_lower)
+            for fault in self.automotive_knowledge_base:
+                fault_code = fault["fault"]
+                if allowed and fault_code not in allowed:
+                    continue
+                score = sum(1 for s in fault["symptoms"] if s.lower() in symptom_lower)
+                if score > 0:
+                    confidence = score / len(fault["symptoms"])
+                    if fault_code not in seen_faults or confidence > seen_faults[fault_code]["confidence"]:
+                        seen_faults[fault_code] = {
+                            "fault": fault_code,
+                            "description": fault["description"],
+                            "confidence": confidence,
+                            "severity": fault["severity"],
+                            "parts": fault["parts"],
+                            "diagnostic_steps": fault["diagnostic_steps"],
+                            "triggered_by": symptom
+                        }
+
+        # Also check combined text for cross-symptom patterns
+        if len(symptoms) > 1:
+            combined = " ".join(symptoms).lower()
+            for fault in self.automotive_knowledge_base:
+                score = sum(1 for s in fault["symptoms"] if s.lower() in combined)
+                if score > 0:
+                    confidence = score / len(fault["symptoms"])
+                    fault_code = fault["fault"]
+                    if fault_code not in seen_faults or confidence > seen_faults[fault_code]["confidence"]:
+                        seen_faults[fault_code] = {
+                            "fault": fault_code,
+                            "description": fault["description"],
+                            "confidence": confidence,
+                            "severity": fault["severity"],
+                            "parts": fault["parts"],
+                            "diagnostic_steps": fault["diagnostic_steps"],
+                            "triggered_by": "combined symptoms"
+                        }
+
+        matches = sorted(seen_faults.values(), key=lambda x: x["confidence"], reverse=True)
+
         return {
             "method": "keyword_matching",
-            "predicted_faults": matches[:3],
+            "predicted_faults": matches,
             "symptom_analysis": {
-                "processed_text": symptom_text,
+                "processed_text": " | ".join(symptoms),
                 "keyword_matches": len(matches)
             }
         }

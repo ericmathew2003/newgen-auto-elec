@@ -1411,6 +1411,36 @@ router.post("/", authenticateToken, checkPermission('ACCOUNTS_JOURNAL_VOUCHER_AD
       ]);
     }
 
+    // Insert into acc_trn_invoice for any party-linked lines (for aging/outstanding reports)
+    // A journal line with a party_id and a debit on their AR account = receivable
+    // A journal line with a party_id and a credit on their AR account = payable/credit
+    for (const detail of journal_details) {
+      if (!detail.party_id) continue;
+      const amount = parseFloat(detail.debit_amount || 0) + parseFloat(detail.credit_amount || 0);
+      if (amount <= 0) continue;
+
+      // Determine tran_type: debit on party account = SAL (receivable), credit = payment/credit
+      const tranType = parseFloat(detail.debit_amount || 0) > 0 ? 'SAL' : 'RECEIPT';
+
+      await client.query(`
+        INSERT INTO acc_trn_invoice (
+          fyear_id, tran_type, tran_date, party_id,
+          party_inv_no, tran_amount, paid_amount, balance_amount,
+          inv_reference, is_posted, inv_master_id, created_date
+        ) VALUES ($1, $2, $3, $4, $5, $6, 0, $6, $7, true, $8, NOW())
+        ON CONFLICT DO NOTHING
+      `, [
+        finyearid,
+        tranType,
+        journal_date,
+        detail.party_id,
+        journalSerial,
+        amount,
+        journalSerial,
+        journalMasId
+      ]);
+    }
+
     await client.query('COMMIT');
     res.json({ 
       message: "✅ Journal entry created successfully", 
@@ -1563,6 +1593,34 @@ router.put("/:id", authenticateToken, checkPermission('ACCOUNTS_JOURNAL_VOUCHER_
         detail.description || '',
         detail.allocation_ref_id || null
       ]);
+    }
+
+    // Sync acc_trn_invoice for party-linked lines (upsert)
+    // First remove old journal-sourced entries for this journal
+    await client.query(
+      `DELETE FROM acc_trn_invoice WHERE inv_master_id = $1 AND tran_type IN ('SAL','RECEIPT')`,
+      [id]
+    );
+    // Re-insert for current details
+    const journalSerial = masterResult.rows[0].journal_serial;
+    const fyearRes = await client.query(
+      `SELECT finyearid FROM acc_journal_master WHERE journal_mas_id = $1`, [id]
+    );
+    const fyearId = fyearRes.rows[0]?.finyearid;
+
+    for (const detail of journal_details) {
+      if (!detail.party_id) continue;
+      const amount = parseFloat(detail.debit_amount || 0) + parseFloat(detail.credit_amount || 0);
+      if (amount <= 0) continue;
+      const tranType = parseFloat(detail.debit_amount || 0) > 0 ? 'SAL' : 'RECEIPT';
+      await client.query(`
+        INSERT INTO acc_trn_invoice (
+          fyear_id, tran_type, tran_date, party_id,
+          party_inv_no, tran_amount, paid_amount, balance_amount,
+          inv_reference, is_posted, inv_master_id, created_date
+        ) VALUES ($1, $2, $3, $4, $5, $6, 0, $6, $7, true, $8, NOW())
+        ON CONFLICT DO NOTHING
+      `, [fyearId, tranType, journal_date, detail.party_id, journalSerial, amount, journalSerial, id]);
     }
 
     await client.query('COMMIT');

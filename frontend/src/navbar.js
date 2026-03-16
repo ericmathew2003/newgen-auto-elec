@@ -40,6 +40,7 @@ export default function Navbar() {
   const [dashboardOpen, setDashboardOpen] = useState(false);
   const [inventoryOpen, setInventoryOpen] = useState(false);
   const [accountsOpen, setAccountsOpen] = useState(false);
+  const [aiOpen, setAiOpen] = useState(false);
 
   // Inventory sub-menu states
   const [masterOpen, setMasterOpen] = useState(false);
@@ -516,18 +517,6 @@ export default function Navbar() {
                               <div className="w-1.5 h-1.5 bg-purple-400 rounded-full mr-2"></div>
                               ML Reports & Analytics
                             </Link>
-                            <Link to="/cashflow-prediction" className="flex items-center p-2 rounded-lg hover:bg-blue-50 hover:text-blue-700 transition-all duration-200 text-sm font-medium">
-                              <div className="w-1.5 h-1.5 bg-blue-400 rounded-full mr-2"></div>
-                              💰 Cash Flow Prediction
-                            </Link>
-                            <Link to="/parts/identify" className="flex items-center p-2 rounded-lg hover:bg-green-50 hover:text-green-700 transition-all duration-200 text-sm font-medium">
-                              <div className="w-1.5 h-1.5 bg-green-400 rounded-full mr-2"></div>
-                              🚗 AI Part Identification
-                            </Link>
-                            <Link to="/fault-diagnosis" className="flex items-center p-2 rounded-lg hover:bg-red-50 hover:text-red-700 transition-all duration-200 text-sm font-medium">
-                              <div className="w-1.5 h-1.5 bg-red-400 rounded-full mr-2"></div>
-                              🔧 AI Fault Diagnosis
-                            </Link>
                           </div>
                         )}
                       </div>
@@ -717,7 +706,50 @@ export default function Navbar() {
               </div>
               )}
 
-              {/* 4. SETTINGS SECTION */}
+              {/* 4. AI SYSTEMS SECTION */}
+              {(canView('AI_SYSTEMS', 'CASHFLOW_PREDICTION') || canView('AI_SYSTEMS', 'PART_IDENTIFICATION') || canView('AI_SYSTEMS', 'FAULT_DIAGNOSIS')) && (
+              <div className="space-y-2">
+                <button
+                  onClick={() => setAiOpen(!aiOpen)}
+                  className="flex items-center justify-between w-full p-4 rounded-xl hover:bg-gradient-to-r hover:from-violet-50 hover:to-purple-50 hover:text-violet-700 transition-all duration-200 group border border-transparent hover:border-violet-100"
+                >
+                  <div className="flex items-center">
+                    <div className="p-2 bg-violet-100 rounded-lg group-hover:bg-violet-200 transition-colors duration-200 mr-4">
+                      <span className="text-lg">🤖</span>
+                    </div>
+                    <span className="font-medium">AI Systems</span>
+                  </div>
+                  <div className="p-1 rounded-md bg-violet-100 group-hover:bg-violet-100 transition-colors duration-200">
+                    {aiOpen ? <FiChevronDown size={16} /> : <FiChevronRight size={16} />}
+                  </div>
+                </button>
+
+                {aiOpen && (
+                  <div className="ml-4 space-y-1 animate-fadeIn">
+                    {canView('AI_SYSTEMS', 'CASHFLOW_PREDICTION') && (
+                      <Link to="/cashflow-prediction" className="flex items-center p-3 rounded-lg hover:bg-blue-50 hover:text-blue-700 transition-all duration-200 text-sm font-medium">
+                        <div className="w-1.5 h-1.5 bg-blue-400 rounded-full mr-2"></div>
+                        💰 Cash Flow Prediction
+                      </Link>
+                    )}
+                    {canView('AI_SYSTEMS', 'PART_IDENTIFICATION') && (
+                      <Link to="/parts/identify" className="flex items-center p-3 rounded-lg hover:bg-green-50 hover:text-green-700 transition-all duration-200 text-sm font-medium">
+                        <div className="w-1.5 h-1.5 bg-green-400 rounded-full mr-2"></div>
+                        🚗 AI Part Identification
+                      </Link>
+                    )}
+                    {canView('AI_SYSTEMS', 'FAULT_DIAGNOSIS') && (
+                      <Link to="/fault-diagnosis" className="flex items-center p-3 rounded-lg hover:bg-red-50 hover:text-red-700 transition-all duration-200 text-sm font-medium">
+                        <div className="w-1.5 h-1.5 bg-red-400 rounded-full mr-2"></div>
+                        🔧 AI Fault Diagnosis
+                      </Link>
+                    )}
+                  </div>
+                )}
+              </div>
+              )}
+
+              {/* 5. SETTINGS SECTION */}
               {canView('SECURITY', 'USER_MANAGEMENT') && (
               <div className="space-y-2">
                 <button

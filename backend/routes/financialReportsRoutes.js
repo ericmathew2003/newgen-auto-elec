@@ -720,7 +720,7 @@ router.get('/ledger', authenticateToken, checkPermission('REPORTS_LEDGER_VIEW'),
   let client;
   
   try {
-    const { accountId, fromDate, toDate } = req.query;
+    const { accountId, fromDate, toDate, partyId } = req.query;
     
     if (!accountId) {
       return res.status(400).json({ error: 'Account ID is required' });
@@ -753,6 +753,18 @@ router.get('/ledger', authenticateToken, checkPermission('REPORTS_LEDGER_VIEW'),
     }
     
     const account = accountResult.rows[0];
+
+    // If partyId provided, get party name for display
+    let partyName = null;
+    if (partyId) {
+      const partyResult = await client.query(
+        `SELECT partyname FROM tblmasparty WHERE partyid = $1`, [partyId]
+      );
+      if (partyResult.rows.length > 0) partyName = partyResult.rows[0].partyname;
+    }
+
+    // Build party filter clause
+    const partyFilter = partyId ? `AND jd.party_id = ${parseInt(partyId)}` : '';
     
     // Get opening balance (transactions before fromDate)
     const openingBalanceQuery = `
@@ -763,6 +775,7 @@ router.get('/ledger', authenticateToken, checkPermission('REPORTS_LEDGER_VIEW'),
       INNER JOIN acc_journal_master jm ON jd.journal_mas_id = jm.journal_mas_id
       WHERE jd.account_id = $1
         AND jm.journal_date < $2
+        ${partyFilter}
     `;
     
     const openingBalanceResult = await client.query(openingBalanceQuery, [accountId, fromDate]);
@@ -784,24 +797,26 @@ router.get('/ledger', authenticateToken, checkPermission('REPORTS_LEDGER_VIEW'),
       INNER JOIN acc_journal_master jm ON jd.journal_mas_id = jm.journal_mas_id
       WHERE jd.account_id = $1
         AND jm.journal_date BETWEEN $2 AND $3
+        ${partyFilter}
       ORDER BY jm.journal_date, jm.journal_mas_id
     `;
     
     const transactionsResult = await client.query(transactionsQuery, [accountId, fromDate, toDate]);
     
-    // Calculate running balance
+    // Calculate running balance — each row has EITHER debit OR credit, never both
     let runningBalance = openingBalance;
     const transactions = transactionsResult.rows.map(row => {
       const debit = parseFloat(row.debit_amount || 0);
       const credit = parseFloat(row.credit_amount || 0);
-      runningBalance += (debit - credit);
+      runningBalance = runningBalance + debit - credit;
       
       return {
         journal_no: row.journal_serial || '',
         date: row.journal_date,
         narration: row.narration || row.description || '',
-        debit: formatCurrency(debit),
-        credit: formatCurrency(credit),
+        // Show debit only if it has a debit amount, credit only if credit amount
+        debit: debit > 0 ? formatCurrency(debit) : '',
+        credit: credit > 0 ? formatCurrency(credit) : '',
         balance: formatCurrency(Math.abs(runningBalance)),
         balance_type: runningBalance >= 0 ? 'Dr' : 'Cr'
       };
@@ -819,7 +834,8 @@ router.get('/ledger', authenticateToken, checkPermission('REPORTS_LEDGER_VIEW'),
         account_id: account.account_id,
         account_code: account.account_code,
         account_name: account.account_name,
-        group_name: account.group_name
+        group_name: account.group_name,
+        party_name: partyName
       },
       period: { from: fromDate, to: toDate },
       opening_balance: {
@@ -844,6 +860,28 @@ router.get('/ledger', authenticateToken, checkPermission('REPORTS_LEDGER_VIEW'),
       details: error.message,
       stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
     });
+  } finally {
+    if (client) client.release();
+  }
+});
+
+// 7. Get parties with their account IDs (for ledger party filter)
+router.get('/ledger-parties', authenticateToken, checkPermission('REPORTS_LEDGER_VIEW'), async (req, res) => {
+  let client;
+  try {
+    client = await pool.connect();
+    const result = await client.query(`
+      SELECT p.partyid, p.partyname, p.partytype, p.accountid,
+             a.account_name, a.account_code
+      FROM tblmasparty p
+      LEFT JOIN acc_mas_coa a ON p.accountid = a.account_id
+      WHERE p.accountid IS NOT NULL
+      ORDER BY p.partytype, p.partyname
+    `);
+    res.json({ success: true, parties: result.rows });
+  } catch (error) {
+    console.error('Error fetching ledger parties:', error);
+    res.status(500).json({ error: 'Failed to fetch parties', details: error.message });
   } finally {
     if (client) client.release();
   }

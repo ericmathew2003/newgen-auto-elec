@@ -39,7 +39,7 @@ router.get('/summary', authenticateToken, async (req, res) => {
         FROM (
           SELECT p.partyid, p.partytype
           FROM tblmasparty p
-          LEFT JOIN acc_mas_account a ON p.accountid = a.account_id
+          LEFT JOIN acc_mas_coa a ON p.accountid = a.account_id
         ) subq 
         WHERE CAST(COALESCE(subq.partytype, 0) AS INTEGER) = 2
       `),
@@ -48,7 +48,7 @@ router.get('/summary', authenticateToken, async (req, res) => {
         FROM (
           SELECT p.partyid, p.partytype
           FROM tblmasparty p
-          LEFT JOIN acc_mas_account a ON p.accountid = a.account_id
+          LEFT JOIN acc_mas_coa a ON p.accountid = a.account_id
         ) subq 
         WHERE CAST(COALESCE(subq.partytype, 0) AS INTEGER) = 1
       `),
@@ -158,7 +158,7 @@ router.get('/stats', authenticateToken, async (req, res) => {
         FROM (
           SELECT p.partyid, p.partytype
           FROM tblmasparty p
-          LEFT JOIN acc_mas_account a ON p.accountid = a.account_id
+          LEFT JOIN acc_mas_coa a ON p.accountid = a.account_id
         ) subq 
         WHERE CAST(COALESCE(subq.partytype, 0) AS INTEGER) = 2
       `);
@@ -175,7 +175,7 @@ router.get('/stats', authenticateToken, async (req, res) => {
         FROM (
           SELECT p.partyid, p.partytype
           FROM tblmasparty p
-          LEFT JOIN acc_mas_account a ON p.accountid = a.account_id
+          LEFT JOIN acc_mas_coa a ON p.accountid = a.account_id
         ) subq 
         WHERE CAST(COALESCE(subq.partytype, 0) AS INTEGER) = 1
       `);

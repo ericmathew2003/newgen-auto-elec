@@ -861,6 +861,10 @@ router.post("/:invMasterId/post", checkPeriodStatus, async (req, res) => {
               console.log(`   ${actualDebitCredit === 'D' ? 'Debit' : 'Credit'}: ${absoluteAmount}`);
               console.log(`   Description: ${description}`);
 
+              // Only set party_id on the AR/AP account line (the customer's receivable account)
+              // COGS, inventory, and revenue lines should NOT have party_id set
+              const linePartyId = (accountId === m.account_id) ? m.party_id : null;
+
               // Insert journal detail entry using absolute amount and actual debit/credit
               await client.query(`
                 INSERT INTO public.acc_journal_detail 
@@ -869,7 +873,7 @@ router.post("/:invMasterId/post", checkPeriodStatus, async (req, res) => {
               `, [
                 journalMasId,
                 accountId,
-                m.party_id,
+                linePartyId,
                 actualDebitCredit === 'D' ? absoluteAmount : 0,
                 actualDebitCredit === 'C' ? absoluteAmount : 0,
                 description

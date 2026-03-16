@@ -231,6 +231,11 @@ const FaultDiagnosis = () => {
                               <p className="text-sm text-gray-600 mb-2">
                                 Fault Code: <span className="font-mono bg-gray-100 px-2 py-1 rounded">{fault.fault}</span>
                               </p>
+                              {fault.triggered_by && (
+                                <p className="text-xs text-gray-500">
+                                  Triggered by: <span className="italic">{fault.triggered_by}</span>
+                                </p>
+                              )}
                             </div>
                             <div className="text-right">
                               <div className={`text-lg font-bold mb-1 ${getConfidenceColor(fault.confidence)}`}>

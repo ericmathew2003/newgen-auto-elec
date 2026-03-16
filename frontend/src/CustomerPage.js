@@ -77,10 +77,13 @@ export default function CustomerPage() {
     }
   };
 
-  // API: fetch all accounts from acc_mas_account table
+  // API: fetch all accounts from acc_mas_coa table
   const fetchAccounts = async () => {
     try {
-      const res = await axios.get(`${API_BASE_URL}/api/acc-mas-account/all`);
+      const token = localStorage.getItem('token');
+      const res = await axios.get(`${API_BASE_URL}/api/coa/all`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
       setAccounts(res.data || []);
     } catch (err) {
       console.error("Error fetching accounts:", err);

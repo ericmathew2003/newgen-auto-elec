@@ -20,6 +20,7 @@ const ReceivablesPayablesPage = () => {
   const [loading, setLoading] = useState(false);
   const [reportData, setReportData] = useState(null);
   const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
+  const [companyInfo, setCompanyInfo] = useState(null);
   
   const partyDropdownRef = useRef(null);
 
@@ -44,6 +45,13 @@ const ReceivablesPayablesPage = () => {
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
     };
+  }, []);
+
+  // Fetch company info on mount
+  useEffect(() => {
+    axios.get(`${API_BASE_URL}/api/company`, getAuthHeaders())
+      .then(r => setCompanyInfo(r.data || {}))
+      .catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -257,13 +265,29 @@ const ReceivablesPayablesPage = () => {
     return (
       <div className="space-y-6">
         {/* Summary Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-            <h4 className="text-sm font-medium text-blue-900 mb-1">Total Outstanding</h4>
+            <h4 className="text-sm font-medium text-blue-900 mb-1">Gross Outstanding</h4>
             <p className="text-2xl font-bold text-blue-700">
               {formatCurrency(reportData.total_outstanding || 0)}
             </p>
           </div>
+          {reportData.total_unallocated_receipts > 0 && (
+            <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
+              <h4 className="text-sm font-medium text-purple-900 mb-1">Unallocated Receipts</h4>
+              <p className="text-2xl font-bold text-purple-700">
+                {formatCurrency(reportData.total_unallocated_receipts || 0)}
+              </p>
+            </div>
+          )}
+          {reportData.total_sales_returns > 0 && (
+            <div className="bg-teal-50 border border-teal-200 rounded-lg p-4">
+              <h4 className="text-sm font-medium text-teal-900 mb-1">Sales Returns</h4>
+              <p className="text-2xl font-bold text-teal-700">
+                {formatCurrency(reportData.total_sales_returns || 0)}
+              </p>
+            </div>
+          )}
           <div className="bg-green-50 border border-green-200 rounded-lg p-4">
             <h4 className="text-sm font-medium text-green-900 mb-1">Current (0-30 days)</h4>
             <p className="text-2xl font-bold text-green-700">
@@ -276,10 +300,28 @@ const ReceivablesPayablesPage = () => {
               {formatCurrency(reportData.aging_buckets?.['31_60'] || 0)}
             </p>
           </div>
+          <div className="bg-orange-50 border border-orange-200 rounded-lg p-4">
+            <h4 className="text-sm font-medium text-orange-900 mb-1">61-90 days</h4>
+            <p className="text-2xl font-bold text-orange-700">
+              {formatCurrency(reportData.aging_buckets?.['61_90'] || 0)}
+            </p>
+          </div>
           <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-            <h4 className="text-sm font-medium text-red-900 mb-1">Over 60 days</h4>
+            <h4 className="text-sm font-medium text-red-900 mb-1">91-180 days</h4>
             <p className="text-2xl font-bold text-red-700">
-              {formatCurrency(reportData.aging_buckets?.over_60 || 0)}
+              {formatCurrency(reportData.aging_buckets?.['91_180'] || 0)}
+            </p>
+          </div>
+          <div className="bg-red-100 border border-red-300 rounded-lg p-4">
+            <h4 className="text-sm font-medium text-red-900 mb-1">Over 180 days</h4>
+            <p className="text-2xl font-bold text-red-800">
+              {formatCurrency(reportData.aging_buckets?.over_180 || 0)}
+            </p>
+          </div>
+          <div className="bg-gray-50 border border-gray-300 rounded-lg p-4">
+            <h4 className="text-sm font-medium text-gray-900 mb-1">Net Outstanding</h4>
+            <p className="text-2xl font-bold text-gray-800">
+              {formatCurrency(reportData.net_outstanding ?? reportData.total_outstanding ?? 0)}
             </p>
           </div>
         </div>
@@ -290,58 +332,36 @@ const ReceivablesPayablesPage = () => {
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-50">
                 <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Document No
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Date
-                  </th>
-                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Amount (₹)
-                  </th>
-                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Paid (₹)
-                  </th>
-                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Outstanding (₹)
-                  </th>
-                  <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Days Overdue
-                  </th>
-                  <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Status
-                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Document No</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
+                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Amount (₹)</th>
+                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Allocated (₹)</th>
+                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Outstanding (₹)</th>
+                  <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Days</th>
+                  <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
                 {reportData.aging_details?.map((item, index) => (
                   <tr key={index} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                      {item.document_no}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {new Date(item.date).toLocaleDateString()}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-900">
-                      {formatCurrency(item.amount)}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-900">
-                      {formatCurrency(item.paid)}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-right font-medium text-gray-900">
-                      {formatCurrency(item.outstanding)}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-center text-gray-900">
-                      {item.days_overdue}
-                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{item.document_no}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{new Date(item.date).toLocaleDateString()}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-900">{formatCurrency(item.amount)}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-500">{formatCurrency(item.allocated || 0)}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-right font-medium text-gray-900">{formatCurrency(item.outstanding)}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-center text-gray-900">{item.days_overdue}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-center">
                       <span className={`px-2 py-1 text-xs font-semibold rounded-full ${
-                        item.days_overdue <= 30 ? 'bg-green-100 text-green-800' :
-                        item.days_overdue <= 60 ? 'bg-yellow-100 text-yellow-800' :
-                        'bg-red-100 text-red-800'
+                        item.days_overdue <= 30  ? 'bg-green-100 text-green-800' :
+                        item.days_overdue <= 60  ? 'bg-yellow-100 text-yellow-800' :
+                        item.days_overdue <= 90  ? 'bg-orange-100 text-orange-800' :
+                        item.days_overdue <= 180 ? 'bg-red-100 text-red-800' :
+                        'bg-red-200 text-red-900'
                       }`}>
-                        {item.days_overdue <= 30 ? 'Current' :
-                         item.days_overdue <= 60 ? 'Due' : 'Overdue'}
+                        {item.days_overdue <= 30  ? 'Current' :
+                         item.days_overdue <= 60  ? '31-60' :
+                         item.days_overdue <= 90  ? '61-90' :
+                         item.days_overdue <= 180 ? '91-180' : 'Over 180'}
                       </span>
                     </td>
                   </tr>
@@ -350,6 +370,19 @@ const ReceivablesPayablesPage = () => {
             </table>
           </div>
         </div>
+
+        {/* Unallocated receipts note */}
+        {(reportData.total_unallocated_receipts > 0 || reportData.total_sales_returns > 0) && (
+          <div className="bg-purple-50 border border-purple-200 rounded-lg p-4 text-sm text-purple-800 space-y-1">
+            {reportData.total_sales_returns > 0 && (
+              <div>Sales Returns: {formatCurrency(reportData.total_sales_returns)} reduce the net outstanding.</div>
+            )}
+            {reportData.total_unallocated_receipts > 0 && (
+              <div>Unallocated Receipts: {formatCurrency(reportData.total_unallocated_receipts)} are available and reduce the net outstanding.</div>
+            )}
+            <div className="font-semibold">Net Outstanding: {formatCurrency(reportData.net_outstanding)}</div>
+          </div>
+        )}
       </div>
     );
   };
@@ -644,6 +677,18 @@ const ReceivablesPayablesPage = () => {
           <div className="bg-white rounded-lg shadow-md overflow-hidden printable-report">
             {/* Report Header */}
             <div className="bg-gradient-to-r from-blue-600 to-blue-700 text-white p-6">
+              {/* Company info - top left */}
+              {companyInfo && (
+                <div className="text-left text-sm text-blue-100 mb-3">
+                  <div className="font-bold text-white text-base">{companyInfo.company_name}</div>
+                  {(companyInfo.address_line1 || companyInfo.city) && (
+                    <div>{[companyInfo.address_line1, companyInfo.city].filter(Boolean).join(', ')}</div>
+                  )}
+                  {(companyInfo.address_line2 || companyInfo.state) && (
+                    <div>{[companyInfo.address_line2, companyInfo.state].filter(Boolean).join(', ')}</div>
+                  )}
+                </div>
+              )}
               <h2 className="text-2xl font-bold text-center">
                 {currentReportConfig?.name}
               </h2>

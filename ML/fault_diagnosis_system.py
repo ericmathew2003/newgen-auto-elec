@@ -224,43 +224,64 @@ class FaultDiagnosisSystem:
         logger.info(f"Loaded fault-to-parts mapping for {len(self.fault_to_parts_map)} faults")
     
     def diagnose_fault(self, symptoms: List[str], vehicle_info: Dict = None) -> Dict:
-        """Diagnose fault based on symptoms"""
+        """Diagnose fault based on symptoms — each symptom diagnosed independently,
+        then results merged so multiple unrelated faults are all returned."""
         if not self.fault_classifier or not self.symptom_vectorizer:
             return {
                 "error": "Fault diagnosis models not available",
                 "predicted_faults": [],
                 "confidence_score": 0.0
             }
-        
+
         try:
-            # Combine symptoms into text
-            symptoms_text = " ".join(symptoms).lower()
-            
-            # Vectorize symptoms
-            X = self.symptom_vectorizer.transform([symptoms_text])
-            
-            # Predict fault
-            fault_probabilities = self.fault_classifier.predict_proba(X)[0]
-            fault_classes = self.fault_classifier.classes_
-            
-            # Get top 3 predictions
-            top_indices = np.argsort(fault_probabilities)[-3:][::-1]
-            
-            predicted_faults = []
-            for idx in top_indices:
-                if fault_probabilities[idx] > 0.1:  # Only include if confidence > 10%
-                    predicted_faults.append({
-                        "fault": fault_classes[idx],
-                        "confidence": float(fault_probabilities[idx]),
-                        "description": self._get_fault_description(fault_classes[idx])
-                    })
-            
+            seen_faults = {}  # fault_code -> best result so far
+
+            # 1. Diagnose each symptom individually
+            for symptom in symptoms:
+                X = self.symptom_vectorizer.transform([symptom.lower()])
+                probs = self.fault_classifier.predict_proba(X)[0]
+                classes = self.fault_classifier.classes_
+
+                top_indices = np.argsort(probs)[-3:][::-1]
+                for idx in top_indices:
+                    if probs[idx] > 0.1:
+                        fault_code = classes[idx]
+                        if fault_code not in seen_faults or probs[idx] > seen_faults[fault_code]["confidence"]:
+                            seen_faults[fault_code] = {
+                                "fault": fault_code,
+                                "confidence": float(probs[idx]),
+                                "description": self._get_fault_description(fault_code),
+                                "triggered_by": symptom
+                            }
+
+            # 2. Also run combined symptoms to catch cross-symptom patterns
+            if len(symptoms) > 1:
+                combined_text = " ".join(symptoms).lower()
+                X_combined = self.symptom_vectorizer.transform([combined_text])
+                probs_combined = self.fault_classifier.predict_proba(X_combined)[0]
+                classes = self.fault_classifier.classes_
+
+                top_indices = np.argsort(probs_combined)[-3:][::-1]
+                for idx in top_indices:
+                    if probs_combined[idx] > 0.15:  # slightly higher threshold for combined
+                        fault_code = classes[idx]
+                        if fault_code not in seen_faults or probs_combined[idx] > seen_faults[fault_code]["confidence"]:
+                            seen_faults[fault_code] = {
+                                "fault": fault_code,
+                                "confidence": float(probs_combined[idx]),
+                                "description": self._get_fault_description(fault_code),
+                                "triggered_by": "combined symptoms"
+                            }
+
+            # 3. Sort by confidence descending
+            predicted_faults = sorted(seen_faults.values(), key=lambda x: x["confidence"], reverse=True)
+
             return {
                 "predicted_faults": predicted_faults,
-                "confidence_score": float(fault_probabilities[top_indices[0]]) if predicted_faults else 0.0,
+                "confidence_score": predicted_faults[0]["confidence"] if predicted_faults else 0.0,
                 "symptoms_analyzed": symptoms
             }
-        
+
         except Exception as e:
             logger.error(f"Error in fault diagnosis: {e}")
             return {

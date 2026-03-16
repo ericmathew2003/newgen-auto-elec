@@ -215,7 +215,11 @@ const AccJournalEntryForm = () => {
       const response = await axios.get(`${API_BASE_URL}/api/party/all`, {
         headers: { Authorization: `Bearer ${token}` }
       });
-      setParties(response.data);
+      // Sort alphabetically by party name
+      const sorted = (response.data || []).sort((a, b) =>
+        String(a.partyname || '').localeCompare(String(b.partyname || ''), undefined, { sensitivity: 'base' })
+      );
+      setParties(sorted);
     } catch (error) {
       console.error('Error fetching parties:', error);
       showMessage('Failed to load parties', 'error');
@@ -727,22 +731,35 @@ const AccJournalEntryForm = () => {
                         />
                       </td>
                       <td className="p-2 whitespace-nowrap">
-                        <select
-                          value={line.partyId}
-                          onChange={(e) => handleLineChange(line.tempId, 'partyId', e.target.value)}
+                        <input
+                          list={`party-list-${line.tempId}`}
+                          value={
+                            line.partyId
+                              ? (parties.find(p => String(p.partyid) === String(line.partyId))?.partyname || line.partyId)
+                              : (line._partySearch || '')
+                          }
+                          onChange={(e) => {
+                            const typed = e.target.value;
+                            const match = parties.find(p =>
+                              String(p.partyname).toLowerCase() === typed.toLowerCase()
+                            );
+                            if (match) {
+                              handleLineChange(line.tempId, 'partyId', String(match.partyid));
+                              handleLineChange(line.tempId, '_partySearch', '');
+                            } else {
+                              handleLineChange(line.tempId, 'partyId', '');
+                              handleLineChange(line.tempId, '_partySearch', typed);
+                            }
+                          }}
+                          placeholder="Type to search party..."
                           className="w-full p-2 border border-gray-300 rounded-lg focus:ring-red-500 focus:border-red-500 text-sm"
-                        >
-                          <option value="">Select Party (Optional)</option>
-                          {parties.length === 0 ? (
-                            <option value="" disabled>No parties available</option>
-                          ) : (
-                            parties.map(party => (
-                              <option key={party.partyid} value={party.partyid}>
-                                {party.partyname}
-                              </option>
-                            ))
-                          )}
-                        </select>
+                          autoComplete="off"
+                        />
+                        <datalist id={`party-list-${line.tempId}`}>
+                          {parties.map(party => (
+                            <option key={party.partyid} value={party.partyname} />
+                          ))}
+                        </datalist>
                       </td>
                       <td className="p-2">
                         <input

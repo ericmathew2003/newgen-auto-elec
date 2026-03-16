@@ -66,7 +66,7 @@ router.get("/all", authenticateToken, async (req, res) => {
         a.account_name, 
         a.account_code
       FROM tblMasParty p
-      LEFT JOIN acc_mas_account a ON p.AccountID = a.account_id
+      LEFT JOIN acc_mas_coa a ON p.AccountID = a.account_id
       ORDER BY p.PartyID
     `);
     console.log(`Found ${result.rows.length} parties`);

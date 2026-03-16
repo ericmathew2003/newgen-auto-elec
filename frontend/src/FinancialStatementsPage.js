@@ -13,6 +13,15 @@ const FinancialStatementsPage = () => {
   const [loading, setLoading] = useState(false);
   const [reportData, setReportData] = useState(null);
   const [toast, setToast] = useState({ show: false, message: '', type: '' });
+  const [companyInfo, setCompanyInfo] = useState(null);
+
+  // Fetch company info on mount
+  React.useEffect(() => {
+    const token = localStorage.getItem('token');
+    axios.get(`${API_BASE_URL}/api/company`, { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => setCompanyInfo(r.data || {}))
+      .catch(() => {});
+  }, []);
 
   // Auto-hide toast after 3 seconds
   React.useEffect(() => {
@@ -136,13 +145,30 @@ const FinancialStatementsPage = () => {
 
     const doc = new jsPDF();
     const pageWidth = doc.internal.pageSize.getWidth();
-    
-    // Add header
-    doc.setFontSize(18);
+
+    // Company header - top left
+    let cursorY = 14;
+    if (companyInfo?.company_name) {
+      doc.setFontSize(13);
+      doc.setFont(undefined, 'bold');
+      doc.text(companyInfo.company_name, 14, cursorY);
+      cursorY += 6;
+      doc.setFontSize(9);
+      doc.setFont(undefined, 'normal');
+      const line2 = [companyInfo.address_line1, companyInfo.city].filter(Boolean).join(', ');
+      const line3 = [companyInfo.address_line2, companyInfo.state].filter(Boolean).join(', ');
+      if (line2) { doc.text(line2, 14, cursorY); cursorY += 5; }
+      if (line3) { doc.text(line3, 14, cursorY); cursorY += 5; }
+      cursorY += 2;
+    }
+
+    // Report title - centered
+    doc.setFontSize(16);
     doc.setFont(undefined, 'bold');
-    doc.text(reportData.report_name || selectedReportConfig?.name, pageWidth / 2, 20, { align: 'center' });
-    
-    // Add period/date
+    doc.text(reportData.report_name || selectedReportConfig?.name, pageWidth / 2, cursorY, { align: 'center' });
+    cursorY += 8;
+
+    // Period/date
     doc.setFontSize(10);
     doc.setFont(undefined, 'normal');
     let dateText = '';
@@ -151,24 +177,30 @@ const FinancialStatementsPage = () => {
     } else if (reportData.as_on_date) {
       dateText = `As on: ${new Date(reportData.as_on_date).toLocaleDateString()}`;
     }
-    doc.text(dateText, pageWidth / 2, 28, { align: 'center' });
+    if (dateText) { doc.text(dateText, pageWidth / 2, cursorY, { align: 'center' }); cursorY += 8; }
+
+    // Separator line
+    doc.setDrawColor(59, 130, 246);
+    doc.setLineWidth(0.5);
+    doc.line(14, cursorY, pageWidth - 14, cursorY);
+    cursorY += 6;
 
     // Generate content based on report type
     switch (selectedReport) {
       case 'trial-balance':
-        generateTrialBalancePDF(doc);
+        generateTrialBalancePDF(doc, cursorY);
         break;
       case 'trading-account':
-        generateTradingAccountPDF(doc);
+        generateTradingAccountPDF(doc, cursorY);
         break;
       case 'profit-loss':
-        generateProfitLossPDF(doc);
+        generateProfitLossPDF(doc, cursorY);
         break;
       case 'balance-sheet':
-        generateBalanceSheetPDF(doc);
+        generateBalanceSheetPDF(doc, cursorY);
         break;
       case 'cash-flow':
-        generateCashFlowPDF(doc);
+        generateCashFlowPDF(doc, cursorY);
         break;
       default:
         doc.text('Report generation not implemented', 20, 40);
@@ -197,7 +229,7 @@ const FinancialStatementsPage = () => {
   };
 
   // Generate Trial Balance PDF
-  const generateTrialBalancePDF = (doc) => {
+  const generateTrialBalancePDF = (doc, startY = 35) => {
     if (!reportData.accounts) return;
 
     const tableData = reportData.accounts.map(account => [
@@ -216,7 +248,7 @@ const FinancialStatementsPage = () => {
     ]);
 
     autoTable(doc, {
-      startY: 35,
+      startY,
       head: [['Account Code', 'Account Name', 'Group', 'Debit (Rs.)', 'Credit (Rs.)']],
       body: tableData,
       theme: 'grid',
@@ -232,13 +264,14 @@ const FinancialStatementsPage = () => {
     if (parseFloat(reportData.totals.difference) > 0.01) {
       const finalY = doc.lastAutoTable.finalY + 10;
       doc.setFontSize(10);
-      doc.setTextColor(255, 0, 0);
+      doc.setTextColor(220, 38, 38); // red
       doc.text(`Warning: Trial Balance is not balanced. Difference: Rs. ${formatNumberForPDF(reportData.totals.difference)}`, 20, finalY);
+      doc.setTextColor(0, 0, 0);
     }
   };
 
   // Generate Trading Account PDF
-  const generateTradingAccountPDF = (doc) => {
+  const generateTradingAccountPDF = (doc, startY = 35) => {
     if (!reportData.particulars) return;
 
     const { particulars } = reportData;
@@ -254,7 +287,7 @@ const FinancialStatementsPage = () => {
     ];
 
     autoTable(doc, {
-      startY: 35,
+      startY,
       head: [['Debit', 'Amount (Rs.)', 'Credit', 'Amount (Rs.)']],
       body: tableData,
       theme: 'grid',
@@ -279,10 +312,8 @@ const FinancialStatementsPage = () => {
   };
 
   // Generate Profit & Loss PDF
-  const generateProfitLossPDF = (doc) => {
+  const generateProfitLossPDF = (doc, startY = 35) => {
     if (!reportData.revenue || !reportData.expenses) return;
-
-    let startY = 35;
 
     // Revenue Section
     doc.setFontSize(12);
@@ -336,10 +367,8 @@ const FinancialStatementsPage = () => {
   };
 
   // Generate Balance Sheet PDF
-  const generateBalanceSheetPDF = (doc) => {
+  const generateBalanceSheetPDF = (doc, startY = 35) => {
     if (!reportData.assets || !reportData.liabilities) return;
-
-    let startY = 35;
 
     // Assets
     doc.setFontSize(12);
@@ -424,15 +453,19 @@ const FinancialStatementsPage = () => {
     startY = doc.lastAutoTable.finalY + 10;
     doc.setFontSize(10);
     doc.setFont(undefined, 'normal');
-    const balanceText = reportData.balanced ? '✓ Balance Sheet is balanced' : '⚠ Balance Sheet is not balanced';
-    doc.text(balanceText, 20, startY);
+    if (reportData.balanced) {
+      doc.setTextColor(22, 163, 74); // green
+      doc.text('Balance Sheet is balanced', 20, startY);
+    } else {
+      doc.setTextColor(202, 138, 4); // amber
+      doc.text('Balance Sheet is NOT balanced', 20, startY);
+    }
+    doc.setTextColor(0, 0, 0); // reset to black
   };
 
   // Generate Cash Flow PDF
-  const generateCashFlowPDF = (doc) => {
+  const generateCashFlowPDF = (doc, startY = 35) => {
     if (!reportData.operating_activities) return;
-
-    let startY = 35;
 
     // Operating Activities
     doc.setFontSize(12);
@@ -1134,6 +1167,18 @@ const FinancialStatementsPage = () => {
                   <div className="bg-white rounded-lg shadow-md overflow-hidden">
                     {/* Report Header */}
                     <div className="bg-gradient-to-r from-blue-600 to-blue-700 text-white p-6">
+                      {/* Company info - top left */}
+                      {companyInfo && (
+                        <div className="text-left text-sm text-blue-100 mb-3">
+                          <div className="font-bold text-white text-base">{companyInfo.company_name}</div>
+                          {(companyInfo.address_line1 || companyInfo.city) && (
+                            <div>{[companyInfo.address_line1, companyInfo.city].filter(Boolean).join(', ')}</div>
+                          )}
+                          {(companyInfo.address_line2 || companyInfo.state) && (
+                            <div>{[companyInfo.address_line2, companyInfo.state].filter(Boolean).join(', ')}</div>
+                          )}
+                        </div>
+                      )}
                       <h2 className="text-2xl font-bold text-center">
                         {reportData.report_name || selectedReportConfig?.name}
                       </h2>
