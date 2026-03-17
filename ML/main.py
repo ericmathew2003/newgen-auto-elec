@@ -3,7 +3,7 @@ Unified ML Service for Render deployment
 Mounts all ML sub-apps under path prefixes on a single port.
 
   /cashflow  -> Cash Flow Prediction (cashflow_service.py)
-  /fault     -> Fault Diagnosis (fault_diagnosis_system.py)
+  /fault     -> Fault Diagnosis (advanced_fault_diagnosis.py)
   /parts     -> Parts Vision (parts_vision_service.py)
   /health    -> Health check
 """
@@ -68,11 +68,11 @@ except Exception as e:
     print(f"⚠️  Cashflow service failed to load: {e}")
 
 try:
-    from fault_diagnosis_system import app as fault_app
+    from advanced_fault_diagnosis import app as fault_app
     app.mount("/fault", fault_app)
-    print("✅ Fault diagnosis service mounted at /fault")
+    print("✅ Advanced fault diagnosis service mounted at /fault")
 except Exception as e:
-    print(f"⚠️  Fault diagnosis service failed to load: {e}")
+    print(f"⚠️  Advanced fault diagnosis service failed to load: {e}")
 
 try:
     from parts_vision_service import app as parts_app

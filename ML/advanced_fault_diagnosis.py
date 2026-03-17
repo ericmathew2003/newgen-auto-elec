@@ -80,13 +80,8 @@ class SymptomInput(BaseModel):
 
 def get_db():
     try:
-        return psycopg2.connect(
-            host=os.getenv('DB_HOST', 'localhost'),
-            port=os.getenv('DB_PORT', '5433'),
-            database=os.getenv('DB_NAME', 'newgen'),
-            user=os.getenv('DB_USER', 'postgres'),
-            password=os.getenv('DB_PASSWORD', 'eric@123')
-        )
+        from db_utils import get_connection
+        return get_connection()
     except Exception as e:
         logger.error(f"Database connection failed: {e}")
         return None
