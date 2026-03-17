@@ -12,10 +12,6 @@ numpy==1.26.4
 pandas==2.2.3
 joblib==1.4.2
 
-# TensorFlow CPU (for parts vision classification)
-# Note: ~500MB install — requires Render paid tier (512MB+ RAM)
-tensorflow-cpu==2.15.0
-
 # Computer Vision
 Pillow==10.4.0
 opencv-python-headless==4.10.0.84
