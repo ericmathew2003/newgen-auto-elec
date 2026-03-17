@@ -685,46 +685,90 @@ class AdvancedFaultDiagnosisSystem:
         except Exception as e:
             logger.error(f"Failed to precompute embeddings: {e}")
     
-    # System keyword guard: if symptom contains a system keyword, restrict to that system's faults
+    # System keyword guard: if symptom contains a system keyword, restrict to that system's faults.
+    # NOTE: Keep this list broad — missing a keyword means the user gets NO results on the fallback path.
     SYSTEM_KEYWORDS = {
         "brake": ["brake_pad_wear", "brake_fluid_leak", "warped_brake_disc", "brake_caliper_fault"],
+        "braking": ["brake_pad_wear", "brake_fluid_leak", "warped_brake_disc", "brake_caliper_fault"],
         "clutch": ["clutch_wear", "transmission_fluid_low"],
         "gear": ["transmission_fluid_low", "transmission_gear_fault", "clutch_wear"],
+        "gearbox": ["transmission_fluid_low", "transmission_gear_fault", "clutch_wear"],
         "transmission": ["transmission_fluid_low", "transmission_gear_fault", "clutch_wear"],
         "steering": ["power_steering_failure", "wheel_alignment_issue", "steering_joint_wear"],
         "engine": ["cooling_system_failure", "battery_charging_failure", "engine_misfire",
                    "engine_bearing_wear", "oil_seal_failure", "head_gasket_failure",
                    "engine_management_fault", "fuel_system_issue", "fuel_injector_fault"],
+        "overheat": ["cooling_system_failure", "head_gasket_failure", "radiator_leak"],
+        "hot": ["cooling_system_failure", "head_gasket_failure"],
+        "temperature": ["cooling_system_failure", "head_gasket_failure"],
         "coolant": ["cooling_system_failure", "head_gasket_failure", "radiator_leak"],
         "radiator": ["cooling_system_failure", "radiator_leak"],
         "oil": ["oil_seal_failure", "engine_bearing_wear"],
         "fuel": ["fuel_system_issue", "fuel_injector_fault"],
+        "stall": ["fuel_system_issue", "engine_misfire", "battery_charging_failure"],
         "exhaust": ["exhaust_system_damage", "catalytic_converter_failure"],
+        "smoke": ["oil_seal_failure", "head_gasket_failure", "exhaust_system_damage", "fuel_injector_fault"],
         "tyre": ["tyre_puncture", "wheel_bearing_failure", "wheel_alignment_issue"],
         "tire": ["tyre_puncture", "wheel_bearing_failure", "wheel_alignment_issue"],
         "wheel": ["wheel_bearing_failure", "tyre_puncture", "wheel_alignment_issue"],
+        "puncture": ["tyre_puncture"],
+        "flat": ["tyre_puncture"],
         "suspension": ["shock_absorber_wear", "suspension_component_wear", "wheel_alignment_camber"],
+        "bounce": ["shock_absorber_wear", "suspension_component_wear"],
+        "rough ride": ["shock_absorber_wear", "suspension_component_wear"],
+        "vibrat": ["wheel_alignment_issue", "warped_brake_disc", "wheel_bearing_failure", "engine_misfire"],
+        "shake": ["wheel_alignment_issue", "warped_brake_disc", "engine_misfire"],
+        "shaking": ["wheel_alignment_issue", "warped_brake_disc", "engine_misfire"],
+        "knock": ["engine_bearing_wear", "steering_joint_wear", "suspension_component_wear"],
+        "noise": ["brake_pad_wear", "wheel_bearing_failure", "engine_bearing_wear",
+                  "exhaust_system_damage", "suspension_component_wear"],
+        "squeal": ["brake_pad_wear"],
+        "grind": ["brake_pad_wear", "wheel_bearing_failure"],
         "ac": ["ac_system_failure", "ac_evaporator_contamination"],
-        "air conditioning": ["ac_system_failure", "ac_evaporator_contamination"],
+        "air condition": ["ac_system_failure", "ac_evaporator_contamination"],
+        "cooling": ["ac_system_failure", "cooling_system_failure"],
         "battery": ["battery_charging_failure", "alternator_failure", "electrical_short_circuit"],
+        "start": ["battery_charging_failure", "starter_motor_failure"],
+        "crank": ["battery_charging_failure", "starter_motor_failure"],
         "alternator": ["alternator_failure", "battery_charging_failure"],
+        "charge": ["alternator_failure", "battery_charging_failure"],
         "starter": ["starter_motor_failure", "battery_charging_failure"],
+        "electric": ["electrical_short_circuit", "alternator_failure", "battery_charging_failure"],
         "light": ["lighting_failure", "alternator_failure"],
+        "headlight": ["lighting_failure", "alternator_failure"],
         "window": ["window_regulator_failure"],
         "wiper": ["wiper_system_fault"],
         "horn": ["horn_failure"],
+        "pull": ["wheel_alignment_issue", "brake_caliper_fault", "tyre_puncture"],
+        "drift": ["wheel_alignment_issue", "tyre_puncture"],
+        "misfire": ["engine_misfire"],
+        "idle": ["engine_misfire", "fuel_system_issue"],
+        "hesitat": ["engine_misfire", "fuel_system_issue"],
+        "power": ["engine_misfire", "fuel_system_issue", "alternator_failure"],
+        "leak": ["oil_seal_failure", "brake_fluid_leak", "radiator_leak", "fuel_system_issue"],
+        "smell": ["oil_seal_failure", "fuel_system_issue", "ac_evaporator_contamination",
+                  "exhaust_system_damage", "clutch_wear"],
+        "warning": ["engine_management_fault", "brake_fluid_leak", "battery_charging_failure"],
+        "check engine": ["engine_management_fault"],
     }
 
     def _allowed_faults(self, symptom: str) -> set:
         """Return allowed fault codes based on system keywords. Empty set = no restriction."""
-        # Normalize: collapse spaces so "over heating" matches "overheating" keyword
         s = self._normalize(symptom)
         s_nospace = s.replace(' ', '')
         allowed = set()
         for kw, faults in self.SYSTEM_KEYWORDS.items():
             kw_norm = kw.replace(' ', '')
+            # Substring match (handles multi-word keys like "check engine", "air condition")
             if kw_norm in s_nospace or kw in s:
                 allowed.update(faults)
+                continue
+            # Prefix/stem match: user word starts with keyword or keyword starts with user word
+            # e.g. keyword "overheat" matches user word "overheating"
+            for user_word in s.split():
+                if len(user_word) > 3 and (user_word.startswith(kw_norm) or kw_norm.startswith(user_word)):
+                    allowed.update(faults)
+                    break
         return allowed
 
     def analyze_symptoms_with_nlp(self, symptoms: List[str]) -> Dict:
@@ -813,7 +857,8 @@ class AdvancedFaultDiagnosisSystem:
     def _symptom_matches(self, kb_symptom: str, user_input: str) -> bool:
         """
         Check if a knowledge-base symptom phrase matches user input.
-        Handles: exact substring, space-collapsed variants, individual keywords.
+        Handles: exact substring, space-collapsed variants, individual keywords,
+        and partial word stems (e.g. "overheat" matches "overheating").
         """
         kb = self._normalize(kb_symptom)
         user = self._normalize(user_input)
@@ -832,6 +877,15 @@ class AdvancedFaultDiagnosisSystem:
         kb_words = [w for w in kb.split() if len(w) > 3]  # skip short words
         if kb_words and all(w in user for w in kb_words):
             return True
+
+        # 4. Stem/prefix match — any significant KB word starts with a user word stem
+        #    e.g. "overheat" in KB matches user typing "overheating", "overheated"
+        user_words = [w for w in user.split() if len(w) > 3]
+        for kb_word in kb_words:
+            for user_word in user_words:
+                # KB word is prefix of user word (e.g. "overheat" -> "overheating")
+                if user_word.startswith(kb_word) or kb_word.startswith(user_word):
+                    return True
 
         return False
 
