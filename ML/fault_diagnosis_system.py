@@ -230,7 +230,9 @@ class FaultDiagnosisSystem:
             return {
                 "error": "Fault diagnosis models not available",
                 "predicted_faults": [],
-                "confidence_score": 0.0
+                "confidence_score": 0.0,
+                "nlp_available": False,
+                "analysis_method": "unavailable"
             }
 
         try:
@@ -279,7 +281,9 @@ class FaultDiagnosisSystem:
             return {
                 "predicted_faults": predicted_faults,
                 "confidence_score": predicted_faults[0]["confidence"] if predicted_faults else 0.0,
-                "symptoms_analyzed": symptoms
+                "symptoms_analyzed": symptoms,
+                "nlp_available": ML_AVAILABLE,
+                "analysis_method": "sklearn_tfidf_random_forest" if ML_AVAILABLE else "fallback"
             }
 
         except Exception as e:
@@ -287,7 +291,9 @@ class FaultDiagnosisSystem:
             return {
                 "error": str(e),
                 "predicted_faults": [],
-                "confidence_score": 0.0
+                "confidence_score": 0.0,
+                "nlp_available": ML_AVAILABLE,
+                "analysis_method": "error"
             }
     
     def _get_fault_description(self, fault_code: str) -> str:

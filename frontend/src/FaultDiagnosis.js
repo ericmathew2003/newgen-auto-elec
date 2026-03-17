@@ -280,7 +280,7 @@ const FaultDiagnosis = () => {
                             <p className="font-medium">{diagnosis.diagnosis.analysis_method?.replace(/_/g, ' ').toUpperCase()}</p>
                           </div>
                           <div>
-                            <p className="text-gray-600">NLP Available</p>
+                            <p className="text-gray-600">ML Available</p>
                             <p className="font-medium">{diagnosis.diagnosis.nlp_available ? '✅ Yes' : '❌ No'}</p>
                           </div>
                           <div>
