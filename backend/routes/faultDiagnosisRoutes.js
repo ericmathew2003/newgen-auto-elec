@@ -3,7 +3,9 @@ const router = express.Router();
 const axios = require('axios');
 const { authenticateToken } = require('../middleware/auth');
 
-const FAULT_DIAGNOSIS_SERVICE_URL = 'http://localhost:8009';
+const FAULT_DIAGNOSIS_SERVICE_URL = process.env.ML_SERVICE_URL 
+  ? `${process.env.ML_SERVICE_URL}/fault`
+  : 'http://localhost:8009';
 
 // Diagnose fault based on symptoms
 router.post('/diagnose', authenticateToken, async (req, res) => {

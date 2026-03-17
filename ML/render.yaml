@@ -1,0 +1,26 @@
+services:
+  - type: web
+    name: newgen-auto-ml
+    runtime: python
+    rootDir: ML
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.0
+      - key: DB_HOST
+        sync: false          # Not needed when using DATABASE_URL
+      - key: DB_PORT
+        sync: false
+      - key: DB_NAME
+        sync: false
+      - key: DB_USER
+        sync: false
+      - key: DB_PASSWORD
+        sync: false
+      - key: DATABASE_URL
+        value: postgresql://neondb_owner:npg_nF9IbkoU8xqW@ep-mute-block-afj1xofd-pooler.c-2.us-west-2.aws.neon.tech/neondb?sslmode=require&channel_binding=require
+      - key: VERCEL_FRONTEND_URL
+        value: https://newgen-auto-frontend.vercel.app
+      - key: VERCEL_BACKEND_URL
+        value: https://newgen-auto-elec.vercel.app

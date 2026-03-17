@@ -4,7 +4,9 @@ const axios = require("axios");
 const router = express.Router();
 
 // Python ML Service Configuration
-const PYTHON_ML_SERVICE = process.env.PYTHON_ML_SERVICE_URL || 'http://localhost:8000';
+// When ML_SERVICE_URL is set (hosted), cashflow is at /cashflow prefix
+const _mlBase = process.env.ML_SERVICE_URL || process.env.PYTHON_ML_SERVICE_URL || 'http://localhost:8001';
+const PYTHON_ML_SERVICE = process.env.ML_SERVICE_URL ? `${_mlBase}/cashflow` : _mlBase;
 
 // Helper function to handle ML service requests
 async function callPythonMLService(endpoint, params = {}) {
