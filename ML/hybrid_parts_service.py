@@ -102,14 +102,16 @@ class HybridPartsService:
     
     def load_part_categories(self):
         """Load part categories from your trained model"""
-        class_indices_path = 'ML/models/class_indices.json'
-        if os.path.exists(class_indices_path):
-            with open(class_indices_path, 'r') as f:
-                class_indices = json.load(f)
-            self.part_categories = [k for k, v in sorted(class_indices.items(), key=lambda x: x[1])]
-            logger.info(f"Loaded {len(self.part_categories)} categories")
-        else:
-            self.part_categories = ['oil_filter', 'air_filter', 'brake_pad', 'alternator', 'lights']
+        # Try both relative paths (service runs from ML/ dir or project root)
+        for path in ['models/class_indices.json', 'ML/models/class_indices.json']:
+            if os.path.exists(path):
+                with open(path, 'r') as f:
+                    class_indices = json.load(f)
+                self.part_categories = [k for k, v in sorted(class_indices.items(), key=lambda x: x[1])]
+                logger.info(f"Loaded {len(self.part_categories)} categories from {path}")
+                return
+        self.part_categories = ['oil_filter', 'air_filter', 'brake_pad', 'alternator', 'lights']
+        logger.warning("class_indices.json not found, using defaults")
     
     def _initialize_google_vision(self):
         """Initialize Google Vision API client (optional)"""
@@ -135,8 +137,8 @@ class HybridPartsService:
             return
         
         model_paths = [
-            'ML/models/parts_classifier.h5',
-            'models/parts_classifier.h5'
+            'models/parts_classifier.h5',
+            'ML/models/parts_classifier.h5'
         ]
         
         for model_path in model_paths:
@@ -224,44 +226,51 @@ class HybridPartsService:
         """Classify using your trained model"""
         if not self.parts_classifier:
             return "unknown", 0.0
-        
+
         try:
-            # Preprocess image (same as original)
             img = Image.open(io.BytesIO(image_data))
             if img.mode != 'RGB':
                 img = img.convert('RGB')
-            
+
             img = img.resize((224, 224))
             img_array = keras_image.img_to_array(img)
             img_array = np.expand_dims(img_array, axis=0)
             img_array = preprocess_input(img_array)
-            
-            # Predict
+
             predictions = self.parts_classifier.predict(img_array, verbose=0)
             predicted_idx = np.argmax(predictions[0])
             confidence = float(predictions[0][predicted_idx])
-            
+
             if predicted_idx < len(self.part_categories):
                 category = self.part_categories[predicted_idx]
             else:
                 category = "unknown"
-            
+
             logger.info(f"Your model: {category} (confidence: {confidence:.3f})")
             return category, confidence
-        
+
         except Exception as e:
             logger.error(f"Model classification error: {e}")
             return "unknown", 0.0
     
     def smart_filtering(self, google_result: Dict, your_category: str, your_confidence: float) -> Dict:
         """Smart filtering using available information"""
-        
+
+        # If neither Google Vision nor the local model is available,
+        # skip filtering entirely — don't reject valid parts just because
+        # the model isn't loaded (e.g. TF not installed on Render free tier)
+        model_available = self.parts_classifier is not None
+        google_available = google_result['available']
+
+        if not model_available and not google_available:
+            return {'is_automotive': True, 'reason': 'no_filter_available'}
+
         # If Google Vision is available, use it for filtering
-        if google_result['available']:
-            non_automotive_objects = [obj for obj in google_result['objects'] 
+        if google_available:
+            non_automotive_objects = [obj for obj in google_result['objects']
                                     if obj['category'] == 'non_automotive']
-            
-            # If Google clearly sees non-automotive objects with high confidence
+
+            # Only reject if Google is very confident it's non-automotive
             if non_automotive_objects:
                 highest_non_auto = max(non_automotive_objects, key=lambda x: x['confidence'])
                 if highest_non_auto['confidence'] > 0.8:
@@ -270,30 +279,30 @@ class HybridPartsService:
                         'reason': 'google_non_automotive',
                         'message': f'Google Vision detected {highest_non_auto["name"]} with high confidence'
                     }
-            
+
             # If Google sees automotive objects, allow through
-            automotive_objects = [obj for obj in google_result['objects'] 
+            automotive_objects = [obj for obj in google_result['objects']
                                 if obj['category'] == 'automotive']
             if automotive_objects:
                 return {'is_automotive': True, 'reason': 'google_automotive'}
-        
-        # Fallback to your model confidence
-        if your_confidence < 0.3:
+
+        # Only apply model confidence filter when the model is actually loaded
+        if model_available and your_confidence < 0.3:
             return {
                 'is_automotive': False,
                 'reason': 'low_model_confidence',
                 'message': f'Low classification confidence ({your_confidence:.2f})'
             }
-        
+
         # Special case: "lights" with medium confidence might be anime/artistic
-        if your_category == 'lights' and your_confidence < 0.9:
+        if model_available and your_category == 'lights' and your_confidence < 0.9:
             return {
                 'is_automotive': False,
                 'reason': 'suspicious_lights',
-                'message': f'Suspicious lights classification (confidence: {your_confidence:.2f}). May be artistic content with lighting effects.'
+                'message': f'Suspicious lights classification (confidence: {your_confidence:.2f}).'
             }
-        
-        return {'is_automotive': True, 'reason': 'model_confident'}
+
+        return {'is_automotive': True, 'reason': 'model_confident' if model_available else 'no_filter_available'}
     
     def search_inventory(self, category: str, part_numbers: List[str] = None) -> List[Dict]:
         """Search inventory"""
@@ -352,16 +361,16 @@ class HybridPartsService:
     
     def identify_part(self, image_data: bytes) -> Dict:
         """Main identification method"""
-        
+
         # Step 1: Analyze with Google Vision (if available)
         google_result = self.analyze_with_google_vision(image_data)
-        
-        # Step 2: Classify with your model
+
+        # Step 2: Classify with your model (may return unknown/0.0 if model not loaded)
         your_category, your_confidence = self.classify_with_your_model(image_data)
-        
-        # Step 3: Smart filtering
+
+        # Step 3: Smart filtering — skipped gracefully when no model/Google available
         filter_result = self.smart_filtering(google_result, your_category, your_confidence)
-        
+
         if not filter_result['is_automotive']:
             return {
                 'success': False,
@@ -373,10 +382,12 @@ class HybridPartsService:
                     'confidence': your_confidence
                 }
             }
-        
+
         # Step 4: Search inventory
-        inventory_matches = self.search_inventory(your_category)
-        
+        # When model is unavailable, search broadly using 'general' so we still return results
+        search_category = your_category if (self.parts_classifier and your_category != 'unknown') else None
+        inventory_matches = self.search_inventory(search_category)
+
         return {
             'success': True,
             'google_vision': {
@@ -385,7 +396,7 @@ class HybridPartsService:
                 'texts': google_result.get('texts', [])
             },
             'your_model': {
-                'category': your_category,
+                'category': your_category if self.parts_classifier else 'model_unavailable',
                 'confidence': your_confidence
             },
             'inventory_matches': inventory_matches,
@@ -423,21 +434,34 @@ async def health_check():
 async def identify_part(file: UploadFile = File(...)):
     """Smart part identification"""
     try:
-        if not file.content_type.startswith('image/'):
+        if not file.content_type or not file.content_type.startswith('image/'):
             raise HTTPException(status_code=400, detail="File must be an image")
-        
+
         image_data = await file.read()
+
         result = hybrid_service.identify_part(image_data)
-        
+
         return {
             "filename": file.filename,
             "timestamp": datetime.now().isoformat(),
             **result
         }
-    
+
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error processing image: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        # Return a safe success response with no category rather than a 500
+        return {
+            "filename": file.filename if file else "unknown",
+            "timestamp": datetime.now().isoformat(),
+            "success": True,
+            "your_model": {"category": "unknown", "confidence": 0.0},
+            "inventory_matches": [],
+            "match_count": 0,
+            "filter_reason": "error_fallback",
+            "error_detail": str(e)
+        }
 
 if __name__ == "__main__":
     print("\n" + "="*70)

@@ -46,6 +46,12 @@ async function callMLService(endpoint, fileBuffer, originalname, mimetype) {
         detected_object: data.detected_object, results: { category: 'not_automotive', confidence: 0, part_number: null } };
     }
 
+    // Any other ML-side rejection — treat as unidentified rather than hard error
+    if (data.success === false) {
+      return { success: true, filtered: false, results: {
+        category: 'general', confidence: 0, part_number: null, inventory_matches: [] } };
+    }
+
     if (data.success && data.your_model) {
       return { success: true, filtered: false, results: {
         category: data.your_model.category, confidence: data.your_model.confidence,
@@ -98,13 +104,13 @@ router.post('/identify', authenticateToken, upload.single('image'), async (req, 
     console.log(`Processing part identification for file: ${req.file.originalname}`);
     
     // Call ML service for identification — pass buffer directly (no disk I/O)
-    const mlResult = await callMLService('/identify', req.file.buffer, req.file.originalname, req.file.mimetype);
+    let mlResult = await callMLService('/identify', req.file.buffer, req.file.originalname, req.file.mimetype);
     
     console.log('ML Service Response:', JSON.stringify(mlResult, null, 2));
     
     // Handle filtered rejection (non-automotive image)
-    if (mlResult.success === false) {
-      console.log('Image rejected by hybrid service:', mlResult.reason);
+    if (mlResult.success === false && mlResult.filtered) {
+      console.log('Image rejected as non-automotive:', mlResult.reason);
       return res.status(400).json({
         success: false,
         filtered: true,
@@ -114,22 +120,16 @@ router.post('/identify', authenticateToken, upload.single('image'), async (req, 
         suggestion: 'Please upload an image of a car part (brake pad, filter, bearing, etc.)'
       });
     }
-    
+
+    // ML service error or any other failure — fall through to DB-only mode
     if (!mlResult || !mlResult.success) {
-      console.error('ML service failed:', mlResult);
-      return res.status(500).json({ 
-        error: 'ML service failed to process image',
-        details: mlResult ? mlResult.error : 'No response from ML service'
-      });
+      console.log('ML service unavailable or failed, using DB fallback');
+      mlResult = { success: true, results: { category: null, confidence: 0, part_number: null } };
     }
     
     // Validate ML results
     if (!mlResult.results) {
-      console.error('ML service returned no results');
-      return res.status(500).json({ 
-        error: 'ML service returned invalid response',
-        details: 'No results object in response'
-      });
+      mlResult.results = { category: null, confidence: 0, part_number: null };
     }
 
     const { category, confidence, part_number } = mlResult.results || {};

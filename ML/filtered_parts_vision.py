@@ -241,125 +241,54 @@ class FilteredPartsVision:
     
     def is_automotive_part(self, image_data: bytes) -> Tuple[bool, float, str]:
         """
-        Pre-filter: Check if image contains automotive parts
+        Pre-filter: Only reject images that are CLEARLY non-automotive
+        (people, animals, food, furniture). Everything else passes through —
+        ImageNet was not trained on auto parts, so unknown classes are likely parts.
         Returns: (is_automotive, confidence, detected_object)
         """
         if not self.automotive_filter:
-            return True, 1.0, "filter_unavailable"  # Allow through if filter unavailable
-        
+            return True, 1.0, "filter_unavailable"
+
         try:
-            # Preprocess for ImageNet (different preprocessing)
             img_array = self.preprocess_image(image_data)
-            
-            # Get ImageNet predictions
             predictions = self.automotive_filter.predict(img_array, verbose=0)
-            top_pred_idx = np.argmax(predictions[0])
+            top_pred_idx = int(np.argmax(predictions[0]))
             confidence = float(predictions[0][top_pred_idx])
-            
-            # Get top 3 predictions to better understand the image
-            top3_indices = np.argsort(predictions[0])[-3:][::-1]
-            top3_confidences = [float(predictions[0][i]) for i in top3_indices]
-            
-            # ImageNet class names (simplified automotive-related classes)
-            automotive_classes = {
-                # Vehicle parts and automotive objects
-                436: 'beach_wagon',  # station wagon
-                511: 'convertible',
-                609: 'jeep',
-                627: 'limousine',
-                656: 'minivan',
-                705: 'passenger_car',
-                717: 'pickup',
-                734: 'racer',
-                751: 'recreational_vehicle',
-                817: 'sports_car',
-                829: 'streetcar',
-                864: 'tow_truck',
-                
-                # Mechanical parts
-                468: 'brake_light',
-                545: 'gear',
-                571: 'headlight',
-                
-                # Tools and mechanical objects
-                491: 'chain_saw',
-                677: 'motor_scooter',
-                803: 'space_heater',
+
+            # ONLY reject things that are unambiguously not auto parts.
+            # Keep this list small and obvious — false negatives (rejecting real parts)
+            # are much worse than false positives (letting non-parts through).
+            OBVIOUS_NON_AUTOMOTIVE = {
+                # Animals
+                207, 208, 209, 210, 211, 212, 213,  # dogs
+                281, 282, 283, 284, 285, 286,        # cats
+                # People / body parts
+                # (ImageNet doesn't have many explicit person classes, skip)
+                # Food
+                924, 950, 951, 952, 953, 954, 948, 949,  # fruits
+                963, 964, 965, 966, 967, 968,             # food items
+                # Furniture / household
+                526, 559, 423, 424,   # tables, chairs, desks
+                # Clothing
+                514, 610, 776, 474,   # hats, jersey, sandal, bra
+                # Entertainment
+                722,  # ping pong ball
             }
-            
-            # Objects that are clearly NOT automotive (strict rejection)
-            non_automotive_classes = {
-                # People and characters
-                281: 'tabby_cat',
-                207: 'golden_retriever',
-                285: 'Egyptian_cat',
-                # Clothing and accessories
-                514: 'cowboy_hat',
-                610: 'jersey',
-                # Office/household items
-                417: 'ballpoint_pen',
-                445: 'book',
-                526: 'dining_table',
-                559: 'folding_chair',
-                # Food items
-                924: 'banana',
-                950: 'orange',
-                # Entertainment/media
-                722: 'ping_pong_ball',
-                # Fantasy/anime related (common misclassifications)
-                513: 'cornet',  # musical instruments
-                776: 'sandal',  # clothing
-                # Art/decorative items
-                644: 'matchstick',
-                846: 'television',
-            }
-            
-            # Check if top prediction is clearly automotive
-            if top_pred_idx in automotive_classes:
-                detected_object = automotive_classes[top_pred_idx]
-                is_automotive = True
-                logger.info(f"🚗 Automotive object detected: {detected_object} (confidence: {confidence:.3f})")
-            
-            # Check if top prediction is clearly non-automotive
-            elif top_pred_idx in non_automotive_classes:
-                detected_object = non_automotive_classes[top_pred_idx]
-                is_automotive = False
-                logger.info(f"❌ Non-automotive object detected: {detected_object} (confidence: {confidence:.3f})")
-            
-            else:
-                # For unknown classes, use more sophisticated logic
-                detected_object = f"class_{top_pred_idx}"
-                
-                # Check if ANY of the top 3 predictions are clearly non-automotive
-                non_automotive_in_top3 = any(idx in non_automotive_classes for idx in top3_indices)
-                automotive_in_top3 = any(idx in automotive_classes for idx in top3_indices)
-                
-                # If high confidence in non-automotive OR multiple non-automotive in top predictions
-                if (confidence > 0.7 and top_pred_idx in non_automotive_classes) or non_automotive_in_top3:
-                    is_automotive = False
-                    logger.info(f"❌ Likely non-automotive: {detected_object} (confidence: {confidence:.3f})")
-                
-                # If automotive classes in top 3 OR very low confidence (uncertain)
-                elif automotive_in_top3 or confidence < 0.5:
-                    is_automotive = True
-                    logger.info(f"🤔 Uncertain, allowing through: {detected_object} (confidence: {confidence:.3f})")
-                
-                # Medium confidence in unknown object - check if it could be mechanical
-                elif confidence < 0.8:
-                    # Allow through if not obviously non-automotive
-                    is_automotive = True
-                    logger.info(f"🔧 Possible mechanical object: {detected_object} (confidence: {confidence:.3f})")
-                
-                else:
-                    # High confidence in unknown object - be more cautious
-                    is_automotive = False
-                    logger.info(f"❌ High confidence non-automotive: {detected_object} (confidence: {confidence:.3f})")
-            
-            return is_automotive, confidence, detected_object
-            
+
+            detected_object = f"imagenet_class_{top_pred_idx}"
+
+            if top_pred_idx in OBVIOUS_NON_AUTOMOTIVE and confidence > 0.6:
+                logger.info(f"❌ Rejected obvious non-automotive class {top_pred_idx} (conf: {confidence:.3f})")
+                return False, confidence, detected_object
+
+            # Everything else — metal objects, cylinders, mechanical things,
+            # unknown classes — allow through. The parts classifier handles the rest.
+            logger.info(f"✅ Allowing through class {top_pred_idx} (conf: {confidence:.3f})")
+            return True, confidence, detected_object
+
         except Exception as e:
             logger.error(f"Error in automotive filter: {e}")
-            return True, 0.0, "error"  # Allow through on error
+            return True, 0.0, "error"
     
     def classify_part_category(self, image_data: bytes) -> Tuple[str, float]:
         """Classify part category (only called after automotive filter passes)"""
@@ -515,45 +444,29 @@ class FilteredPartsVision:
     
     def identify_part(self, image_data: bytes) -> Dict:
         """Main identification method with pre-filtering"""
-        
-        # Step 1: Pre-filter - Is this an automotive part?
+
+        # Step 1: Pre-filter — only rejects obvious non-automotive (animals, food, etc.)
         is_automotive, filter_confidence, detected_object = self.is_automotive_part(image_data)
-        
-        # SIMPLIFIED LOGIC: Only reject obvious non-automotive items
-        # Allow most things through to avoid rejecting legitimate parts
-        if not is_automotive and filter_confidence > 0.8:
-            # Only reject if ImageNet is very confident it's non-automotive
+
+        if not is_automotive:
             return {
                 'success': False,
                 'reason': 'not_automotive_part',
                 'detected_object': detected_object,
                 'filter_confidence': filter_confidence,
-                'message': f'This appears to be a {detected_object}, not an automotive part.'
+                'message': 'This image does not appear to contain automotive parts.'
             }
-        
+
         # Step 2: Classify part category
         category, category_confidence = self.classify_part_category(image_data)
-        
-        # Step 3: Enhanced confidence check with category-specific logic
-        # TEMPORARILY RELAXED FOR DEBUGGING - Let's see what the model actually predicts
-        
-        # Only reject if confidence is extremely low
-        if category_confidence < 0.2:
-            return {
-                'success': False,
-                'reason': 'very_low_confidence',
-                'detected_object': detected_object,
-                'filter_confidence': filter_confidence,
-                'classification_confidence': category_confidence,
-                'message': f'Very low classification confidence ({category_confidence:.2f}). This may not be an automotive part.'
-            }
-        
-        # Step 4: Extract text and keywords
+
+        # Step 3: Extract text and keywords
         keywords = self.extract_text_and_keywords(image_data)
-        
-        # Step 5: Search inventory
-        matches = self.search_inventory(category, keywords)
-        
+
+        # Step 4: Search inventory — use category if confident, else broad search
+        search_category = category if category_confidence >= 0.15 else None
+        matches = self.search_inventory(search_category, keywords)
+
         return {
             'success': True,
             'filter_result': {
