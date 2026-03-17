@@ -874,59 +874,116 @@ class AdvancedFaultDiagnosisSystem:
             return True
 
         # 3. All significant words of kb_symptom appear in user input
-        kb_words = [w for w in kb.split() if len(w) > 3]  # skip short words
-        if kb_words and all(w in user for w in kb_words):
-            return True
+        #    Also strips trailing 's' for plural matching (brakes -> brake)
+        kb_words = [w for w in kb.split() if len(w) > 3]
+        if kb_words:
+            def word_in_user(w):
+                return w in user or (w.endswith('s') and w[:-1] in user) or (w + 's') in user
+            if all(word_in_user(w) for w in kb_words):
+                return True
 
-        # 4. Stem/prefix match — any significant KB word starts with a user word stem
-        #    e.g. "overheat" in KB matches user typing "overheating", "overheated"
+        # 4. Stem/prefix match — significant KB word starts with a user word stem
+        #    e.g. "overheat" in KB matches user typing "overheating"
+        #    Require stem length >= 6 to avoid short-word false positives
         user_words = [w for w in user.split() if len(w) > 3]
         for kb_word in kb_words:
             for user_word in user_words:
-                # KB word is prefix of user word (e.g. "overheat" -> "overheating")
-                if user_word.startswith(kb_word) or kb_word.startswith(user_word):
+                stem_len = min(len(kb_word), len(user_word))
+                if stem_len >= 6 and (user_word.startswith(kb_word) or kb_word.startswith(user_word)):
                     return True
 
         return False
 
+        return False
+
+    def _score_fault_match(self, fault: Dict, symptom: str) -> float:
+        """
+        Score how well a fault matches a symptom.
+        Uses weighted scoring: longer/more-specific KB symptom phrases score higher
+        than short single-word matches, preventing generic words like 'brake' from
+        matching every brake-related fault equally.
+        """
+        symptom_lower = symptom.lower()
+        total_weight = 0.0
+        matched_weight = 0.0
+
+        for kb_symptom in fault["symptoms"]:
+            # Weight = number of significant words in the KB phrase
+            # e.g. "brake pedal soft spongy feel" (5 words) > "brake noise" (2 words)
+            words = [w for w in kb_symptom.split() if len(w) > 3]
+            weight = max(1.0, len(words) * 1.5)
+            total_weight += weight
+            if self._symptom_matches(kb_symptom, symptom_lower):
+                matched_weight += weight
+
+        if total_weight == 0:
+            return 0.0
+        return matched_weight / total_weight
+
     def _fallback_analysis(self, symptoms: List[str]) -> Dict:
-        """Fallback analysis using keyword matching — each symptom checked independently"""
+        """
+        Fallback keyword matching — scores faults by weighted phrase specificity,
+        then applies a minimum threshold so generic single-word matches don't flood results.
+        """
         seen_faults = {}
 
         for symptom in symptoms:
             symptom_lower = symptom.lower()
             allowed = self._allowed_faults(symptom_lower)
+
+            fault_scores = []
             for fault in self.automotive_knowledge_base:
                 fault_code = fault["fault"]
                 if allowed and fault_code not in allowed:
                     continue
-                score = sum(1 for s in fault["symptoms"] if self._symptom_matches(s, symptom))
+                score = self._score_fault_match(fault, symptom_lower)
                 if score > 0:
-                    confidence = score / len(fault["symptoms"])
-                    if fault_code not in seen_faults or confidence > seen_faults[fault_code]["confidence"]:
-                        seen_faults[fault_code] = {
-                            "fault": fault_code,
-                            "description": fault["description"],
-                            "confidence": confidence,
-                            "severity": fault["severity"],
-                            "parts": fault["parts"],
-                            "diagnostic_steps": fault["diagnostic_steps"],
-                            "triggered_by": symptom
-                        }
+                    fault_scores.append((fault, score))
 
-        # Also check combined text for cross-symptom patterns
+            if not fault_scores:
+                continue
+
+            # Dynamic threshold: only keep faults scoring >= 50% of the best match
+            # This prevents weak matches from appearing alongside strong ones
+            best_score = max(s for _, s in fault_scores)
+            min_threshold = max(0.25, best_score * 0.5)
+
+            for fault, score in fault_scores:
+                if score < min_threshold:
+                    continue
+                fault_code = fault["fault"]
+                if fault_code not in seen_faults or score > seen_faults[fault_code]["confidence"]:
+                    seen_faults[fault_code] = {
+                        "fault": fault_code,
+                        "description": fault["description"],
+                        "confidence": round(score, 4),
+                        "severity": fault["severity"],
+                        "parts": fault["parts"],
+                        "diagnostic_steps": fault["diagnostic_steps"],
+                        "triggered_by": symptom
+                    }
+
+        # Also check combined text for cross-symptom patterns (multiple symptoms only)
         if len(symptoms) > 1:
             combined = " ".join(symptoms)
+            fault_scores = []
             for fault in self.automotive_knowledge_base:
-                score = sum(1 for s in fault["symptoms"] if self._symptom_matches(s, combined))
+                score = self._score_fault_match(fault, combined)
                 if score > 0:
-                    confidence = score / len(fault["symptoms"])
+                    fault_scores.append((fault, score))
+
+            if fault_scores:
+                best_score = max(s for _, s in fault_scores)
+                min_threshold = max(0.25, best_score * 0.5)
+                for fault, score in fault_scores:
+                    if score < min_threshold:
+                        continue
                     fault_code = fault["fault"]
-                    if fault_code not in seen_faults or confidence > seen_faults[fault_code]["confidence"]:
+                    if fault_code not in seen_faults or score > seen_faults[fault_code]["confidence"]:
                         seen_faults[fault_code] = {
                             "fault": fault_code,
                             "description": fault["description"],
-                            "confidence": confidence,
+                            "confidence": round(score, 4),
                             "severity": fault["severity"],
                             "parts": fault["parts"],
                             "diagnostic_steps": fault["diagnostic_steps"],
