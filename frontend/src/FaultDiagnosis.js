@@ -58,7 +58,12 @@ const FaultDiagnosis = () => {
       setDiagnosis(response.data);
     } catch (error) {
       console.error('Error diagnosing fault:', error);
-      setError(error.response?.data?.detail || 'Failed to diagnose fault');
+      const errData = error.response?.data;
+      if (errData?.retry) {
+        setError('The ML service is waking up from sleep. Please try again in 10-15 seconds.');
+      } else {
+        setError(errData?.error || errData?.detail || 'Failed to diagnose fault');
+      }
     } finally {
       setLoading(false);
     }
@@ -182,7 +187,7 @@ const FaultDiagnosis = () => {
                   {loading ? (
                     <>
                       <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                      Diagnosing...
+                      Diagnosing... (may take ~30s on first request)
                     </>
                   ) : (
                     <>

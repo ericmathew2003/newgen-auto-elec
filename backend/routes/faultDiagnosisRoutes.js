@@ -3,58 +3,74 @@ const router = express.Router();
 const axios = require('axios');
 const { authenticateToken } = require('../middleware/auth');
 
-const FAULT_DIAGNOSIS_SERVICE_URL = process.env.ML_SERVICE_URL 
+const FAULT_DIAGNOSIS_SERVICE_URL = process.env.ML_SERVICE_URL
   ? `${process.env.ML_SERVICE_URL}/fault`
   : 'http://localhost:8009';
+
+// Render free tier sleeps after inactivity — wake it up before the real call
+async function wakeUpService() {
+  try {
+    const baseUrl = process.env.ML_SERVICE_URL || 'http://localhost:8009';
+    await axios.get(`${baseUrl}/health`, { timeout: 60000 });
+  } catch (_) {
+    // Ignore — just warming up
+  }
+}
 
 // Diagnose fault based on symptoms
 router.post('/diagnose', authenticateToken, async (req, res) => {
   try {
     const { symptoms, vehicle_make, vehicle_model, mileage, additional_info } = req.body;
 
-    // Validate input
     if (!symptoms || !Array.isArray(symptoms) || symptoms.length === 0) {
-      return res.status(400).json({ 
-        error: 'Symptoms are required and must be a non-empty array' 
+      return res.status(400).json({
+        error: 'Symptoms are required and must be a non-empty array',
       });
     }
 
     console.log(`Processing fault diagnosis for symptoms: ${symptoms.join(', ')}`);
 
-    // Call fault diagnosis service
-    const response = await axios.post(`${FAULT_DIAGNOSIS_SERVICE_URL}/diagnose`, {
-      symptoms: symptoms.filter(s => s && s.trim()), // Remove empty symptoms
-      vehicle_make,
-      vehicle_model,
-      mileage,
-      additional_info
-    }, {
-      timeout: 30000
-    });
+    // Wake up Render service if it's sleeping (free tier cold start can take ~30s)
+    await wakeUpService();
+
+    const response = await axios.post(
+      `${FAULT_DIAGNOSIS_SERVICE_URL}/diagnose`,
+      {
+        symptoms: symptoms.filter((s) => s && s.trim()),
+        vehicle_make,
+        vehicle_model,
+        mileage,
+        additional_info,
+      },
+      { timeout: 90000 } // 90s to handle cold starts
+    );
 
     console.log('Fault diagnosis completed successfully');
     res.json(response.data);
 
   } catch (error) {
-    console.error('Error in fault diagnosis:', error);
-    
+    console.error('Error in fault diagnosis:', error.message);
+
     if (error.response) {
-      // Service returned an error
       res.status(error.response.status).json({
         error: 'Fault diagnosis service error',
-        details: error.response.data
+        details: error.response.data,
       });
     } else if (error.code === 'ECONNREFUSED') {
-      // Service not available
       res.status(503).json({
         error: 'Fault diagnosis service unavailable',
-        details: 'Please ensure the fault diagnosis service is running on port 8008'
+        details: 'ML service is not running',
+      });
+    } else if (error.code === 'ECONNABORTED') {
+      res.status(503).json({
+        error: 'ML service is starting up',
+        details: 'The service was sleeping. Please try again in a few seconds.',
+        retry: true,
       });
     } else {
-      // Other errors
       res.status(500).json({
         error: 'Failed to diagnose fault',
-        details: error.message
+        details: error.message,
       });
     }
   }
@@ -64,39 +80,35 @@ router.post('/diagnose', authenticateToken, async (req, res) => {
 router.get('/faults', authenticateToken, async (req, res) => {
   try {
     const response = await axios.get(`${FAULT_DIAGNOSIS_SERVICE_URL}/faults`, {
-      timeout: 10000
+      timeout: 60000,
     });
-
     res.json(response.data);
-
   } catch (error) {
-    console.error('Error fetching known faults:', error);
+    console.error('Error fetching known faults:', error.message);
     res.status(500).json({
       error: 'Failed to fetch known faults',
-      details: error.message
+      details: error.message,
     });
   }
 });
 
-// Health check for fault diagnosis service
+// Health check
 router.get('/health', authenticateToken, async (req, res) => {
   try {
     const response = await axios.get(`${FAULT_DIAGNOSIS_SERVICE_URL}/health`, {
-      timeout: 5000
+      timeout: 60000,
     });
-
     res.json({
       success: true,
       service_url: FAULT_DIAGNOSIS_SERVICE_URL,
-      service_status: response.data
+      service_status: response.data,
     });
-
   } catch (error) {
     res.status(503).json({
       success: false,
       service_url: FAULT_DIAGNOSIS_SERVICE_URL,
       error: 'Fault diagnosis service unavailable',
-      details: error.message
+      details: error.message,
     });
   }
 });
