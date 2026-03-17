@@ -854,45 +854,48 @@ class AdvancedFaultDiagnosisSystem:
         text = re.sub(r'\s+', ' ', text)         # collapse whitespace
         return text
 
+    @staticmethod
+    def _word_in_text(word: str, text: str) -> bool:
+        """Check if a word appears in text, with basic plural/singular handling."""
+        if word in text:
+            return True
+        # singular -> plural: "brake" matches "brakes"
+        if (word + "s") in text:
+            return True
+        # plural -> singular: "brakes" matches "brake"
+        if word.endswith("s") and word[:-1] in text:
+            return True
+        return False
+
     def _symptom_matches(self, kb_symptom: str, user_input: str) -> bool:
         """
         Check if a knowledge-base symptom phrase matches user input.
-        Handles: exact substring, space-collapsed variants, individual keywords,
-        and partial word stems (e.g. "overheat" matches "overheating").
+        Rules applied in order — returns True on first match.
         """
         kb = self._normalize(kb_symptom)
         user = self._normalize(user_input)
 
-        # 1. Direct substring match (e.g. "engine overheating" in "engine overheating")
+        # 1. Direct substring match
         if kb in user:
             return True
 
-        # 2. Space-collapsed match (e.g. "overheating" matches "over heating")
-        kb_nospace = kb.replace(' ', '')
-        user_nospace = user.replace(' ', '')
-        if kb_nospace in user_nospace:
+        # 2. Space-collapsed match (handles "over heating" vs "overheating")
+        if kb.replace(" ", "") in user.replace(" ", ""):
             return True
 
-        # 3. All significant words of kb_symptom appear in user input
-        #    Also strips trailing 's' for plural matching (brakes -> brake)
+        # 3. All significant words present (with plural/singular tolerance)
         kb_words = [w for w in kb.split() if len(w) > 3]
-        if kb_words:
-            def word_in_user(w):
-                return w in user or (w.endswith('s') and w[:-1] in user) or (w + 's') in user
-            if all(word_in_user(w) for w in kb_words):
-                return True
+        if kb_words and all(self._word_in_text(w, user) for w in kb_words):
+            return True
 
-        # 4. Stem/prefix match — significant KB word starts with a user word stem
-        #    e.g. "overheat" in KB matches user typing "overheating"
-        #    Require stem length >= 6 to avoid short-word false positives
+        # 4. Stem match for longer words only (>= 6 chars) to avoid false positives
+        #    e.g. "overheat" matches "overheating", but "brake" does NOT match "brakes" here
         user_words = [w for w in user.split() if len(w) > 3]
         for kb_word in kb_words:
             for user_word in user_words:
-                stem_len = min(len(kb_word), len(user_word))
-                if stem_len >= 6 and (user_word.startswith(kb_word) or kb_word.startswith(user_word)):
-                    return True
-
-        return False
+                if min(len(kb_word), len(user_word)) >= 6:
+                    if user_word.startswith(kb_word) or kb_word.startswith(user_word):
+                        return True
 
         return False
 
@@ -943,10 +946,11 @@ class AdvancedFaultDiagnosisSystem:
             if not fault_scores:
                 continue
 
-            # Dynamic threshold: only keep faults scoring >= 50% of the best match
-            # This prevents weak matches from appearing alongside strong ones
+            # Dynamic threshold: only keep faults scoring >= 40% of the best match.
+            # Note: keyword scores are naturally low (a single phrase match out of many
+            # gives ~10-30%), so we use a relative threshold rather than an absolute one.
             best_score = max(s for _, s in fault_scores)
-            min_threshold = max(0.25, best_score * 0.5)
+            min_threshold = best_score * 0.4
 
             for fault, score in fault_scores:
                 if score < min_threshold:
@@ -974,7 +978,7 @@ class AdvancedFaultDiagnosisSystem:
 
             if fault_scores:
                 best_score = max(s for _, s in fault_scores)
-                min_threshold = max(0.25, best_score * 0.5)
+                min_threshold = best_score * 0.4
                 for fault, score in fault_scores:
                     if score < min_threshold:
                         continue
