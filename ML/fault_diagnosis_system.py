@@ -36,7 +36,6 @@ from dotenv import load_dotenv
 
 # ML libraries
 try:
-    import tensorflow as tf
     from sklearn.feature_extraction.text import TfidfVectorizer
     from sklearn.ensemble import RandomForestClassifier
     from sklearn.model_selection import train_test_split
@@ -46,6 +45,12 @@ try:
 except ImportError:
     print("ML libraries not available. Install with: pip install scikit-learn")
     ML_AVAILABLE = False
+
+# TensorFlow is optional - fault diagnosis works without it
+try:
+    import tensorflow as tf
+except ImportError:
+    pass  # Not required for text-based fault diagnosis
 
 load_dotenv()
 logging.basicConfig(level=logging.INFO)
