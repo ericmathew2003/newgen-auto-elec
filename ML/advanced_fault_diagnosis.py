@@ -717,10 +717,13 @@ class AdvancedFaultDiagnosisSystem:
 
     def _allowed_faults(self, symptom: str) -> set:
         """Return allowed fault codes based on system keywords. Empty set = no restriction."""
-        s = symptom.lower()
+        # Normalize: collapse spaces so "over heating" matches "overheating" keyword
+        s = self._normalize(symptom)
+        s_nospace = s.replace(' ', '')
         allowed = set()
         for kw, faults in self.SYSTEM_KEYWORDS.items():
-            if kw in s:
+            kw_norm = kw.replace(' ', '')
+            if kw_norm in s_nospace or kw in s:
                 allowed.update(faults)
         return allowed
 
@@ -799,6 +802,39 @@ class AdvancedFaultDiagnosisSystem:
             logger.error(f"NLP analysis failed: {e}")
             return self._fallback_analysis(symptoms)
     
+    def _normalize(self, text: str) -> str:
+        """Normalize text: lowercase, collapse spaces, remove punctuation"""
+        import re
+        text = text.lower().strip()
+        text = re.sub(r'[^\w\s]', ' ', text)   # remove punctuation
+        text = re.sub(r'\s+', ' ', text)         # collapse whitespace
+        return text
+
+    def _symptom_matches(self, kb_symptom: str, user_input: str) -> bool:
+        """
+        Check if a knowledge-base symptom phrase matches user input.
+        Handles: exact substring, space-collapsed variants, individual keywords.
+        """
+        kb = self._normalize(kb_symptom)
+        user = self._normalize(user_input)
+
+        # 1. Direct substring match (e.g. "engine overheating" in "engine overheating")
+        if kb in user:
+            return True
+
+        # 2. Space-collapsed match (e.g. "overheating" matches "over heating")
+        kb_nospace = kb.replace(' ', '')
+        user_nospace = user.replace(' ', '')
+        if kb_nospace in user_nospace:
+            return True
+
+        # 3. All significant words of kb_symptom appear in user input
+        kb_words = [w for w in kb.split() if len(w) > 3]  # skip short words
+        if kb_words and all(w in user for w in kb_words):
+            return True
+
+        return False
+
     def _fallback_analysis(self, symptoms: List[str]) -> Dict:
         """Fallback analysis using keyword matching — each symptom checked independently"""
         seen_faults = {}
@@ -810,7 +846,7 @@ class AdvancedFaultDiagnosisSystem:
                 fault_code = fault["fault"]
                 if allowed and fault_code not in allowed:
                     continue
-                score = sum(1 for s in fault["symptoms"] if s.lower() in symptom_lower)
+                score = sum(1 for s in fault["symptoms"] if self._symptom_matches(s, symptom))
                 if score > 0:
                     confidence = score / len(fault["symptoms"])
                     if fault_code not in seen_faults or confidence > seen_faults[fault_code]["confidence"]:
@@ -826,9 +862,9 @@ class AdvancedFaultDiagnosisSystem:
 
         # Also check combined text for cross-symptom patterns
         if len(symptoms) > 1:
-            combined = " ".join(symptoms).lower()
+            combined = " ".join(symptoms)
             for fault in self.automotive_knowledge_base:
-                score = sum(1 for s in fault["symptoms"] if s.lower() in combined)
+                score = sum(1 for s in fault["symptoms"] if self._symptom_matches(s, combined))
                 if score > 0:
                     confidence = score / len(fault["symptoms"])
                     fault_code = fault["fault"]
