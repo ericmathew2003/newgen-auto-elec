@@ -3,31 +3,13 @@ const router = express.Router();
 const multer = require('multer');
 const axios = require('axios');
 const FormData = require('form-data');
-const fs = require('fs');
-const path = require('path');
 const pool = require('../db');
 const { authenticateToken } = require('../middleware/auth');
 
-// Configure multer for file uploads
-const storage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    const uploadDir = 'uploads/parts';
-    if (!fs.existsSync(uploadDir)) {
-      fs.mkdirSync(uploadDir, { recursive: true });
-    }
-    cb(null, uploadDir);
-  },
-  filename: function (req, file, cb) {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    cb(null, 'part-' + uniqueSuffix + path.extname(file.originalname));
-  }
-});
-
-const upload = multer({ 
-  storage: storage,
-  limits: {
-    fileSize: 10 * 1024 * 1024 // 10MB limit
-  },
+// Use memory storage — Vercel's filesystem is read-only, disk storage won't work
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB
   fileFilter: function (req, file, cb) {
     if (file.mimetype.startsWith('image/')) {
       cb(null, true);
@@ -42,96 +24,44 @@ const _mlBase = process.env.ML_SERVICE_URL || 'http://localhost:8007';
 const ML_SERVICE_URL = process.env.ML_SERVICE_URL ? `${_mlBase}/parts` : _mlBase;
 const USE_ML_SERVICE = true; // ✅ ML enabled - Hybrid service with better filtering!
 
-// Helper function to call ML service
-async function callMLService(endpoint, filePath) {
-  // If ML service is disabled, return default response
+// Helper function to call ML service — accepts a buffer (memory storage compatible)
+async function callMLService(endpoint, fileBuffer, originalname, mimetype) {
   if (!USE_ML_SERVICE) {
-    console.log('ML service disabled, using database-only mode');
-    return {
-      success: true,
-      results: {
-        category: 'general',
-        confidence: 0.5,
-        part_number: null
-      }
-    };
+    return { success: true, results: { category: 'general', confidence: 0.5, part_number: null } };
   }
-  
+
   try {
     const formData = new FormData();
-    formData.append('file', fs.createReadStream(filePath));
-    
+    formData.append('file', fileBuffer, { filename: originalname || 'part.jpg', contentType: mimetype || 'image/jpeg' });
+
     const response = await axios.post(`${ML_SERVICE_URL}${endpoint}`, formData, {
-      headers: {
-        ...formData.getHeaders(),
-      },
+      headers: { ...formData.getHeaders() },
       timeout: 30000
     });
-    
-    // Handle filtered service response format
+
     const data = response.data;
-    
-    // Check if image was rejected by filter
+
     if (data.success === false && data.reason === 'not_automotive_part') {
-      console.log('Image rejected by automotive filter:', data.message);
-      return {
-        success: false,
-        filtered: true,
-        reason: data.reason,
-        message: data.message,
-        detected_object: data.detected_object,
-        results: {
-          category: 'not_automotive',
-          confidence: 0,
-          part_number: null
-        }
-      };
+      return { success: false, filtered: true, reason: data.reason, message: data.message,
+        detected_object: data.detected_object, results: { category: 'not_automotive', confidence: 0, part_number: null } };
     }
-    
-    // Handle successful identification from hybrid service
+
     if (data.success && data.your_model) {
-      return {
-        success: true,
-        filtered: false,
-        results: {
-          category: data.your_model.category,
-          confidence: data.your_model.confidence,
-          part_number: null, // Will be extracted from Google Vision texts if available
-          inventory_matches: data.inventory_matches || []
-        }
-      };
+      return { success: true, filtered: false, results: {
+        category: data.your_model.category, confidence: data.your_model.confidence,
+        part_number: null, inventory_matches: data.inventory_matches || [] } };
     }
-    
-    // Handle successful identification (legacy format)
+
     if (data.success && data.classification) {
-      return {
-        success: true,
-        filtered: false,
-        results: {
-          category: data.classification.category,
-          confidence: data.classification.confidence,
-          part_number: data.part_number || null,
-          inventory_matches: data.inventory_matches || []
-        }
-      };
+      return { success: true, filtered: false, results: {
+        category: data.classification.category, confidence: data.classification.confidence,
+        part_number: data.part_number || null, inventory_matches: data.inventory_matches || [] } };
     }
-    
+
     return data;
   } catch (error) {
     console.error(`ML Service Error (${endpoint}):`, error.message);
-    if (error.response) {
-      console.error('ML Service Response:', error.response.data);
-    }
-    // Return a safe default instead of throwing
-    return {
-      success: false,
-      error: error.message,
-      results: {
-        category: 'unknown',
-        confidence: 0,
-        part_number: null
-      }
-    };
+    return { success: false, error: error.message, results: { category: 'unknown', confidence: 0, part_number: null } };
   }
 }
 
@@ -165,10 +95,10 @@ router.post('/identify', authenticateToken, upload.single('image'), async (req, 
       return res.status(400).json({ error: 'No image file provided' });
     }
 
-    console.log(`Processing part identification for file: ${req.file.filename}`);
+    console.log(`Processing part identification for file: ${req.file.originalname}`);
     
-    // Call ML service for identification
-    const mlResult = await callMLService('/identify', req.file.path);
+    // Call ML service for identification — pass buffer directly (no disk I/O)
+    const mlResult = await callMLService('/identify', req.file.buffer, req.file.originalname, req.file.mimetype);
     
     console.log('ML Service Response:', JSON.stringify(mlResult, null, 2));
     
@@ -449,7 +379,7 @@ router.post('/identify', authenticateToken, upload.single('image'), async (req, 
         total_stock: parseFloat(stats.total_stock || 0)
       },
       image_info: {
-        filename: req.file.filename,
+        filename: req.file.originalname,
         size: req.file.size,
         upload_time: new Date().toISOString()
       }
@@ -467,15 +397,7 @@ router.post('/identify', authenticateToken, upload.single('image'), async (req, 
     });
   } finally {
     if (client) client.release();
-    
-    // Clean up uploaded file
-    if (req.file && fs.existsSync(req.file.path)) {
-      try {
-        fs.unlinkSync(req.file.path);
-      } catch (cleanupError) {
-        console.error('Error cleaning up file:', cleanupError);
-      }
-    }
+    // No disk file to clean up — using memory storage
   }
 });
 
