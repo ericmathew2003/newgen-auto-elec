@@ -230,4 +230,32 @@ router.get("/python-status", async (req, res) => {
   }
 });
 
+// Cashflow prediction proxy — used by CashFlowDashboard.js
+router.post("/cashflow/predict", async (req, res) => {
+  try {
+    const response = await axios.post(`${PYTHON_ML_SERVICE}/predict`, req.body, { timeout: 60000 });
+    res.json(response.data);
+  } catch (error) {
+    res.status(503).json({ detail: error.message });
+  }
+});
+
+router.post("/cashflow/train", async (req, res) => {
+  try {
+    const response = await axios.post(`${PYTHON_ML_SERVICE}/train`, req.body, { timeout: 120000 });
+    res.json(response.data);
+  } catch (error) {
+    res.status(503).json({ detail: error.message });
+  }
+});
+
+router.get("/cashflow/analytics/categories", async (req, res) => {
+  try {
+    const response = await axios.get(`${PYTHON_ML_SERVICE}/analytics/categories`, { params: req.query, timeout: 30000 });
+    res.json(response.data);
+  } catch (error) {
+    res.status(503).json({ detail: error.message });
+  }
+});
+
 module.exports = router;

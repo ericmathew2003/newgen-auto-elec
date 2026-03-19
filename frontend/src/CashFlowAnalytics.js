@@ -9,7 +9,8 @@ const CashFlowAnalytics = ({ customers, suppliers, paymentPatterns, anomalies, a
   
   const fetchCategories = async () => {
     try {
-      const response = await fetch('http://localhost:8001/analytics/categories?days=90');
+      const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+      const response = await fetch(`${API_BASE_URL}/api/ml/cashflow/analytics/categories?days=90`);
       const data = await response.json();
       setCategories(data.categories || []);
     } catch (err) {

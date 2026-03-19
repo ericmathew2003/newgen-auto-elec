@@ -3,7 +3,8 @@ import axios from 'axios';
 import CashFlowAnalytics from './CashFlowAnalytics';
 import WhatIfSimulation from './WhatIfSimulation';
 
-const ML_API_URL = 'http://localhost:8001';
+const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+const ML_API_URL = `${API_BASE_URL}/api/ml/cashflow`;
 
 const CashFlowDashboard = () => {
   const [loading, setLoading] = useState(true);
