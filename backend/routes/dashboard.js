@@ -563,7 +563,6 @@ router.get('/low-stock-items', authenticateToken, async (req, res) => {
       AND COALESCE(curstock, 0) <= 10
       AND (deleted = false OR deleted IS NULL)
       ORDER BY curstock ASC
-      LIMIT 50
     `);
     
     res.json(result.rows);
@@ -591,7 +590,6 @@ router.get('/out-of-stock-items', authenticateToken, async (req, res) => {
       WHERE COALESCE(curstock, 0) = 0
       AND (deleted = false OR deleted IS NULL)
       ORDER BY itemname ASC
-      LIMIT 50
     `);
     
     res.json(result.rows);

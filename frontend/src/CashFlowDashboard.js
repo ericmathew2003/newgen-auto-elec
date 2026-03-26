@@ -64,31 +64,26 @@ const CashFlowDashboard = () => {
       });
       setPrediction(response.data);
     } catch (err) {
-      // If prediction fails, try training first
-      if (err.response?.status === 500 || !prediction) {
-        console.log('Prediction failed, attempting to train model first...');
-        try {
-          const trainResponse = await axios.post(`${ML_API_URL}/train`);
-          
-          // Check if training was successful
-          if (!trainResponse.data.success) {
-            setError(`Insufficient data: ${trainResponse.data.message}. You have ${trainResponse.data.data_points} days of data, but need at least 30 days of transaction history.`);
-            setLoading(false);
-            return;
-          }
-          
-          // Retry prediction after training
-          const retryResponse = await axios.post(`${ML_API_URL}/predict`, {
-            days_ahead: daysAhead
-          });
-          setPrediction(retryResponse.data);
-        } catch (trainErr) {
-          setError(trainErr.response?.data?.detail || 'Failed to fetch prediction. Make sure ML service is running on port 8001.');
-          console.error('Error training and predicting:', trainErr);
+      // If prediction fails for any reason, try training first
+      console.log('Prediction failed, attempting to train model first...');
+      try {
+        const trainResponse = await axios.post(`${ML_API_URL}/train`);
+        
+        // Check if training was successful
+        if (!trainResponse.data.success) {
+          setError(`Insufficient data: ${trainResponse.data.message}. You have ${trainResponse.data.data_points} days of data, but need at least 30 days of transaction history.`);
+          setLoading(false);
+          return;
         }
-      } else {
-        setError(err.response?.data?.detail || 'Failed to fetch prediction. Make sure ML service is running on port 8001.');
-        console.error('Error fetching prediction:', err);
+        
+        // Retry prediction after training
+        const retryResponse = await axios.post(`${ML_API_URL}/predict`, {
+          days_ahead: daysAhead
+        });
+        setPrediction(retryResponse.data);
+      } catch (trainErr) {
+        setError(trainErr.response?.data?.detail || 'Failed to fetch prediction. Make sure ML service is running on port 8001.');
+        console.error('Error training and predicting:', trainErr);
       }
     } finally {
       setLoading(false);
@@ -241,7 +236,7 @@ const CashFlowDashboard = () => {
           </select>
           <button
             onClick={trainModel}
-            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+            className="hidden"
           >
             Train Model
           </button>
@@ -298,8 +293,8 @@ const CashFlowDashboard = () => {
             <span className="text-red-600 mr-2">⚠️</span>
             Alerts ({alerts.filter((_, idx) => !dismissedAlerts.includes(idx)).length})
           </h2>
-          <div className="space-y-3">
-            {alerts.slice(0, 5).map((alert, idx) => (
+          <div className="space-y-3 max-h-[520px] overflow-y-auto pr-1">
+            {alerts.slice(0, 10).map((alert, idx) => (
               !dismissedAlerts.includes(idx) && (
                 <div key={idx} className={`border-l-4 p-4 rounded ${getAlertColor(alert.type)} relative`}>
                   <button

@@ -128,7 +128,7 @@ const FaultDiagnosis = () => {
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   />
                 </div>
-                <div className="md:col-span-2">
+                <div className="md:col-span-2 hidden">
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Mileage (km)
                   </label>
@@ -243,7 +243,7 @@ const FaultDiagnosis = () => {
                               )}
                             </div>
                             <div className="text-right">
-                              <div className={`text-lg font-bold mb-1 ${getConfidenceColor(fault.confidence)}`}>
+                              <div className="hidden">
                                 {(fault.confidence * 100).toFixed(1)}%
                               </div>
                               <span className={`px-3 py-1 rounded-full text-xs font-medium ${
@@ -274,15 +274,7 @@ const FaultDiagnosis = () => {
                       {/* Analysis Summary */}
                       <div className="mt-6 p-4 bg-gray-50 rounded-lg">
                         <h4 className="font-semibold text-gray-800 mb-2">Analysis Summary</h4>
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                          <div>
-                            <p className="text-gray-600">Analysis Method</p>
-                            <p className="font-medium">{diagnosis.diagnosis.analysis_method?.replace(/_/g, ' ').toUpperCase()}</p>
-                          </div>
-                          <div>
-                            <p className="text-gray-600">ML Available</p>
-                            <p className="font-medium">{diagnosis.diagnosis.nlp_available ? '✅ Yes' : '❌ No'}</p>
-                          </div>
+                        <div className="grid grid-cols-2 gap-4 text-sm">
                           <div>
                             <p className="text-gray-600">Faults Detected</p>
                             <p className="font-medium">{diagnosis.diagnosis.predicted_faults.length}</p>
@@ -442,8 +434,7 @@ const FaultDiagnosis = () => {
                                           {formatCurrency(part.price)}
                                         </div>
                                         {part.mrp > part.price && (
-                                          <div className="text-sm text-gray-500 line-through">
-                                            MRP: {formatCurrency(part.mrp)}
+                                          <div className="text-sm text-gray-500">
                                           </div>
                                         )}
                                         <div className="text-sm font-medium text-green-700">
@@ -463,13 +454,13 @@ const FaultDiagnosis = () => {
                                           </span>
                                         )}
                                         {part.fault_confidence && (
-                                          <span className="px-2 py-1 bg-purple-100 text-purple-800 text-xs font-medium rounded">
+                                          <span className="hidden">
                                             Match: {(part.fault_confidence * 100).toFixed(0)}%
                                           </span>
                                         )}
                                       </div>
                                       
-                                      <button className="px-4 py-2 bg-blue-600 text-white text-sm rounded hover:bg-blue-700 transition-colors">
+                                      <button className="px-4 py-2 bg-blue-600 text-white text-sm rounded hover:bg-blue-700 transition-colors hidden">
                                         Add to Quote
                                       </button>
                                     </div>
@@ -538,7 +529,7 @@ const FaultDiagnosis = () => {
                                         )}
                                       </div>
                                       
-                                      <button className="px-4 py-2 bg-gray-400 text-white text-sm rounded cursor-not-allowed">
+                                      <button className="px-4 py-2 bg-gray-400 text-white text-sm rounded cursor-not-allowed hidden">
                                         Notify When Available
                                       </button>
                                     </div>

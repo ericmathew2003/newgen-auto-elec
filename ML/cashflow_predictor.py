@@ -772,11 +772,7 @@ class CashFlowPredictor:
                 'avg_daily_outflow': round(sum(p['predicted_outflow'] for p in predictions) / days_ahead, 2),
                 'forecast_period_days': days_ahead
             },
-            'risk_assessment': {
-                'risk_level': 'UNKNOWN',
-                'risk_score': 0,
-                'overall_assessment': 'Insufficient data'
-            },
+            'risk_assessment': self._assess_risk(predictions, current_balance),
             'alerts': [],
             'recommendations': [{
                 'category': 'Data Collection',

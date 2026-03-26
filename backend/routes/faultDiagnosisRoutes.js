@@ -5,12 +5,12 @@ const { authenticateToken } = require('../middleware/auth');
 
 const FAULT_DIAGNOSIS_SERVICE_URL = process.env.ML_SERVICE_URL
   ? `${process.env.ML_SERVICE_URL}/fault`
-  : 'http://localhost:8009';
+  : 'http://localhost:8001/fault';
 
 // Render free tier sleeps after inactivity — wake it up before the real call
 async function wakeUpService() {
   try {
-    const baseUrl = process.env.ML_SERVICE_URL || 'http://localhost:8009';
+    const baseUrl = process.env.ML_SERVICE_URL || 'http://localhost:8001';
     await axios.get(`${baseUrl}/health`, { timeout: 60000 });
   } catch (_) {
     // Ignore — just warming up

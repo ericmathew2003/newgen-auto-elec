@@ -158,8 +158,8 @@ class FilteredPartsVision:
     def _initialize_parts_classifier(self):
         """Initialize parts classification model"""
         model_paths = [
-            'ML/models/parts_classifier.h5',
-            'models/parts_classifier.h5'
+            'models/parts_classifier.h5',
+            'ML/models/parts_classifier.h5'
         ]
         
         for model_path in model_paths:

@@ -75,7 +75,7 @@ except Exception as e:
     print(f"⚠️  Advanced fault diagnosis service failed to load: {e}")
 
 try:
-    from parts_vision_service import app as parts_app
+    from hybrid_parts_service import app as parts_app
     app.mount("/parts", parts_app)
     print("✅ Parts vision service mounted at /parts")
 except Exception as e:

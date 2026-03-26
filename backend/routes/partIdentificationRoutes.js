@@ -20,8 +20,8 @@ const upload = multer({
 });
 
 // When ML_SERVICE_URL is set (hosted), parts service is at /parts prefix
-const _mlBase = process.env.ML_SERVICE_URL || 'http://localhost:8007';
-const ML_SERVICE_URL = process.env.ML_SERVICE_URL ? `${_mlBase}/parts` : _mlBase;
+const _mlBase = process.env.ML_SERVICE_URL || 'http://localhost:8001';
+const ML_SERVICE_URL = process.env.ML_SERVICE_URL ? `${_mlBase}/parts` : `${_mlBase}/parts`;
 const USE_ML_SERVICE = true; // ✅ ML enabled - Hybrid service with better filtering!
 
 // Helper function to call ML service — accepts a buffer (memory storage compatible)

@@ -6,7 +6,7 @@ const router = express.Router();
 // Python ML Service Configuration
 // When ML_SERVICE_URL is set (hosted), cashflow is at /cashflow prefix
 const _mlBase = process.env.ML_SERVICE_URL || process.env.PYTHON_ML_SERVICE_URL || 'http://localhost:8001';
-const PYTHON_ML_SERVICE = process.env.ML_SERVICE_URL ? `${_mlBase}/cashflow` : _mlBase;
+const PYTHON_ML_SERVICE = `${_mlBase}/cashflow`;
 
 // Helper function to handle ML service requests
 async function callPythonMLService(endpoint, params = {}) {
@@ -252,6 +252,78 @@ router.post("/cashflow/train", async (req, res) => {
 router.get("/cashflow/analytics/categories", async (req, res) => {
   try {
     const response = await axios.get(`${PYTHON_ML_SERVICE}/analytics/categories`, { params: req.query, timeout: 30000 });
+    res.json(response.data);
+  } catch (error) {
+    res.status(503).json({ detail: error.message });
+  }
+});
+
+router.get("/cashflow/analytics/customers", async (req, res) => {
+  try {
+    const response = await axios.get(`${PYTHON_ML_SERVICE}/analytics/customers`, { params: req.query, timeout: 30000 });
+    res.json(response.data);
+  } catch (error) {
+    res.status(503).json({ detail: error.message });
+  }
+});
+
+router.get("/cashflow/analytics/suppliers", async (req, res) => {
+  try {
+    const response = await axios.get(`${PYTHON_ML_SERVICE}/analytics/suppliers`, { params: req.query, timeout: 30000 });
+    res.json(response.data);
+  } catch (error) {
+    res.status(503).json({ detail: error.message });
+  }
+});
+
+router.get("/cashflow/analytics/payment-patterns", async (req, res) => {
+  try {
+    const response = await axios.get(`${PYTHON_ML_SERVICE}/analytics/payment-patterns`, { params: req.query, timeout: 30000 });
+    res.json(response.data);
+  } catch (error) {
+    res.status(503).json({ detail: error.message });
+  }
+});
+
+router.get("/cashflow/analytics/anomalies", async (req, res) => {
+  try {
+    const response = await axios.get(`${PYTHON_ML_SERVICE}/analytics/anomalies`, { params: req.query, timeout: 30000 });
+    res.json(response.data);
+  } catch (error) {
+    res.status(503).json({ detail: error.message });
+  }
+});
+
+router.get("/cashflow/alerts/history", async (req, res) => {
+  try {
+    const response = await axios.get(`${PYTHON_ML_SERVICE}/alerts/history`, { params: req.query, timeout: 30000 });
+    res.json(response.data);
+  } catch (error) {
+    res.status(503).json({ detail: error.message });
+  }
+});
+
+router.delete("/cashflow/alerts/clear", async (req, res) => {
+  try {
+    const response = await axios.delete(`${PYTHON_ML_SERVICE}/alerts/clear`, { params: req.query, timeout: 30000 });
+    res.json(response.data);
+  } catch (error) {
+    res.status(503).json({ detail: error.message });
+  }
+});
+
+router.get("/cashflow/historical-data", async (req, res) => {
+  try {
+    const response = await axios.get(`${PYTHON_ML_SERVICE}/historical-data`, { params: req.query, timeout: 30000 });
+    res.json(response.data);
+  } catch (error) {
+    res.status(503).json({ detail: error.message });
+  }
+});
+
+router.get("/cashflow/current-balance", async (req, res) => {
+  try {
+    const response = await axios.get(`${PYTHON_ML_SERVICE}/current-balance`, { params: req.query, timeout: 30000 });
     res.json(response.data);
   } catch (error) {
     res.status(503).json({ detail: error.message });

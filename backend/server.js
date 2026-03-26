@@ -1,6 +1,6 @@
-const express=require("express");
-const app=express();
-const cors=require("cors");
+const express = require("express");
+const app = express();
+const cors = require("cors");
 require('dotenv').config();
 
 const authRoutes = require('./routes/authRoutes');
@@ -35,19 +35,13 @@ const financialReportsRoutes = require("./routes/financialReportsRoutes");
 const receivablesPayablesRoutes = require("./routes/receivablesPayablesRoutes");
 const stockReportRoutes = require("./routes/stockReportRoutes");
 
-// Conditionally load ML Python routes only if explicitly enabled
-// Set ENABLE_ML_PYTHON=true in .env to enable Python ML routes
+// Always load ML Python cashflow proxy routes
 let mlPythonRoutes = null;
-if (process.env.ENABLE_ML_PYTHON === 'true') {
-  try {
-    mlPythonRoutes = require("./routes/mlRoutes_python");
-    console.log('✅ ML Python routes loaded');
-  } catch (e) {
-    console.log('⚠️  ML Python routes failed to load:', e.message);
-    console.log('   Make sure axios is installed: npm install axios');
-  }
-} else {
-  console.log('ℹ️  ML Python routes disabled (set ENABLE_ML_PYTHON=true to enable)');
+try {
+  mlPythonRoutes = require("./routes/mlRoutes_python");
+  console.log('✅ ML Python routes loaded');
+} catch (e) {
+  console.log('⚠️  ML Python routes failed to load:', e.message);
 }
 
 const userRoutes = require("./routes/userRoutes");
@@ -60,14 +54,14 @@ const corsOptions = {
   origin: function (origin, callback) {
     // Allow requests with no origin (like mobile apps or curl requests)
     if (!origin) return callback(null, true);
-    
+
     const allowedOrigins = [
       'http://localhost:3000',
       'http://localhost:3001',
       process.env.FRONTEND_URL,
       process.env.VERCEL_FRONTEND_URL
     ].filter(Boolean); // Remove undefined values
-    
+
     if (allowedOrigins.indexOf(origin) !== -1) {
       callback(null, true);
     } else {
@@ -129,6 +123,6 @@ app.use("/api/user-roles", userRoleRoutes);
 
 const PORT = process.env.PORT || 5000;
 
-app.listen(PORT, ()=>{
-    console.log(`Server has started on port ${PORT}`);
+app.listen(PORT, () => {
+  console.log(`Server has started on port ${PORT}`);
 });
