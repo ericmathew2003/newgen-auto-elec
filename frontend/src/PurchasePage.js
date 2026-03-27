@@ -2047,18 +2047,7 @@ export default function PurchasePage() {
                     </div>
                   </th>
                   <th className="p-2 border-b">Confirmed</th>
-                  <th
-                    className="p-2 border-b cursor-pointer hover:bg-gray-200 select-none"
-                    onClick={() => handleSort('is_cancelled')}
-                    title="Click to sort by Cancelled Status"
-                  >
-                    <div className="flex items-center justify-between">
-                      <span>Cancelled</span>
-                      <span className="ml-1">
-                        {sortField === 'is_cancelled' ? (sortDirection === 'asc' ? '↑' : '↓') : '↕'}
-                      </span>
-                    </div>
-                  </th>
+                  <th className="hidden">Cancelled</th>
                 </tr>
               </thead>
               <tbody>
@@ -2103,13 +2092,8 @@ export default function PurchasePage() {
                         onClick={(e) => e.stopPropagation()}
                       />
                     </td>
-                    <td className="p-2 border-b text-center">
-                      <input
-                        type="checkbox"
-                        checked={!!r.is_cancelled}
-                        readOnly
-                        onClick={(e) => e.stopPropagation()}
-                      />
+                    <td className="hidden">
+                      <input type="checkbox" checked={!!r.is_cancelled} readOnly />
                     </td>
                   </tr>
                 ))}
