@@ -69,15 +69,30 @@ export default function Navbar() {
   const navigate = useNavigate();
   const { user, logout, isAdmin } = useAuth();
 
-  // Fetch notifications
+  // Fetch notifications and compute unread count based on last-seen timestamp
   const fetchNotifications = async () => {
     try {
       const response = await axios.get(`${API_BASE_URL}/api/notifications`);
-      setNotifications(response.data || []);
-      setNotificationCount(response.data?.length || 0);
+      const data = response.data || [];
+      setNotifications(data);
+
+      // Count only notifications newer than the last time the panel was opened
+      const lastSeen = parseInt(localStorage.getItem('notif_last_seen') || '0', 10);
+      const unseen = data.filter(n => new Date(n.timestamp).getTime() > lastSeen).length;
+      setNotificationCount(unseen);
     } catch (error) {
       console.error("Error fetching notifications:", error);
       setNotifications([]);
+      setNotificationCount(0);
+    }
+  };
+
+  // Mark all as seen when panel opens
+  const handleToggleNotifications = () => {
+    const opening = !notificationsOpen;
+    setNotificationsOpen(opening);
+    if (opening) {
+      localStorage.setItem('notif_last_seen', Date.now().toString());
       setNotificationCount(0);
     }
   };
@@ -201,7 +216,7 @@ export default function Navbar() {
           {/* Notifications */}
           <div className="relative">
             <button
-              onClick={() => setNotificationsOpen(!notificationsOpen)}
+              onClick={() => handleToggleNotifications()}
               className="relative p-2.5 rounded-xl hover:bg-gray-100 transition-all duration-200 hover:shadow-md group"
               title="Notifications"
             >
