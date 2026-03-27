@@ -513,7 +513,7 @@ export default function Navbar() {
                                 Stock In Hand
                               </Link>
                             )}
-                            <Link to="/ml-reports" className="flex items-center p-2 rounded-lg hover:bg-purple-50 hover:text-purple-700 transition-all duration-200 text-sm font-medium">
+                            <Link to="/ml-reports" className="hidden">
                               <div className="w-1.5 h-1.5 bg-purple-400 rounded-full mr-2"></div>
                               ML Reports & Analytics
                             </Link>
