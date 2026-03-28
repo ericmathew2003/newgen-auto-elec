@@ -109,11 +109,8 @@ const ReceivePaymentModal = ({ isOpen, onClose, invoiceData, onSuccess }) => {
       const response = await axios.post(`${API_BASE_URL}/api/receipts`, payload, getAuthHeaders());
       const receiptId = response.data.receipt_id;
 
-      // Auto-confirm the receipt (this updates acc_trn_invoice paid_amount)
+      // Auto-confirm the receipt (this updates acc_trn_invoice paid_amount and creates journals)
       await axios.post(`${API_BASE_URL}/api/receipts/${receiptId}/confirm`, {}, getAuthHeaders());
-
-      // Auto-post the receipt (this creates journal entries and updates is_paid)
-      await axios.post(`${API_BASE_URL}/api/receipts/${receiptId}/post`, {}, getAuthHeaders());
 
       showToast('Payment received and posted successfully!', 'success');
       
